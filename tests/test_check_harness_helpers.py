@@ -56,8 +56,9 @@ class PluginValidationCheckRunner(RecordingCheckRunner):
 class PluginValidationRoutingTests(unittest.TestCase):
     def test_matt_package_uses_repo_owned_native_validator(self) -> None:
         runner = PluginValidationCheckRunner()
+        tooling_python = Path(tempfile.gettempdir()).resolve() / "tooling" / "python"
         runner.check_plugin_validation(
-            Path("/tooling/python"),
+            tooling_python,
             ["mattpocock-skills@oh-my-harness"],
             env={},
             validator=Path("/missing/bundled-validator.py"),
@@ -68,7 +69,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
             runner.commands,
             [
                 [
-                    "/tooling/python",
+                    str(tooling_python),
                     str(REPO_ROOT / "scripts" / "update_mattpocock_skills.py"),
                     "--validate-only",
                 ]
@@ -79,9 +80,10 @@ class PluginValidationRoutingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             validator = Path(tmp) / "validate_plugin.py"
             validator.write_text("# fixture\n", encoding="utf-8")
+            tooling_python = Path(tmp) / "tooling" / "python"
             runner = PluginValidationCheckRunner()
             runner.check_plugin_validation(
-                Path("/tooling/python"),
+                tooling_python,
                 ["watcher@oh-my-harness", "mattpocock-skills@oh-my-harness"],
                 env={},
                 validator=validator,
@@ -91,7 +93,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
         self.assertEqual(
             runner.commands[0],
             [
-                "/tooling/python",
+                str(tooling_python),
                 str(validator),
                 str(REPO_ROOT / "plugins" / "watcher"),
             ],
@@ -99,7 +101,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
         self.assertEqual(
             runner.commands[1],
             [
-                "/tooling/python",
+                str(tooling_python),
                 str(REPO_ROOT / "scripts" / "update_mattpocock_skills.py"),
                 "--validate-only",
             ],

@@ -46,6 +46,11 @@ python3 scripts/watcher skill report --since 7d
 python3 scripts/watcher migrate-state --dry-run
 ```
 
+`config/repos.example.json` resolves the audited checkout from
+`OH_MY_HARNESS_ROOT`. Keep that variable bound to the canonical Git worktree so
+the same config remains valid when Watcher runs from either source or an
+installed plugin cache.
+
 Skill `observe`, `install-hook`, and `doctor` accept `--repo-root`; when omitted they require `OH_MY_HARNESS_ROOT`. Installed command hooks embed the resolved root explicitly, so SessionStart behavior does not depend on the process working directory, a plugin-cache path, or adapter-path inference. `$CODEX_HOME/watcher` remains runtime state only.
 
 Doc audit configs may define multiple named profiles for one repository. Keep current authority,

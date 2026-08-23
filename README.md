@@ -29,7 +29,7 @@ Every refresh and closure check selects one complete distribution with `--harnes
 | `gemini-cli` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
 | `opencode` | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
 
-`codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its schema-v4 install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
+`codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its exact-shape install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. The manifest has no independent schema-version field; its repository-owned reader rejects missing or unsupported fields. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
 
 Directory projections use directory symlinks on POSIX and directory junctions on Windows. They manage only entries proven to target canonical skill directories in this checkout, prune only repository-owned stale links, preserve unrelated user skills, and refuse unmanaged same-name entries. A retry may recover an exact canonical empty ordinary directory left by an interrupted link creation; recovery rejects non-empty directories and reparse points and uses only non-recursive `rmdir()`. The unchanged `plugins/mattpocock-skills/skills/` mirror is never rewritten.
 
@@ -127,6 +127,18 @@ and creates ordinary `oh-my-harness` and `omh` launchers under `bin/`. Pass
 `--repository <url>` only when the initializer is not running from a checkout
 with a configured origin.
 
+`state/install.json` records one initialization lifecycle and its source
+snapshot. It has no independent schema-version field, and its recorded
+repository and revision are an installation receipt rather than rolling Git
+authority. Failed-install recovery accepts only the current exact field set and
+values. When an installation record exists, an installer launched from either
+the managed repository or another checkout automatically attempts strict
+recovery of the exact managed `repo/`; neither the invoking checkout nor the
+process working directory becomes installation authority. A checkout already
+moved to the managed path with no incomplete installation record still requires
+the explicit `--adopt-current-checkout` option before the initializer may claim
+it.
+
 Unix:
 
 ```bash
@@ -161,15 +173,34 @@ $ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { J
 New-Item -ItemType Directory -Force -Path $ManagerHome | Out-Null
 Move-Item -LiteralPath $OldRepo -Destination (Join-Path $ManagerHome "repo")
 Set-Location -LiteralPath (Join-Path $ManagerHome "repo")
-.\install.ps1 --adopt-current-checkout --migrate-from-repo $OldRepo --migrate-marketplace --yes
+.\install.ps1 --adopt-current-checkout --migrate-from-repo $OldRepo -MigrateMarketplace --yes
 ```
+
+If initialization stops after writing `status: "installing"`, rerun the
+same installer command from either the original external checkout or the
+managed checkout. `--adopt-current-checkout` is not required for recovery.
+Re-pass any workflow authorization still required by the failed operation, such
+as `--migrate-marketplace --yes` on Unix or `-MigrateMarketplace` on Windows
+PowerShell. Automatic recovery always uses the managed `repo/` and proceeds only
+after the recorded repository, revision, harness, owned paths, launcher bytes,
+and venv shape all match exactly; otherwise it stops without changing manager
+state.
+
+Expected installer failures are written to standard error as `error: <reason>`
+and return a nonzero exit code. A failing child command includes its command and
+exit code. The PowerShell install and upgrade wrappers preserve that exit code;
+an upgrade stage reports `error: <stage> failed with exit code <code>` after the
+child diagnostic, and neither wrapper replaces the reason with a `throw`
+exception stack. Interactive terminals render errors and exit codes in bright
+red and required actions or confirmation prompts in bright yellow. Redirected
+output remains plain text; set `NO_COLOR` to disable emphasis explicitly.
 
 Windows PowerShell:
 
 ```powershell
 .\install.ps1 --harness codex --yes
 $env:PATH = "$env:USERPROFILE\.oh-my-harness\bin;$env:PATH"
-omh --help
+omh -Help
 ```
 
 The initializer does not edit shell profiles or the machine-wide `PATH`. Add the
@@ -191,13 +222,16 @@ The managed installation layout is:
 
 On Windows the two launcher files use the `.cmd` suffix. Development checkouts
 may exist elsewhere, but installed hooks and marketplace state bind to the one
-managed `repo/` checkout.
+managed `repo/` checkout. A local marketplace may report that checkout with the
+Windows extended-length `\\?\` prefix; source-binding checks treat equivalent
+drive and UNC spellings as the same path while still rejecting a different
+directory.
 
 If initialization fails, `state/install.json` remains `installing`. Rerun the
-same adopt command: recovery proceeds only when the recorded identity, paths,
-revision, launcher set and launcher content still match exactly. It refuses
-ready installations, links, extra entries and changed state; normal updates to
-a ready installation use `omh`.
+same installer request from either checkout: recovery proceeds only when the
+recorded identity, paths, revision, launcher set and launcher content still
+match exactly. It refuses ready installations, links, extra entries and changed
+state; normal updates to a ready installation use `omh`.
 
 Use the harness-aware refresh command for global instructions. It resolves the target from the registry and applies the required confirmation policy; do not force-copy over an existing instructions file.
 

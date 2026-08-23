@@ -448,6 +448,12 @@ class PowerShellUpgradeWrapperContractTests(unittest.TestCase):
         self.assertIn("[string]$Harness,", script)
         self.assertNotIn('[string]$Harness = "codex"', script)
         self.assertNotIn("ValidateSet", script)
+        self.assertNotIn("throw ", script.lower())
+        self.assertIn("exit $ExitCode", script)
+        self.assertIn("function Write-AccentError", script)
+        self.assertIn("[Console]::IsErrorRedirected", script)
+        self.assertIn("[Console]::ForegroundColor", script)
+        self.assertIn("Test-Path Env:NO_COLOR", script)
         self.assertIn('$HarnessWasProvided = $PSBoundParameters.ContainsKey("Harness")', script)
         self.assertGreaterEqual(script.count('@("--harness", $Harness)'), 2)
         self.assertIn('Write-Host "Harness=registry-default"', script)
@@ -467,6 +473,88 @@ class PowerShellUpgradeWrapperContractTests(unittest.TestCase):
             script.index('-Exe $BootstrapPython', script.index('$bootstrapArgs')),
             script.index('-Exe $env:OH_MY_HARNESS_PYTHON', script.index('$refreshArgs')),
         )
+
+    @unittest.skipUnless(
+        os.name == "nt" and shutil.which("powershell.exe"),
+        "Windows PowerShell wrapper test",
+    )
+    def test_explicit_help_exits_before_bootstrap_or_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_python = Path(tmp) / "missing-python.exe"
+            result = subprocess.run(
+                [
+                    shutil.which("powershell.exe") or "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(POWERSHELL_UPGRADE_SCRIPT),
+                    "-Help",
+                    "-BootstrapPython",
+                    str(missing_python),
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Usage: omh [-Harness ID] [options]", result.stdout)
+        self.assertIn("-MigrateMarketplace", result.stdout)
+        self.assertIn("-Help", result.stdout)
+        self.assertNotIn("OH_MY_HARNESS_HOME=", result.stdout)
+        self.assertNotIn(str(missing_python), result.stdout + result.stderr)
+
+    @unittest.skipUnless(
+        os.name == "nt" and shutil.which("powershell.exe"),
+        "Windows PowerShell wrapper test",
+    )
+    def test_refresh_failure_preserves_reason_and_nonzero_exit_code_without_throwing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager_home = Path(tmp) / ".oh-my-harness"
+            failing_python = Path(tmp) / "failing-python.cmd"
+            failing_python.write_text(
+                "@echo off\r\n"
+                'if "%~1"=="scripts\\bootstrap_tooling_env.py" exit /b 0\r\n'
+                "echo simulated refresh failure 1>&2\r\n"
+                "exit /b 23\r\n",
+                encoding="utf-8",
+                newline="",
+            )
+            result = subprocess.run(
+                [
+                    shutil.which("powershell.exe") or "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(POWERSHELL_UPGRADE_SCRIPT),
+                    "-ManagerHome",
+                    str(manager_home),
+                    "-BootstrapPython",
+                    str(failing_python),
+                    "-ToolingPython",
+                    str(failing_python),
+                    "-Harness",
+                    "codex",
+                    "-DryRun",
+                    "-SkipCheck",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 23)
+        self.assertIn("simulated refresh failure", result.stderr)
+        self.assertIn(
+            "error: oh-my-harness refresh failed with exit code 23",
+            result.stderr,
+        )
+        self.assertNotIn("\x1b", result.stderr)
+        self.assertNotIn("RuntimeException", result.stderr)
+        self.assertNotIn("FullyQualifiedErrorId", result.stderr)
+        self.assertNotIn("At ", result.stderr)
 
 
 if __name__ == "__main__":

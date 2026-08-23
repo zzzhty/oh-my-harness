@@ -123,6 +123,10 @@ Add lightweight dry-runs or `--summary` commands when entry points provide them.
 
 For Watcher doc-domain validation:
 
+Set `OH_MY_HARNESS_ROOT` to the canonical Git worktree before using the example
+repository config; do not infer repository authority from the plugin cache
+location or current working directory.
+
 ```bash
 python3 scripts/watcher doc doctor --config config/repos.example.json
 python3 -m compileall -q scripts/watcher_runtime

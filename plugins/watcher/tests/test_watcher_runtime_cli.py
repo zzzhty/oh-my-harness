@@ -4,6 +4,7 @@ import contextlib
 import importlib
 import inspect
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ sys.path.insert(0, str(ROOT_SCRIPTS))
 sys.path.insert(0, str(SCRIPTS))
 
 from watcher_runtime import cli as watcher_cli  # noqa: E402
-from watcher_runtime.doc import audit_repo, audit_runtime  # noqa: E402
+from watcher_runtime.doc import audit_repo, audit_runtime, doctor  # noqa: E402
 from refresh_harness import (  # noqa: E402
     cached_plugin_names,
     plugin_prune_plan,
@@ -156,6 +157,41 @@ class WatcherRuntimeCliTests(unittest.TestCase):
             with mock.patch.dict("os.environ", {"DOC_WATCHER_STATE_DIR": str(legacy)}, clear=True):
                 with mock.patch("watcher_runtime.doc.audit_repo.DEFAULT_STATE_DIR", default):
                     self.assertEqual(audit_repo.resolve_state_dir(None), default)
+
+    def test_doc_doctor_example_config_uses_explicit_repository_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = (
+                root
+                / "cache"
+                / "oh-my-harness"
+                / "watcher"
+                / "version"
+                / "config"
+                / "repos.example.json"
+            )
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                (PLUGIN_ROOT / "config" / "repos.example.json").read_text(
+                    encoding="utf-8"
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"OH_MY_HARNESS_ROOT": str(REPO_ROOT)},
+                    clear=False,
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                exit_code = doctor.main(
+                    ["--config", str(config), "--state-dir", str(root / "state")]
+                )
+
+        self.assertEqual(exit_code, 0, stdout.getvalue())
+        self.assertIn(f"ok: repo oh-my-harness: {REPO_ROOT}", stdout.getvalue())
 
     def test_prune_stale_plugins_removes_cache_only_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

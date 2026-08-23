@@ -82,51 +82,64 @@ class HarnessRegistryTests(unittest.TestCase):
         )
 
     def test_environment_root_and_environment_home_append_are_distinct(self) -> None:
-        home = Path("/users/tester")
-        codex = resolve_harness_plan(
-            self.registry,
-            "codex",
-            environ={"CODEX_HOME": "/config/codex"},
-            user_home=home,
-        )
-        claude = resolve_harness_plan(
-            self.registry,
-            "claude-code",
-            environ={"CLAUDE_CONFIG_DIR": "/config/claude"},
-            user_home=home,
-        )
-        copilot = resolve_harness_plan(
-            self.registry,
-            "copilot-cli",
-            environ={"COPILOT_HOME": "/config/copilot"},
-            user_home=home,
-        )
-        gemini = resolve_harness_plan(
-            self.registry,
-            "gemini-cli",
-            environ={"GEMINI_CLI_HOME": "/homes/gemini"},
-            user_home=home,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture_root = Path(tmp)
+            home = fixture_root / "users" / "tester"
+            codex_root = fixture_root / "config" / "codex"
+            claude_root = fixture_root / "config" / "claude"
+            copilot_root = fixture_root / "config" / "copilot"
+            gemini_home = fixture_root / "homes" / "gemini"
+            codex = resolve_harness_plan(
+                self.registry,
+                "codex",
+                environ={"CODEX_HOME": str(codex_root)},
+                user_home=home,
+            )
+            claude = resolve_harness_plan(
+                self.registry,
+                "claude-code",
+                environ={"CLAUDE_CONFIG_DIR": str(claude_root)},
+                user_home=home,
+            )
+            copilot = resolve_harness_plan(
+                self.registry,
+                "copilot-cli",
+                environ={"COPILOT_HOME": str(copilot_root)},
+                user_home=home,
+            )
+            gemini = resolve_harness_plan(
+                self.registry,
+                "gemini-cli",
+                environ={"GEMINI_CLI_HOME": str(gemini_home)},
+                user_home=home,
+            )
 
-        self.assertEqual(codex.root, Path("/config/codex"))
-        self.assertEqual(claude.root, Path("/config/claude"))
-        self.assertEqual(copilot.root, Path("/config/copilot"))
-        self.assertEqual(gemini.root, Path("/homes/gemini/.gemini"))
+            self.assertEqual(codex.root, codex_root)
+            self.assertEqual(claude.root, claude_root)
+            self.assertEqual(copilot.root, copilot_root)
+            self.assertEqual(gemini.root, gemini_home / ".gemini")
 
     def test_fixed_and_excluded_roots_follow_user_home(self) -> None:
-        home = Path("/users/tester")
-        zcode = resolve_harness_plan(self.registry, "zcode", environ={}, user_home=home)
-        opencode = resolve_harness_plan(
-            self.registry,
-            "opencode",
-            environ={"XDG_CONFIG_HOME": "/xdg"},
-            user_home=home,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture_root = Path(tmp)
+            home = fixture_root / "users" / "tester"
+            zcode = resolve_harness_plan(
+                self.registry,
+                "zcode",
+                environ={},
+                user_home=home,
+            )
+            opencode = resolve_harness_plan(
+                self.registry,
+                "opencode",
+                environ={"XDG_CONFIG_HOME": str(fixture_root / "xdg")},
+                user_home=home,
+            )
 
-        self.assertEqual(zcode.skills_root, home / ".zcode/skills")
-        self.assertEqual(zcode.instructions_target, home / ".zcode/AGENTS.md")
-        self.assertEqual(zcode.excluded_skill_roots, (home / ".agents/skills",))
-        self.assertEqual(opencode.root, home / ".config/opencode")
+            self.assertEqual(zcode.skills_root, home / ".zcode/skills")
+            self.assertEqual(zcode.instructions_target, home / ".zcode/AGENTS.md")
+            self.assertEqual(zcode.excluded_skill_roots, (home / ".agents/skills",))
+            self.assertEqual(opencode.root, home / ".config/opencode")
 
     def test_removed_shared_harness_is_rejected_without_an_alias(self) -> None:
         with self.assertRaisesRegex(

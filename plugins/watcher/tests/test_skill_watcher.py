@@ -434,7 +434,6 @@ class SkillWatcherTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schemaVersion": 4,
                         "harness": "codex",
                         "marketplace": "oh-my-harness",
                         "plugins": [

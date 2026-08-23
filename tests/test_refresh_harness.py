@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -57,20 +59,56 @@ class RefreshHarnessCliTests(unittest.TestCase):
             )
         prompt.assert_not_called()
 
-    def test_retired_marketplace_requires_the_explicit_migration_flag(self) -> None:
+    def test_retired_marketplace_hint_uses_the_platform_wrapper_option(self) -> None:
         state = refresh.RetiredMarketplaceState(
             name="my-codex",
             configured_plugins=frozenset({"watcher"}),
             cached_plugins=frozenset({"watcher"}),
             source_config=(("source", "/repo"), ("source_type", "local")),
         )
-        with self.assertRaisesRegex(SystemExit, "--migrate-marketplace"):
-            refresh.confirm_retired_marketplace_migration(
-                (state,),
-                requested=False,
-                dry_run=False,
-                assume_yes=True,
-            )
+        cases = (
+            ("nt", "-MigrateMarketplace", "--migrate-marketplace"),
+            ("posix", "--migrate-marketplace", "-MigrateMarketplace"),
+        )
+        for platform_name, expected_option, other_option in cases:
+            with self.subTest(platform=platform_name):
+                with (
+                    mock.patch.object(refresh.os, "name", platform_name),
+                    self.assertRaises(SystemExit) as raised,
+                ):
+                    refresh.confirm_retired_marketplace_migration(
+                        (state,),
+                        requested=False,
+                        dry_run=False,
+                        assume_yes=True,
+                    )
+
+                message = str(raised.exception)
+                self.assertIn("action required:", message)
+                self.assertIn(expected_option, message)
+                self.assertNotIn(other_option, message)
+
+    def test_cli_reports_action_required_without_a_traceback_in_redirected_output(self) -> None:
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(
+                refresh,
+                "main",
+                side_effect=SystemExit(
+                    "action required: rerun with -MigrateMarketplace"
+                ),
+            ),
+            contextlib.redirect_stderr(stderr),
+        ):
+            exit_code = refresh.cli()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            stderr.getvalue(),
+            "action required: rerun with -MigrateMarketplace\n",
+        )
+        self.assertNotIn("\x1b", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_retired_marketplace_migration_inventory_is_exact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -386,7 +424,6 @@ class RefreshHarnessCliTests(unittest.TestCase):
             metadata.joinpath("install-manifest.json").write_text(
                 json.dumps(
                     {
-                        "schemaVersion": 4,
                         "harness": "codex",
                         "marketplace": "test",
                         "plugins": [{"name": "demo", "install": True, "check": True}],

@@ -12,14 +12,84 @@ param(
     [switch]$MigrateMarketplace,
     [switch]$Yes,
     [switch]$DryRun,
-    [switch]$SkipCheck
+    [switch]$SkipCheck,
+    [Alias("h")]
+    [switch]$Help
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Show-Usage {
+    @'
+Usage: omh [-Harness ID] [options]
+
+Refresh and verify one registry-selected oh-my-harness distribution.
+
+Options:
+  -Harness ID                  Registry harness id. Defaults to the registry value (currently codex).
+  -ManagerHome PATH            Manager home. Defaults to OH_MY_HARNESS_HOME or ~/.oh-my-harness.
+  -BootstrapPython PATH        Base Python used to create or refresh the tooling venv.
+  -CodexPath PATH              Explicit Codex CLI executable. Otherwise uses CODEX_BIN, PATH, then managed installs.
+  -CodexHome PATH              Codex home directory. Defaults to CODEX_HOME or ~/.codex.
+  -ToolingPython PATH          Tooling Python used for harness helpers and Codex hooks.
+  -GitMarketplaceSource URL    Git marketplace source. Defaults to remote.origin.url.
+  -GitRef REF                  Git ref for first-time Git marketplace add. Defaults to main.
+  -MigrateMarketplace          Apply the registry-owned retired Codex marketplace migration.
+  -MigrateFromRepo PATH        Replace the exact former managed Codex AGENTS.md symlink after live confirmation.
+  -Yes                         Confirm missing instructions creation and exact managed-stale prune plans.
+  -DryRun                      Print commands without changing Codex state.
+  -SkipCheck                   Skip the final closure check.
+  -Help, -h                    Show this help without bootstrapping or refreshing.
+'@ | Write-Output
+}
+
+if ($Help) {
+    Show-Usage
+    exit 0
+}
+
 $HarnessWasProvided = $PSBoundParameters.ContainsKey("Harness")
 $CodexPathWasProvided = $PSBoundParameters.ContainsKey("CodexPath")
 $GitRefWasProvided = $PSBoundParameters.ContainsKey("GitRef")
+
+function Write-AccentError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    if ((Test-Path Env:NO_COLOR) -or [Console]::IsErrorRedirected) {
+        [Console]::Error.WriteLine($Message)
+        return
+    }
+    $previousColor = [Console]::ForegroundColor
+    try {
+        [Console]::ForegroundColor = [ConsoleColor]::Red
+        [Console]::Error.WriteLine($Message)
+    }
+    finally {
+        [Console]::ForegroundColor = $previousColor
+    }
+}
+
+function Stop-Upgrade {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+
+        [int]$ExitCode = 1
+    )
+
+    Write-AccentError -Message "error: $Message"
+    exit $ExitCode
+}
+
+trap {
+    Stop-Upgrade `
+        -Message "unexpected PowerShell failure: $($_.Exception.Message)" `
+        -ExitCode 1
+}
 
 function Resolve-ExecutableCandidate {
     param(
@@ -71,7 +141,9 @@ function Resolve-Executable {
         }
     }
 
-    throw "$Label not found. Checked:$([Environment]::NewLine)$($checked -join [Environment]::NewLine)"
+    Stop-Upgrade `
+        -Message "$Label not found. Checked:$([Environment]::NewLine)$($checked -join [Environment]::NewLine)" `
+        -ExitCode 1
 }
 
 function Resolve-BootstrapPython {
@@ -107,9 +179,19 @@ function Invoke-Checked {
     )
 
     Write-Host ("+ {0} {1}" -f $Exe, ($Arguments -join " "))
-    & $Exe @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Label failed with exit code $LASTEXITCODE"
+    try {
+        & $Exe @Arguments
+        $commandExitCode = $LASTEXITCODE
+    }
+    catch {
+        Stop-Upgrade `
+            -Message "$Label could not start '$Exe': $($_.Exception.Message)" `
+            -ExitCode 1
+    }
+    if ($commandExitCode -ne 0) {
+        Stop-Upgrade `
+            -Message "$Label failed with exit code $commandExitCode; see the preceding diagnostic." `
+            -ExitCode $commandExitCode
     }
 }
 
@@ -126,7 +208,7 @@ if (-not $ManagerHome) {
     }
 }
 if (-not [System.IO.Path]::IsPathRooted($ManagerHome)) {
-    throw "Manager home must be an absolute path: $ManagerHome"
+    Stop-Upgrade -Message "Manager home must be an absolute path: $ManagerHome" -ExitCode 1
 }
 $env:OH_MY_HARNESS_HOME = [System.IO.Path]::GetFullPath($ManagerHome)
 if (-not $CodexHome) {
@@ -189,9 +271,13 @@ Invoke-Checked `
 
 if (-not (Test-Path -LiteralPath $env:OH_MY_HARNESS_PYTHON -PathType Leaf)) {
     if ($DryRun) {
-        throw "tooling Python is unavailable after dry-run bootstrap: $env:OH_MY_HARNESS_PYTHON. Run the wrapper without -DryRun once to create the tooling environment."
+        Stop-Upgrade `
+            -Message "tooling Python is unavailable after dry-run bootstrap: $env:OH_MY_HARNESS_PYTHON. Run the wrapper without -DryRun once to create the tooling environment." `
+            -ExitCode 1
     }
-    throw "tooling Python is unavailable after bootstrap: $env:OH_MY_HARNESS_PYTHON"
+    Stop-Upgrade `
+        -Message "tooling Python is unavailable after bootstrap: $env:OH_MY_HARNESS_PYTHON" `
+        -ExitCode 1
 }
 
 $refreshArgs = @(

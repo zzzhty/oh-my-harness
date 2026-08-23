@@ -24,6 +24,7 @@ from manager_paths import (
     venv_path,
     venv_python,
 )
+from terminal_output import write_stderr
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
@@ -142,6 +143,10 @@ def launcher_paths(home: Path) -> tuple[Path, Path]:
     return root / "oh-my-harness", root / "omh"
 
 
+def launcher_help_invocation(platform_name: str) -> str:
+    return "omh -Help" if platform_name == "nt" else "omh --help"
+
+
 def posix_launcher(*, home: Path, repo: Path) -> str:
     wrapper = repo / "scripts" / "upgrade_oh_my_harness.sh"
     return (
@@ -216,7 +221,6 @@ def validate_incomplete_adoption(
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemExit(f"incomplete installation state is unreadable: {target}: {exc}") from exc
     expected_keys = {
-        "schemaVersion",
         "product",
         "status",
         "repository",
@@ -235,7 +239,6 @@ def validate_incomplete_adoption(
         "launchers": [str(path) for path in launcher_paths(home)],
     }
     expected = {
-        "schemaVersion": 1,
         "product": PRODUCT_NAME,
         "status": "installing",
         "repository": repository,
@@ -245,9 +248,13 @@ def validate_incomplete_adoption(
         "paths": expected_paths,
     }
     if payload != expected:
+        mismatched_fields = ", ".join(
+            sorted(key for key in expected if payload[key] != expected[key])
+        )
         raise SystemExit(
             "refusing to resume installation because install.json does not match "
-            f"the exact current adoption request: {target}"
+            "the exact current request; mismatched fields: "
+            f"{mismatched_fields}: {target}"
         )
 
     state_entries = set(state_path(home).iterdir())
@@ -270,7 +277,7 @@ def validate_incomplete_adoption(
     for launcher in expected_launchers:
         if launcher.is_symlink() or not launcher.is_file():
             raise SystemExit(f"managed launcher is not an ordinary file: {launcher}")
-        if launcher.read_text(encoding="utf-8") != expected_content:
+        if launcher.read_bytes() != expected_content.encode("utf-8"):
             raise SystemExit(f"managed launcher content changed after failed install: {launcher}")
 
     managed_venv = venv_path(home)
@@ -293,7 +300,6 @@ def write_install_state(
 ) -> None:
     target = state_path(home) / "install.json"
     payload = {
-        "schemaVersion": 1,
         "product": PRODUCT_NAME,
         "status": status,
         "repository": repository,
@@ -397,8 +403,9 @@ def main() -> None:
         "--adopt-current-checkout",
         action="store_true",
         help=(
-            "Initialize manager-owned venv, launchers, and state after the current "
-            "checkout has been moved to <home>/repo."
+            "Explicitly initialize manager-owned state after the current checkout "
+            "has been moved to <home>/repo; exact interrupted installs auto-resume "
+            "from the managed repo even when invoked from another checkout."
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
@@ -425,14 +432,20 @@ def main() -> None:
             )
         migrate_from_repo = migrate_from_repo.resolve(strict=False)
 
-    adopted_repo = SOURCE_ROOT if args.adopt_current_checkout else None
-    if adopted_repo is not None:
-        expected_repo = repo_path(home).resolve(strict=False)
-        if SOURCE_ROOT.resolve(strict=True) != expected_repo:
-            raise SystemExit(
-                "--adopt-current-checkout requires this checkout to be located at "
-                f"{expected_repo}; found {SOURCE_ROOT.resolve(strict=True)}"
-            )
+    source_root = SOURCE_ROOT.resolve(strict=True)
+    expected_repo = repo_path(home).resolve(strict=False)
+    install_state = state_path(home) / "install.json"
+    resume_incomplete_install = install_state.exists() or install_state.is_symlink()
+    if args.adopt_current_checkout and source_root != expected_repo:
+        raise SystemExit(
+            "--adopt-current-checkout requires this checkout to be located at "
+            f"{expected_repo}; found {source_root}"
+        )
+    adopted_repo = (
+        expected_repo
+        if resume_incomplete_install
+        else SOURCE_ROOT if args.adopt_current_checkout else None
+    )
     allowed_existing = (
         validate_incomplete_adoption(
             home=home,
@@ -458,7 +471,8 @@ def main() -> None:
         )
     else:
         repo = adopted_repo
-        print(f"adopt managed checkout: {repo}")
+        action = "resume" if resume_incomplete_install else "adopt"
+        print(f"{action} managed checkout: {repo}")
     launchers = write_launchers(home=home, repo=repo, dry_run=args.dry_run)
     if args.dry_run:
         print("dry-run only; no installation state written")
@@ -492,11 +506,42 @@ def main() -> None:
         status="ready",
     )
     print(f"installation complete: {home}")
-    print(f"add {bin_path(home)} to PATH, then run `omh --help`")
+    print(
+        f"add {bin_path(home)} to PATH, then run "
+        f"`{launcher_help_invocation(os.name)}`"
+    )
+
+
+def cli() -> int:
+    try:
+        main()
+    except SystemExit as exc:
+        if exc.code is None:
+            return 0
+        if isinstance(exc.code, int):
+            return exc.code
+        write_stderr(f"error: {exc.code}")
+        return 1
+    except subprocess.CalledProcessError as exc:
+        command = (
+            command_text([str(part) for part in exc.cmd])
+            if isinstance(exc.cmd, (list, tuple))
+            else str(exc.cmd)
+        )
+        write_stderr(
+            f"error: command failed with exit code {exc.returncode}: {command}"
+        )
+        return exc.returncode if exc.returncode > 0 else 1
+    except OSError as exc:
+        write_stderr(f"error: installation filesystem or process failure: {exc}")
+        return 1
+    except Exception as exc:
+        write_stderr(
+            f"error: unexpected installer failure ({type(exc).__name__}): {exc}"
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except subprocess.CalledProcessError as exc:
-        raise SystemExit(exc.returncode) from exc
+    raise SystemExit(cli())

@@ -2,7 +2,7 @@
   "repos": [
     {
       "name": "oh-my-harness",
-      "path": "../../..",
+      "path": "${OH_MY_HARNESS_ROOT}",
       "profile": "current-authority",
       "docs": [
         "README.md",

@@ -4,6 +4,10 @@ Trigger: read this reference for configured, scheduled, commit-dependent, or one
 
 ## Configured Audit
 
+Before running config-driven commands, set `OH_MY_HARNESS_ROOT` to the
+canonical Git worktree. The example config consumes that explicit root so the
+same audit remains valid from the source plugin or an installed plugin cache.
+
 From the Watcher plugin root, start with deterministic evidence:
 
 ```bash

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -68,7 +69,6 @@ class HarnessFixture:
         write_json(
             self.repo / ".agents" / "plugins" / "install-manifest.json",
             {
-                "schemaVersion": 4,
                 "harness": "codex",
                 "marketplace": "test",
                 "plugins": [
@@ -201,25 +201,37 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
         ):
             refresh.main()
 
-    def test_install_manifest_is_explicitly_owned_by_codex_harness(self) -> None:
+    def test_install_manifest_has_one_exact_repository_owned_shape(self) -> None:
         manifest = self.fixture.repo / ".agents" / "plugins" / "install-manifest.json"
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         payload.pop("harness")
         write_json(manifest, payload)
 
-        with self.assertRaisesRegex(SystemExit, "harness must be 'codex'"):
+        with self.assertRaisesRegex(SystemExit, "missing required top-level fields: harness"):
             refresh.load_install_manifest(manifest)
 
-        payload["schemaVersion"] = 3
         payload["harness"] = "codex"
+        payload["schemaVersion"] = 4
         write_json(manifest, payload)
-        with self.assertRaisesRegex(SystemExit, "schemaVersion must be 4"):
+        with self.assertRaisesRegex(SystemExit, "unsupported top-level fields: schemaVersion"):
             refresh.load_install_manifest(manifest)
 
-        payload["schemaVersion"] = 4
+        payload.pop("schemaVersion")
         payload["skillMode"] = "plugin"
         write_json(manifest, payload)
         with self.assertRaisesRegex(SystemExit, "unsupported top-level fields: skillMode"):
+            refresh.load_install_manifest(manifest)
+
+        payload.pop("skillMode")
+        payload["plugins"][0]["version"] = 1
+        write_json(manifest, payload)
+        with self.assertRaisesRegex(SystemExit, "plugin entry #1 has unsupported fields: version"):
+            refresh.load_install_manifest(manifest)
+
+        payload["plugins"][0].pop("version")
+        payload["plugins"][0].pop("check")
+        write_json(manifest, payload)
+        with self.assertRaisesRegex(SystemExit, "plugin entry #1 is missing required fields: check"):
             refresh.load_install_manifest(manifest)
 
     def test_codex_apply_rejects_a_marketplace_source_other_than_the_validated_checkout(self) -> None:
@@ -240,6 +252,18 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
                 env={},
                 dry_run=False,
             )
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended path syntax")
+    def test_local_marketplace_binding_accepts_windows_extended_path_prefix(self) -> None:
+        extended_repo = f"\\\\?\\{self.fixture.repo.resolve()}"
+
+        self.assertEqual(
+            refresh.marketplace_source_binding_issues(
+                self.fixture.catalog,
+                refresh.MarketplaceSourceBinding("local", extended_repo),
+            ),
+            [],
+        )
 
     def test_git_marketplace_binding_requires_canonical_remote_and_exact_revision(self) -> None:
         with (

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import ntpath
 import os
 import platform
 import shlex
@@ -47,6 +48,7 @@ from manager_paths import (
 from repo_skill_catalog import SkillCatalog, load_repo_skill_catalog
 from sync_agents_skills import sync_layer
 from sync_harness_instructions import apply_instruction_sync, prepare_instruction_sync
+from terminal_output import emphasize, write_stderr
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -396,11 +398,15 @@ def load_json_object(path: Path, *, label: str) -> dict:
 
 def load_install_manifest(manifest_file: Path = INSTALL_MANIFEST_FILE) -> dict:
     data = load_json_object(manifest_file, label="install manifest")
-    if data.get("schemaVersion") != 4:
-        raise SystemExit(f"install manifest schemaVersion must be 4: {manifest_file}")
-    unexpected_fields = sorted(
-        set(data) - {"schemaVersion", "harness", "marketplace", "plugins"}
-    )
+    required_fields = {"harness", "marketplace", "plugins"}
+    missing_fields = sorted(required_fields - set(data))
+    if missing_fields:
+        raise SystemExit(
+            "install manifest is missing required top-level fields: "
+            + ", ".join(missing_fields)
+            + f": {manifest_file}"
+        )
+    unexpected_fields = sorted(set(data) - required_fields)
     if unexpected_fields:
         raise SystemExit(
             "install manifest has unsupported top-level fields: "
@@ -409,15 +415,33 @@ def load_install_manifest(manifest_file: Path = INSTALL_MANIFEST_FILE) -> dict:
         )
     if data.get("harness") != "codex":
         raise SystemExit(f"install manifest harness must be 'codex': {manifest_file}")
+    marketplace = data.get("marketplace")
+    if not isinstance(marketplace, str) or not marketplace.strip():
+        raise SystemExit(f"install manifest marketplace must be a non-empty string: {manifest_file}")
 
     plugins = data.get("plugins")
     if not isinstance(plugins, list):
         raise SystemExit(f"install manifest plugins field is not a list: {manifest_file}")
 
     seen: set[str] = set()
+    required_plugin_fields = {"name", "install", "check"}
     for index, plugin in enumerate(plugins):
         if not isinstance(plugin, dict):
             raise SystemExit(f"install manifest plugin entry #{index + 1} is not an object: {manifest_file}")
+        missing_plugin_fields = sorted(required_plugin_fields - set(plugin))
+        if missing_plugin_fields:
+            raise SystemExit(
+                f"install manifest plugin entry #{index + 1} is missing required fields: "
+                + ", ".join(missing_plugin_fields)
+                + f": {manifest_file}"
+            )
+        unexpected_plugin_fields = sorted(set(plugin) - required_plugin_fields)
+        if unexpected_plugin_fields:
+            raise SystemExit(
+                f"install manifest plugin entry #{index + 1} has unsupported fields: "
+                + ", ".join(unexpected_plugin_fields)
+                + f": {manifest_file}"
+            )
         name = plugin.get("name")
         if not isinstance(name, str) or not name.strip():
             raise SystemExit(f"install manifest plugin entry #{index + 1} has no valid name: {manifest_file}")
@@ -818,6 +842,10 @@ def retired_marketplace_states(
     return tuple(states)
 
 
+def marketplace_migration_option() -> str:
+    return "-MigrateMarketplace" if os.name == "nt" else "--migrate-marketplace"
+
+
 def confirm_retired_marketplace_migration(
     states: tuple[RetiredMarketplaceState, ...],
     *,
@@ -844,8 +872,8 @@ def confirm_retired_marketplace_migration(
 
     if not requested:
         raise SystemExit(
-            "retired marketplace state requires an explicit migration; "
-            "rerun with --migrate-marketplace after reviewing the bounded plan"
+            "action required: retired marketplace state requires an explicit migration; "
+            f"rerun with {marketplace_migration_option()} after reviewing the bounded plan"
         )
     if dry_run:
         return
@@ -853,7 +881,13 @@ def confirm_retired_marketplace_migration(
         print("Retired marketplace migration [auto-confirmed]")
         return
     try:
-        answer = input("Migrate the listed retired marketplace state [y/N] ")
+        answer = input(
+            emphasize(
+                "Migrate the listed retired marketplace state [y/N] ",
+                color="yellow",
+                stream=sys.stdout,
+            )
+        )
     except (EOFError, OSError):
         answer = ""
     if answer.strip() not in {"y", "Y", "yes", "YES", "Yes"}:
@@ -1128,7 +1162,13 @@ def confirm_codex_prune(
         print("Prune listed managed-stale Codex plugins [auto-confirmed]")
         return
     try:
-        answer = input("Prune listed managed-stale Codex plugins [y/N] ")
+        answer = input(
+            emphasize(
+                "Prune listed managed-stale Codex plugins [y/N] ",
+                color="yellow",
+                stream=sys.stdout,
+            )
+        )
     except (EOFError, OSError):
         answer = ""
     if answer.strip() not in {"y", "Y", "yes", "YES", "Yes"}:
@@ -1332,11 +1372,34 @@ def remove_marketplace_source(
     run([codex, "plugin", "marketplace", "remove", marketplace_name], env=env, dry_run=dry_run)
 
 
+def windows_path_comparison_key(path: str | Path) -> str:
+    """Normalize equivalent Win32 and extended-length path spellings."""
+    value = str(path).replace("/", "\\")
+    folded = value.casefold()
+    if folded.startswith("\\\\?\\unc\\"):
+        value = "\\\\" + value[8:]
+    elif (
+        folded.startswith("\\\\?\\")
+        and len(value) >= 7
+        and value[4].isalpha()
+        and value[5:7] == ":\\"
+    ):
+        value = value[4:]
+    return ntpath.normcase(ntpath.normpath(value))
+
+
 def same_path(left: str | Path, right: str | Path) -> bool:
+    left_path = expand_path(left)
+    right_path = expand_path(right)
     try:
-        return expand_path(left).resolve() == expand_path(right).resolve()
+        left_path = left_path.resolve()
+        right_path = right_path.resolve()
     except OSError:
-        return str(expand_path(left)).rstrip("/\\").lower() == str(expand_path(right)).rstrip("/\\").lower()
+        pass
+
+    if os.name == "nt":
+        return windows_path_comparison_key(left_path) == windows_path_comparison_key(right_path)
+    return left_path == right_path
 
 
 def source_is_path_like(raw: str) -> bool:
@@ -1941,5 +2004,29 @@ def main() -> None:
             print("open /hooks in Codex to review and trust refreshed Watcher skill command hooks")
 
 
+def cli() -> int:
+    try:
+        main()
+    except SystemExit as exc:
+        if exc.code is None:
+            return 0
+        if isinstance(exc.code, int):
+            return exc.code
+        message = str(exc.code)
+        if message.startswith("action required:"):
+            write_stderr(message, color="yellow")
+        else:
+            write_stderr(
+                message if message.startswith("error:") else f"error: {message}"
+            )
+        return 1
+    except Exception as exc:
+        write_stderr(
+            f"error: unexpected refresh failure ({type(exc).__name__}): {exc}"
+        )
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())
