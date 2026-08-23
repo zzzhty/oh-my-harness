@@ -28,6 +28,47 @@ class RefreshHarnessCliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         load_catalog.assert_not_called()
 
+    def test_windows_auto_discovery_skips_an_unstartable_path_cli(self) -> None:
+        path_cli = r"C:\Program Files\WindowsApps\OpenAI.Codex\codex.exe"
+        managed_cli = r"C:\Users\tester\AppData\Local\OpenAI\Codex\bin\build\codex.exe"
+        with (
+            mock.patch.object(refresh.sys, "platform", "win32"),
+            mock.patch.object(refresh.shutil, "which", return_value=path_cli),
+            mock.patch.object(
+                refresh,
+                "codex_fallback_candidates",
+                return_value=[managed_cli],
+            ),
+            mock.patch.object(
+                refresh,
+                "resolve_first_executable",
+                side_effect=lambda candidates: candidates[0],
+            ),
+            mock.patch.object(
+                refresh,
+                "codex_executable_is_startable",
+                side_effect=lambda candidate: candidate == managed_cli,
+            ) as startable,
+        ):
+            resolved = refresh.resolve_codex_executable(
+                None,
+                codex_home=Path(r"C:\Users\tester\.codex"),
+            )
+
+        self.assertEqual(resolved, managed_cli)
+        self.assertEqual(
+            [call.args[0] for call in startable.call_args_list],
+            [path_cli, managed_cli],
+        )
+
+    def test_codex_startability_probe_rejects_a_timeout(self) -> None:
+        with mock.patch.object(
+            refresh.subprocess,
+            "run",
+            side_effect=refresh.subprocess.TimeoutExpired("codex --version", 5),
+        ):
+            self.assertFalse(refresh.codex_executable_is_startable("codex"))
+
     def test_nonempty_codex_prune_plan_requires_confirmation_by_default(self) -> None:
         plan = refresh.CodexPrunePlan(
             configured=frozenset({"retired"}),

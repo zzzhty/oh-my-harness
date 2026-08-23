@@ -39,8 +39,10 @@ class HarnessFixture:
         self.codex_home = root / "codex"
         self.target = root / "agents" / "skills"
         self.enabled: set[str] = set()
+        self.versions: dict[str, str] = {}
         self.events: list[str] = []
         self.bad_cached_identity: str | None = None
+        self.deny_reinstall: set[str] = set()
         self.repo.mkdir(parents=True)
         self.repo.joinpath("AGENTS.md").write_text("fixture instructions\n", encoding="utf-8")
         for plugin, skill in (("alpha", "one"), ("beta", "two")):
@@ -92,7 +94,10 @@ class HarnessFixture:
     def rows(self, _codex: str, *, env: dict[str, str]) -> dict[tuple[str, str], PluginListRow]:
         del env
         return {
-            ("test", name): PluginListRow("installed, enabled", "1.0.0")
+            ("test", name): PluginListRow(
+                "installed, enabled",
+                self.versions.get(name, "1.0.0"),
+            )
             for name in self.enabled
         }
 
@@ -120,7 +125,10 @@ class HarnessFixture:
         if dry_run:
             return 0
         if action == "add":
+            if plugin in self.enabled and plugin in self.deny_reinstall:
+                raise SystemExit("failed to copy plugin file: access denied")
             self.enabled.add(plugin)
+            self.versions[plugin] = "1.0.0"
             self._write_cache(plugin)
         elif action == "remove":
             self.enabled.discard(plugin)
@@ -351,6 +359,56 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
             self.fixture.events,
             ["add:alpha", "add:beta", "remove:beta", "remove:alpha"],
         )
+
+    def test_codex_apply_does_not_reinstall_an_enabled_current_plugin(self) -> None:
+        self.fixture.enabled.add("alpha")
+        self.fixture.configure_plugins()
+        self.fixture._write_cache("alpha")
+        self.fixture.deny_reinstall.add("alpha")
+        rows_patch, run_patch = self.patches()
+
+        with rows_patch, run_patch:
+            refresh.apply_codex_harness(
+                self.fixture.catalog,
+                codex="codex",
+                codex_home=self.fixture.codex_home,
+                marketplace_name="test",
+                excluded_skill_roots=(self.fixture.target,),
+                marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                    "local",
+                    str(self.fixture.repo),
+                ),
+                env={},
+                dry_run=False,
+            )
+
+        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
+        self.assertEqual(self.fixture.events, ["add:beta"])
+
+    def test_codex_apply_reinstalls_an_enabled_outdated_plugin(self) -> None:
+        self.fixture.enabled.add("alpha")
+        self.fixture.versions["alpha"] = "0.9.0"
+        self.fixture.configure_plugins()
+        rows_patch, run_patch = self.patches()
+
+        with rows_patch, run_patch:
+            refresh.apply_codex_harness(
+                self.fixture.catalog,
+                codex="codex",
+                codex_home=self.fixture.codex_home,
+                marketplace_name="test",
+                excluded_skill_roots=(self.fixture.target,),
+                marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                    "local",
+                    str(self.fixture.repo),
+                ),
+                env={},
+                dry_run=False,
+            )
+
+        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
+        self.assertEqual(self.fixture.versions, {"alpha": "1.0.0", "beta": "1.0.0"})
+        self.assertEqual(self.fixture.events, ["add:alpha", "add:beta"])
 
     def test_unrelated_user_skill_in_excluded_root_does_not_block_codex(self) -> None:
         user_skill = self.fixture.target / "user-skill"

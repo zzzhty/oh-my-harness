@@ -203,6 +203,84 @@ def installed_revision(repo: Path) -> str:
     return result.stdout.strip()
 
 
+def validate_revision_fast_forward(
+    *,
+    repo: Path,
+    repository: str,
+    ref: str,
+    previous_revision: str,
+    current_revision: str,
+) -> None:
+    for label, revision in (
+        ("recorded", previous_revision),
+        ("current", current_revision),
+    ):
+        if len(revision) not in {40, 64} or any(
+            character not in "0123456789abcdefABCDEF" for character in revision
+        ):
+            raise SystemExit(
+                f"incomplete installation {label} revision is not a full Git object id"
+            )
+
+    status = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode != 0:
+        raise SystemExit("managed checkout status is unavailable for fast-forward resume")
+    if status.stdout.strip():
+        raise SystemExit(
+            "managed checkout has uncommitted changes; refusing fast-forward resume"
+        )
+
+    actual_repository = repository_from_checkout(repo)
+    if actual_repository != repository:
+        raise SystemExit(
+            "managed checkout remote does not match the recorded installation repository"
+        )
+
+    remote_ref = f"refs/remotes/origin/{ref}"
+    remote = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", remote_ref],
+        capture_output=True,
+        text=True,
+    )
+    remote_revision = remote.stdout.strip() if remote.returncode == 0 else ""
+    if not remote_revision:
+        raise SystemExit(
+            f"managed checkout remote tracking ref is unavailable: {remote_ref}"
+        )
+    if remote_revision != current_revision:
+        raise SystemExit(
+            "managed checkout HEAD is not the published requested ref; "
+            f"expected {remote_ref} at {current_revision}, found {remote_revision}"
+        )
+
+    ancestor = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "merge-base",
+            "--is-ancestor",
+            previous_revision,
+            current_revision,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if ancestor.returncode == 1:
+        raise SystemExit(
+            "managed checkout revision did not fast-forward from the incomplete "
+            "installation revision"
+        )
+    if ancestor.returncode != 0:
+        raise SystemExit(
+            "managed checkout ancestry is unavailable for fast-forward resume"
+        )
+
+
 def validate_incomplete_adoption(
     *,
     home: Path,
@@ -210,6 +288,7 @@ def validate_incomplete_adoption(
     repository: str,
     ref: str,
     harness: str,
+    resume_fast_forward: bool = False,
 ) -> frozenset[Path]:
     target = state_path(home) / "install.json"
     if not target.exists() and not target.is_symlink():
@@ -247,15 +326,32 @@ def validate_incomplete_adoption(
         "harness": harness,
         "paths": expected_paths,
     }
-    if payload != expected:
-        mismatched_fields = ", ".join(
-            sorted(key for key in expected if payload[key] != expected[key])
-        )
-        raise SystemExit(
-            "refusing to resume installation because install.json does not match "
-            "the exact current request; mismatched fields: "
-            f"{mismatched_fields}: {target}"
-        )
+    mismatched = sorted(key for key in expected if payload[key] != expected[key])
+    if mismatched:
+        if mismatched == ["revision"] and resume_fast_forward:
+            previous_revision = payload["revision"]
+            if not isinstance(previous_revision, str):
+                raise SystemExit(
+                    "incomplete installation recorded revision must be a string"
+                )
+            validate_revision_fast_forward(
+                repo=repo,
+                repository=repository,
+                ref=ref,
+                previous_revision=previous_revision,
+                current_revision=expected["revision"],
+            )
+            print(
+                "validated incomplete installation fast-forward: "
+                f"{previous_revision[:12]} -> {expected['revision'][:12]}"
+            )
+        else:
+            mismatched_fields = ", ".join(mismatched)
+            raise SystemExit(
+                "refusing to resume installation because install.json does not match "
+                "the exact current request; mismatched fields: "
+                f"{mismatched_fields}: {target}"
+            )
 
     state_entries = set(state_path(home).iterdir())
     if state_entries != {target}:
@@ -408,6 +504,14 @@ def main() -> None:
             "from the managed repo even when invoked from another checkout."
         ),
     )
+    parser.add_argument(
+        "--resume-fast-forward",
+        action="store_true",
+        help=(
+            "Explicitly resume an incomplete installation after its clean managed "
+            "checkout fast-forwards to the published requested ref."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -436,6 +540,10 @@ def main() -> None:
     expected_repo = repo_path(home).resolve(strict=False)
     install_state = state_path(home) / "install.json"
     resume_incomplete_install = install_state.exists() or install_state.is_symlink()
+    if args.resume_fast_forward and not resume_incomplete_install:
+        raise SystemExit(
+            "--resume-fast-forward requires an incomplete installation state"
+        )
     if args.adopt_current_checkout and source_root != expected_repo:
         raise SystemExit(
             "--adopt-current-checkout requires this checkout to be located at "
@@ -453,6 +561,7 @@ def main() -> None:
             repository=repository,
             ref=args.ref,
             harness=args.harness,
+            resume_fast_forward=args.resume_fast_forward,
         )
         if adopted_repo is not None
         else frozenset()

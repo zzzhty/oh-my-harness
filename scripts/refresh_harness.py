@@ -26,6 +26,7 @@ from check_skill_discovery import (
     marketplace_plugin_sources,
     plugin_cache_harness_issues,
     plugin_installation_issues,
+    plugin_manifest_identity,
     plugin_package_issues,
     require_harness_closure,
 )
@@ -235,6 +236,20 @@ def resolve_executable(raw: str) -> str:
     return resolve_first_executable([raw])
 
 
+def codex_executable_is_startable(candidate: str) -> bool:
+    try:
+        subprocess.run(
+            [candidate, "--version"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return True
+
+
 def resolve_codex_executable(raw: str | None, *, codex_home: Path) -> str:
     if raw is not None:
         return resolve_executable(raw)
@@ -244,10 +259,25 @@ def resolve_codex_executable(raw: str | None, *, codex_home: Path) -> str:
         return resolve_executable(configured)
 
     path_codex = shutil.which("codex")
-    if path_codex is not None:
+    if path_codex is not None and (
+        sys.platform != "win32" or codex_executable_is_startable(path_codex)
+    ):
         return path_codex
 
     fallbacks = codex_fallback_candidates(codex_home)
+    if sys.platform == "win32":
+        for candidate in fallbacks:
+            try:
+                resolved = resolve_first_executable([candidate])
+            except SystemExit:
+                continue
+            if codex_executable_is_startable(resolved):
+                return resolved
+        raise SystemExit(
+            "startable executable not found. Checked:\n"
+            "codex on PATH\n"
+            + "\n".join(fallbacks)
+        )
     try:
         return resolve_first_executable(fallbacks)
     except SystemExit:
@@ -755,6 +785,23 @@ def apply_codex_harness(
             )
         return enabled - ignored
 
+    source_versions: dict[str, str] = {}
+    for plugin_name, source_root in plugin_sources.items():
+        try:
+            source_name, source_version = plugin_manifest_identity(
+                source_root / ".codex-plugin" / "plugin.json",
+                label="source",
+            )
+        except ValueError as exc:
+            raise SystemExit(f"{plugin_name}: {exc}") from exc
+        if source_name != plugin_name:
+            raise SystemExit(
+                f"{plugin_name}: source manifest name mismatch; found {source_name!r}"
+            )
+        source_versions[plugin_name] = source_version
+
+    rows_before = current_rows()
+
     def verify_codex() -> None:
         if dry_run:
             return
@@ -792,6 +839,18 @@ def apply_codex_harness(
     attempted_new: list[str] = []
     try:
         for selector in transition_selectors:
+            plugin_name, _, selector_marketplace = selector.partition("@")
+            row_before = rows_before.get((selector_marketplace, plugin_name))
+            if (
+                row_before is not None
+                and row_before.status == "installed, enabled"
+                and row_before.version == source_versions[plugin_name]
+            ):
+                print(
+                    f"Plugin `{selector}` is already installed at current version "
+                    f"{row_before.version}; skipping add."
+                )
+                continue
             if selector.partition("@")[0] not in enabled_before:
                 attempted_new.append(selector)
             run(

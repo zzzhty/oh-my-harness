@@ -219,6 +219,209 @@ class InstallerTests(unittest.TestCase):
             )
             self.assertEqual(state["status"], "ready")
 
+    @unittest.skipUnless(shutil.which("git"), "Git fast-forward resume test")
+    def test_explicit_fast_forward_resume_accepts_a_clean_pushed_descendant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / ".oh-my-harness"
+            repo = home / "repo"
+            remote = root / "remote.git"
+
+            def git(*arguments: str) -> str:
+                result = subprocess.run(
+                    ["git", *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return result.stdout.strip()
+
+            git("init", "--bare", str(remote))
+            git("clone", str(remote), str(repo))
+            git("-C", str(repo), "config", "user.name", "Installer Test")
+            git("-C", str(repo), "config", "user.email", "installer@example.invalid")
+            repo.joinpath("seed.txt").write_text("old\n", encoding="utf-8")
+            git("-C", str(repo), "add", "seed.txt")
+            git("-C", str(repo), "commit", "-m", "old")
+            git("-C", str(repo), "branch", "-M", "main")
+            git("-C", str(repo), "push", "-u", "origin", "main")
+            old_revision = installer.installed_revision(repo)
+
+            launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
+            installer.write_install_state(
+                home=home,
+                repository=str(remote),
+                ref="main",
+                repo=repo,
+                harness="codex",
+                launchers=launchers,
+                status="installing",
+            )
+
+            repo.joinpath("seed.txt").write_text("new\n", encoding="utf-8")
+            git("-C", str(repo), "add", "seed.txt")
+            git("-C", str(repo), "commit", "-m", "new")
+            git("-C", str(repo), "push", "origin", "main")
+            new_revision = installer.installed_revision(repo)
+
+            with (
+                mock.patch.object(installer, "SOURCE_ROOT", repo),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "install_oh_my_harness.py",
+                        "--home",
+                        str(home),
+                        "--repository",
+                        str(remote),
+                        "--harness",
+                        "codex",
+                        "--resume-fast-forward",
+                    ],
+                ),
+                mock.patch.object(installer, "invoke_refresh") as refresh,
+            ):
+                installer.main()
+
+            refresh.assert_called_once()
+            state = json.loads(
+                (home / "state" / "install.json").read_text(encoding="utf-8")
+            )
+            self.assertNotEqual(old_revision, new_revision)
+            self.assertEqual(state["revision"], new_revision)
+            self.assertEqual(state["status"], "ready")
+
+    def test_fast_forward_resume_rejects_a_dirty_checkout(self) -> None:
+        dirty = subprocess.CompletedProcess(
+            ["git", "status", "--porcelain"],
+            0,
+            stdout="?? local-change.txt\n",
+            stderr="",
+        )
+        with mock.patch.object(installer.subprocess, "run", return_value=dirty):
+            with self.assertRaisesRegex(SystemExit, "uncommitted changes"):
+                installer.validate_revision_fast_forward(
+                    repo=Path("managed-repo"),
+                    repository="https://example.invalid/oh-my-harness.git",
+                    ref="main",
+                    previous_revision="1" * 40,
+                    current_revision="2" * 40,
+                )
+
+    def test_revision_drift_still_fails_without_explicit_fast_forward_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".oh-my-harness"
+            repo = home / "repo"
+            repo.mkdir(parents=True)
+            repository = "https://example.invalid/oh-my-harness.git"
+            with mock.patch.object(installer, "installed_revision", return_value="1" * 40):
+                launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
+                installer.write_install_state(
+                    home=home,
+                    repository=repository,
+                    ref="main",
+                    repo=repo,
+                    harness="codex",
+                    launchers=launchers,
+                    status="installing",
+                )
+
+            with mock.patch.object(installer, "installed_revision", return_value="2" * 40):
+                with self.assertRaisesRegex(SystemExit, "mismatched fields: revision"):
+                    installer.validate_incomplete_adoption(
+                        home=home,
+                        repo=repo,
+                        repository=repository,
+                        ref="main",
+                        harness="codex",
+                    )
+
+    def test_fast_forward_resume_rejects_unpublished_or_non_descendant_head(self) -> None:
+        clean = subprocess.CompletedProcess(
+            ["git", "status", "--porcelain"],
+            0,
+            stdout="",
+            stderr="",
+        )
+        current_revision = "2" * 40
+        cases = (
+            (
+                "unpublished",
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse"],
+                    0,
+                    stdout="3" * 40 + "\n",
+                    stderr="",
+                ),
+                None,
+                "not the published requested ref",
+            ),
+            (
+                "non-descendant",
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse"],
+                    0,
+                    stdout=current_revision + "\n",
+                    stderr="",
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "merge-base", "--is-ancestor"],
+                    1,
+                    stdout="",
+                    stderr="",
+                ),
+                "did not fast-forward",
+            ),
+        )
+        for label, remote, ancestor, expected in cases:
+            results = [clean, remote]
+            if ancestor is not None:
+                results.append(ancestor)
+            with (
+                self.subTest(label=label),
+                mock.patch.object(
+                    installer,
+                    "repository_from_checkout",
+                    return_value="https://example.invalid/oh-my-harness.git",
+                ),
+                mock.patch.object(installer.subprocess, "run", side_effect=results),
+            ):
+                with self.assertRaisesRegex(SystemExit, expected):
+                    installer.validate_revision_fast_forward(
+                        repo=Path("managed-repo"),
+                        repository="https://example.invalid/oh-my-harness.git",
+                        ref="main",
+                        previous_revision="1" * 40,
+                        current_revision=current_revision,
+                    )
+
+    def test_fast_forward_resume_requires_an_incomplete_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".oh-my-harness"
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "install_oh_my_harness.py",
+                        "--home",
+                        str(home),
+                        "--repository",
+                        "https://example.invalid/oh-my-harness.git",
+                        "--resume-fast-forward",
+                    ],
+                ),
+                mock.patch.object(installer, "clone_repository") as clone,
+            ):
+                with self.assertRaisesRegex(
+                    SystemExit,
+                    "requires an incomplete installation state",
+                ):
+                    installer.main()
+
+            clone.assert_not_called()
+
     def test_managed_checkout_without_installing_state_requires_explicit_adoption(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / ".oh-my-harness"

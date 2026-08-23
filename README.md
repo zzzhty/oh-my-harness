@@ -184,7 +184,19 @@ as `--migrate-marketplace --yes` on Unix or `-MigrateMarketplace` on Windows
 PowerShell. Automatic recovery always uses the managed `repo/` and proceeds only
 after the recorded repository, revision, harness, owned paths, launcher bytes,
 and venv shape all match exactly; otherwise it stops without changing manager
-state.
+state. If repairing the failed installer required advancing that managed
+checkout, pass `--resume-fast-forward` explicitly. This narrow recovery accepts
+only a clean checkout whose `HEAD` equals the requested `origin/<ref>`, whose
+remote still matches the recorded repository, and whose recorded revision is an
+ancestor of `HEAD`; every other recorded field and owned path remains exact.
+
+```bash
+./install.sh --resume-fast-forward --migrate-marketplace --yes
+```
+
+```powershell
+.\install.ps1 -MigrateMarketplace --resume-fast-forward --yes
+```
 
 Expected installer failures are written to standard error as `error: <reason>`
 and return a nonzero exit code. A failing child command includes its command and
