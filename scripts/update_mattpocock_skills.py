@@ -294,11 +294,25 @@ def update_digest_record(digest: Digest, value: bytes) -> None:
     digest.update(value)
 
 
+def canonical_digest_payload(payload: bytes) -> bytes:
+    """Canonicalize Git's CRLF checkout form for UTF-8 text payloads."""
+    if b"\0" in payload:
+        return payload
+    try:
+        payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return payload
+    return payload.replace(b"\r\n", b"\n")
+
+
 def skill_tree_sha256(skills_root: Path) -> str:
+    """Hash case-sensitive POSIX paths and canonical repository payloads."""
     if not skills_root.is_dir():
         raise SystemExit(f"packaged skills directory is missing: {skills_root}")
     digest = hashlib.sha256()
-    for relative, (kind, payload) in tree_entries(skills_root).items():
+    entries = tree_entries(skills_root)
+    for relative in sorted(entries, key=lambda item: item.as_posix()):
+        kind, payload = entries[relative]
         update_digest_record(digest, relative.as_posix().encode("utf-8"))
         update_digest_record(digest, kind.encode("ascii"))
         if payload is None:
@@ -306,7 +320,7 @@ def skill_tree_sha256(skills_root: Path) -> str:
         elif isinstance(payload, str):
             payload_bytes = payload.encode("utf-8")
         else:
-            payload_bytes = payload
+            payload_bytes = canonical_digest_payload(payload)
         update_digest_record(digest, payload_bytes)
     return digest.hexdigest()
 

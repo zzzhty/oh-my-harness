@@ -5,7 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest import mock
 
 import yaml
@@ -119,6 +119,33 @@ class MattPocockUpdaterTests(unittest.TestCase):
             REPO_ROOT / "plugins" / "mattpocock-skills",
         )
         self.assertTrue(updater.target_plugin_root().is_dir())
+
+    def test_skill_tree_digest_is_stable_across_windows_checkout_semantics(self) -> None:
+        posix_entries = {
+            PurePosixPath("example/SKILL.md"): ("file", b"# Example\n"),
+            PurePosixPath("example/agents"): ("directory", None),
+            PurePosixPath("example/agents/openai.yaml"): (
+                "file",
+                b"interface:\n",
+            ),
+        }
+        windows_entries = {
+            PureWindowsPath("example/agents"): ("directory", None),
+            PureWindowsPath("example/agents/openai.yaml"): (
+                "file",
+                b"interface:\r\n",
+            ),
+            PureWindowsPath("example/SKILL.md"): ("file", b"# Example\r\n"),
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            skills_root = Path(tmp)
+            with mock.patch.object(updater, "tree_entries", return_value=posix_entries):
+                posix_digest = updater.skill_tree_sha256(skills_root)
+            with mock.patch.object(updater, "tree_entries", return_value=windows_entries):
+                windows_digest = updater.skill_tree_sha256(skills_root)
+
+        self.assertEqual(windows_digest, posix_digest)
 
     def test_sync_copies_every_published_skill_without_content_rewrites(self) -> None:
         skills = [
