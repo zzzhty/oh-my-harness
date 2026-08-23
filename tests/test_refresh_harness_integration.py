@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -13,6 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import refresh_my_codex as refresh  # noqa: E402
 from check_skill_discovery import PluginListRow  # noqa: E402
+from harness_registry import load_harness_registry, resolve_harness_plan  # noqa: E402
 from repo_skill_catalog import load_repo_skill_catalog  # noqa: E402
 
 
@@ -30,7 +32,7 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-class ProfileFixture:
+class HarnessFixture:
     def __init__(self, root: Path) -> None:
         self.repo = root / "repo"
         self.codex_home = root / "codex"
@@ -38,6 +40,8 @@ class ProfileFixture:
         self.enabled: set[str] = set()
         self.events: list[str] = []
         self.bad_cached_identity: str | None = None
+        self.repo.mkdir(parents=True)
+        self.repo.joinpath("AGENTS.md").write_text("fixture instructions\n", encoding="utf-8")
         for plugin, skill in (("alpha", "one"), ("beta", "two")):
             write_skill(self.repo, plugin, skill)
             write_json(
@@ -64,8 +68,8 @@ class ProfileFixture:
         write_json(
             self.repo / ".agents" / "plugins" / "install-manifest.json",
             {
-                "schemaVersion": 2,
-                "discoveryProfile": "plugin",
+                "schemaVersion": 4,
+                "harness": "codex",
                 "marketplace": "test",
                 "plugins": [
                     {"name": plugin, "install": True, "check": True}
@@ -125,10 +129,10 @@ class ProfileFixture:
         return 0
 
 
-class RefreshProfileIntegrationTests(unittest.TestCase):
+class RefreshHarnessIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        self.fixture = ProfileFixture(Path(self._tmp.name))
+        self.fixture = HarnessFixture(Path(self._tmp.name))
         self.addCleanup(self._tmp.cleanup)
 
     def patches(self):
@@ -140,28 +144,48 @@ class RefreshProfileIntegrationTests(unittest.TestCase):
     def run_pruning_main(self, *, dry_run: bool = True) -> None:
         arguments = [
             "refresh_my_codex.py",
-            "--discovery-profile",
-            "plugin",
-            "--marketplace-name",
-            "test",
+            "--harness",
+            "codex",
             "--marketplace-source",
             str(self.fixture.repo),
             "--codex-home",
             str(self.fixture.codex_home),
-            "--agents-skills-root",
-            str(self.fixture.target),
-            "--prune-plugins",
             "--skip-bootstrap",
             "--skip-agents",
             "--skip-hooks",
             "--skip-doctor",
+            "--yes",
         ]
         if dry_run:
             arguments.append("--dry-run")
+        registry = load_harness_registry()
+        codex_plan = resolve_harness_plan(
+            registry,
+            "codex",
+            environ={"CODEX_HOME": str(self.fixture.codex_home)},
+            user_home=self.fixture.target.parents[1],
+        )
+        codex_plan = replace(
+            codex_plan,
+            repo_root=self.fixture.repo,
+            root=self.fixture.codex_home,
+            instructions_source=self.fixture.repo / "AGENTS.md",
+            instructions_target=self.fixture.codex_home / "AGENTS.md",
+            instruction_shadow_paths=(self.fixture.codex_home / "AGENTS.override.md",),
+            excluded_skill_roots=(self.fixture.target,),
+            marketplace_path=self.fixture.repo / ".agents/plugins/marketplace.json",
+            install_manifest_path=self.fixture.repo / ".agents/plugins/install-manifest.json",
+        )
+
+        def resolved_plan(_registry, _harness_id, **_kwargs):
+            return codex_plan
+
         rows_patch, run_patch = self.patches()
         with (
             mock.patch.object(sys, "argv", arguments),
             mock.patch.object(refresh, "load_repo_skill_catalog", return_value=self.fixture.catalog),
+            mock.patch.object(refresh, "load_harness_registry", return_value=registry),
+            mock.patch.object(refresh, "resolve_harness_plan", side_effect=resolved_plan),
             mock.patch.object(refresh, "resolve_codex_executable", return_value="codex"),
             mock.patch.object(refresh, "require_codex_plugin_commands"),
             mock.patch.object(
@@ -177,33 +201,38 @@ class RefreshProfileIntegrationTests(unittest.TestCase):
         ):
             refresh.main()
 
-    def test_install_manifest_is_explicitly_owned_by_plugin_profile(self) -> None:
+    def test_install_manifest_is_explicitly_owned_by_codex_harness(self) -> None:
         manifest = self.fixture.repo / ".agents" / "plugins" / "install-manifest.json"
         payload = json.loads(manifest.read_text(encoding="utf-8"))
-        payload.pop("discoveryProfile")
+        payload.pop("harness")
         write_json(manifest, payload)
 
-        with self.assertRaisesRegex(SystemExit, "discoveryProfile must be 'plugin'"):
+        with self.assertRaisesRegex(SystemExit, "harness must be 'codex'"):
             refresh.load_install_manifest(manifest)
 
-        payload["schemaVersion"] = 1
-        payload["discoveryProfile"] = "plugin"
+        payload["schemaVersion"] = 3
+        payload["harness"] = "codex"
         write_json(manifest, payload)
-        with self.assertRaisesRegex(SystemExit, "schemaVersion must be 2"):
+        with self.assertRaisesRegex(SystemExit, "schemaVersion must be 4"):
             refresh.load_install_manifest(manifest)
 
-    def test_plugin_apply_rejects_a_marketplace_source_other_than_the_validated_checkout(self) -> None:
+        payload["schemaVersion"] = 4
+        payload["skillMode"] = "plugin"
+        write_json(manifest, payload)
+        with self.assertRaisesRegex(SystemExit, "unsupported top-level fields: skillMode"):
+            refresh.load_install_manifest(manifest)
+
+    def test_codex_apply_rejects_a_marketplace_source_other_than_the_validated_checkout(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
             "local marketplace source is not the validated canonical checkout",
         ):
-            refresh.apply_plugin_discovery_profile(
+            refresh.apply_codex_harness(
                 self.fixture.catalog,
                 codex="codex",
                 codex_home=self.fixture.codex_home,
                 marketplace_name="test",
-                target_root=self.fixture.target,
-                requested_plugins=None,
+                excluded_skill_roots=(self.fixture.target,),
                 marketplace_source_binding=refresh.MarketplaceSourceBinding(
                     "local",
                     str(self.fixture.repo.parent / "alternate"),
@@ -249,90 +278,41 @@ class RefreshProfileIntegrationTests(unittest.TestCase):
         self.assertIn("not the canonical checkout remote", "\n".join(wrong_source))
         self.assertIn("not pinned to the validated checkout revision", "\n".join(wrong_revision))
 
-    def test_round_trip_preserves_exactly_one_active_discovery_profile(self) -> None:
-        self.fixture.enabled.update({"alpha", "beta"})
-        self.fixture.configure_plugins()
-        rows_patch, run_patch = self.patches()
-        with rows_patch, run_patch:
-            refresh.apply_universal_discovery_profile(
-                self.fixture.catalog,
-                codex="codex",
-                codex_home=self.fixture.codex_home,
-                marketplace_name="test",
-                target_root=self.fixture.target,
-                env={},
-                dry_run=False,
-            )
-            self.assertEqual(self.fixture.enabled, set())
-            self.assertEqual(
-                {path.name for path in self.fixture.target.iterdir()},
-                {"one", "two"},
-            )
-
-            refresh.apply_plugin_discovery_profile(
-                self.fixture.catalog,
-                codex="codex",
-                codex_home=self.fixture.codex_home,
-                marketplace_name="test",
-                target_root=self.fixture.target,
-                requested_plugins=None,
-                marketplace_source_binding=refresh.MarketplaceSourceBinding(
-                    "local",
-                    str(self.fixture.repo),
-                ),
-                env={},
-                dry_run=False,
-            )
-
-        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
-        self.assertFalse(self.fixture.target.exists() and any(self.fixture.target.iterdir()))
-        self.assertEqual(
-            self.fixture.events,
-            ["remove:alpha", "remove:beta", "add:alpha", "add:beta"],
-        )
-
-    def test_transition_rejects_extra_repo_target_link_before_plugin_mutation(self) -> None:
-        self.fixture.enabled.update({"alpha", "beta"})
-        self.fixture.configure_plugins()
-        self.fixture.target.mkdir(parents=True)
-        ghost = self.fixture.target / "ghost"
-        ghost.symlink_to(next(iter(self.fixture.catalog.sources)).path)
+    def test_codex_rejects_an_empty_interrupted_excluded_root_residue(self) -> None:
+        interrupted = self.fixture.target / "one"
+        interrupted.mkdir(parents=True)
         rows_patch, run_patch = self.patches()
 
         with rows_patch, run_patch:
-            with self.assertRaisesRegex(SystemExit, "outside exact canonical set"):
-                refresh.apply_universal_discovery_profile(
+            with self.assertRaisesRegex(SystemExit, "excluded skill root closure failed"):
+                refresh.apply_codex_harness(
                     self.fixture.catalog,
                     codex="codex",
                     codex_home=self.fixture.codex_home,
                     marketplace_name="test",
-                    target_root=self.fixture.target,
+                    excluded_skill_roots=(self.fixture.target,),
+                    marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                        "local",
+                        str(self.fixture.repo),
+                    ),
                     env={},
                     dry_run=False,
                 )
 
-        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
+        self.assertTrue(interrupted.is_dir())
         self.assertEqual(self.fixture.events, [])
-        self.assertTrue(ghost.is_symlink())
 
-    def test_plugin_closure_failure_restores_universal_links_and_removes_partial_plugins(self) -> None:
-        refresh.sync_layer(
-            self.fixture.catalog,
-            target_root=self.fixture.target,
-            dry_run=False,
-            prune=True,
-        )
+    def test_codex_closure_failure_removes_partial_plugins(self) -> None:
         self.fixture.bad_cached_identity = "beta"
         rows_patch, run_patch = self.patches()
         with rows_patch, run_patch:
-            with self.assertRaisesRegex(SystemExit, "cached callable identities differ"):
-                refresh.apply_plugin_discovery_profile(
+            with self.assertRaisesRegex(SystemExit, "cached catalog skill names differ"):
+                refresh.apply_codex_harness(
                     self.fixture.catalog,
                     codex="codex",
                     codex_home=self.fixture.codex_home,
                     marketplace_name="test",
-                    target_root=self.fixture.target,
-                    requested_plugins=None,
+                    excluded_skill_roots=(self.fixture.target,),
                     marketplace_source_binding=refresh.MarketplaceSourceBinding(
                         "local",
                         str(self.fixture.repo),
@@ -342,34 +322,38 @@ class RefreshProfileIntegrationTests(unittest.TestCase):
                 )
 
         self.assertEqual(self.fixture.enabled, set())
-        self.assertEqual(
-            {path.name for path in self.fixture.target.iterdir()},
-            {"one", "two"},
-        )
+        self.assertFalse(self.fixture.target.exists())
         self.assertEqual(
             self.fixture.events,
             ["add:alpha", "add:beta", "remove:beta", "remove:alpha"],
         )
 
-    def test_plugin_selector_cannot_escape_the_selected_marketplace_or_catalog(self) -> None:
+    def test_unrelated_user_skill_in_excluded_root_does_not_block_codex(self) -> None:
+        user_skill = self.fixture.target / "user-skill"
+        user_skill.mkdir(parents=True)
+        user_skill.joinpath("SKILL.md").write_text(
+            "---\nname: user-skill\n---\n",
+            encoding="utf-8",
+        )
         rows_patch, run_patch = self.patches()
+
         with rows_patch, run_patch:
-            with self.assertRaisesRegex(SystemExit, "canonical skills-bearing packages"):
-                refresh.apply_plugin_discovery_profile(
-                    self.fixture.catalog,
-                    codex="codex",
-                    codex_home=self.fixture.codex_home,
-                    marketplace_name="test",
-                    target_root=self.fixture.target,
-                    requested_plugins=["alpha@other"],
-                    marketplace_source_binding=refresh.MarketplaceSourceBinding(
-                        "local",
-                        str(self.fixture.repo),
-                    ),
-                    env={},
-                    dry_run=False,
-                )
-        self.assertEqual(self.fixture.events, [])
+            refresh.apply_codex_harness(
+                self.fixture.catalog,
+                codex="codex",
+                codex_home=self.fixture.codex_home,
+                marketplace_name="test",
+                excluded_skill_roots=(self.fixture.target,),
+                marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                    "local",
+                    str(self.fixture.repo),
+                ),
+                env={},
+                dry_run=False,
+            )
+
+        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
+        self.assertTrue(user_skill.is_dir())
 
     def test_prune_dry_run_reaches_cache_only_stale_plugin_before_full_closure(self) -> None:
         stale_cache = (
@@ -386,7 +370,7 @@ class RefreshProfileIntegrationTests(unittest.TestCase):
             SystemExit,
             "cached my-codex plugins have no canonical repository skills: retired",
         ):
-            refresh.preflight_plugin_distribution(
+            refresh.preflight_codex_distribution(
                 self.fixture.catalog,
                 codex_home=self.fixture.codex_home,
                 marketplace_name="test",

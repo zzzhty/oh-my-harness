@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 2,
-  "discoveryProfile": "plugin",
+  "schemaVersion": 4,
+  "harness": "codex",
   "marketplace": "my-codex",
   "plugins": [
     {

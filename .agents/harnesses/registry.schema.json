@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/my-codex/harness-registry.schema.json",
+  "title": "my-codex harness registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "defaults", "sources", "excludedSkillRoots", "harnesses"],
+  "properties": {
+    "$schema": {"type": "string", "const": "./registry.schema.json"},
+    "schemaVersion": {"type": "integer", "const": 1},
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["harness"],
+      "properties": {
+        "harness": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instructions"],
+      "properties": {
+        "instructions": {"$ref": "#/$defs/relativePath"}
+      }
+    },
+    "excludedSkillRoots": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9-]*$"},
+      "additionalProperties": {"$ref": "#/$defs/excludedSkillRoot"}
+    },
+    "harnesses": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9-]*$"},
+      "additionalProperties": {"$ref": "#/$defs/harness"}
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {"pattern": "(^/|\\\\|^[A-Za-z]:|(^|/)\\.\\.?(/|$)|//|/$)"}
+    },
+    "relativeAppend": {
+      "type": "string",
+      "not": {"pattern": "(^/|\\\\|^[A-Za-z]:|(^|/)\\.\\.?(/|$)|//|/$)"}
+    },
+    "rootCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "append"],
+      "properties": {
+        "source": {"enum": ["environment", "user-home"]},
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "append": {"$ref": "#/$defs/relativeAppend"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "environment"}}},
+          "then": {"required": ["name"]},
+          "else": {"not": {"required": ["name"]}}
+        }
+      ]
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidates"],
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/rootCandidate"}
+        }
+      }
+    },
+    "excludedSkillRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "relativePath"],
+      "properties": {
+        "root": {"$ref": "#/$defs/root"},
+        "relativePath": {"$ref": "#/$defs/relativePath"}
+      }
+    },
+    "skillMaterialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posix", "windows"],
+      "properties": {
+        "posix": {"const": "directory-symlink"},
+        "windows": {"const": "directory-junction"}
+      }
+    },
+    "instructionMaterialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posix", "windows"],
+      "properties": {
+        "posix": {"enum": ["copy", "symlink"]},
+        "windows": {"const": "copy"}
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prunePolicy", "confirmation"],
+      "properties": {
+        "prunePolicy": {"const": "managed-stale"},
+        "confirmation": {"enum": ["none", "when-nonempty"]}
+      }
+    },
+    "directoryReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prunePolicy", "confirmation"],
+      "properties": {
+        "prunePolicy": {"const": "managed-stale"},
+        "confirmation": {"const": "none"}
+      }
+    },
+    "skills": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["driver", "marketplacePath", "installManifestPath", "reconciliation"],
+          "properties": {
+            "driver": {"const": "codex-marketplace"},
+            "marketplacePath": {"$ref": "#/$defs/relativePath"},
+            "installManifestPath": {"$ref": "#/$defs/relativePath"},
+            "reconciliation": {"$ref": "#/$defs/reconciliation"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["driver", "relativePath", "materialization", "reconciliation"],
+          "properties": {
+            "driver": {"const": "directory-projection"},
+            "relativePath": {"$ref": "#/$defs/relativePath"},
+            "materialization": {"$ref": "#/$defs/skillMaterialization"},
+            "reconciliation": {"$ref": "#/$defs/directoryReconciliation"}
+          }
+        }
+      ]
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "replace"],
+      "properties": {
+        "create": {"const": "assume-yes-or-interactive"},
+        "replace": {"const": "interactive"}
+      }
+    },
+    "instructions": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["driver", "relativePath", "materialization", "confirmation", "shadowPaths"],
+          "properties": {
+            "driver": {"const": "managed-file"},
+            "relativePath": {"$ref": "#/$defs/relativePath"},
+            "materialization": {"$ref": "#/$defs/instructionMaterialization"},
+            "confirmation": {"$ref": "#/$defs/confirmation"},
+            "shadowPaths": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/relativePath"},
+              "uniqueItems": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["driver", "settingsPath", "settingPath", "defaultRelativePath", "multipleTargetsPolicy", "materialization", "confirmation", "shadowPaths"],
+          "properties": {
+            "driver": {"const": "settings-derived-file"},
+            "settingsPath": {"$ref": "#/$defs/relativePath"},
+            "settingPath": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "defaultRelativePath": {"$ref": "#/$defs/relativePath"},
+            "multipleTargetsPolicy": {"const": "reject"},
+            "materialization": {"$ref": "#/$defs/instructionMaterialization"},
+            "confirmation": {"$ref": "#/$defs/confirmation"},
+            "shadowPaths": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/relativePath"},
+              "uniqueItems": true
+            }
+          }
+        }
+      ]
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "root", "skills", "instructions", "extras"],
+      "properties": {
+        "displayName": {"type": "string", "minLength": 1},
+        "root": {"$ref": "#/$defs/root"},
+        "skills": {"$ref": "#/$defs/skills"},
+        "instructions": {"$ref": "#/$defs/instructions"},
+        "extras": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["codex-agent-support", "watcher-hooks", "watcher-doctor"]}
+        }
+      }
+    }
+  }
+}

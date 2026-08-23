@@ -7,7 +7,7 @@
 - Automate waiting, checking, summarizing, and reporting; preserve human judgment for mutation, escalation, privacy-sensitive actions, messages to others, source skill mutations, automation changes, and irreversible actions.
 - Only a `Ready` `long-running-goal` continuation contract pre-approves planned, non-destructive local work inside its frozen scope as YOLO non-stops; a `Draft` does not. Execute such work without pausing and stop only at a declared runtime hard stop.
 - Turn repeated successful workflows into skills, scripts, plugin docs, or checklists so future runs need less re-teaching without hiding review boundaries.
-- For global subagent workflow guidance, use the installed note at `$CODEX_HOME/agents/operating-principles.md`; if `$CODEX_HOME` is unset, use `~/.codex/agents/operating-principles.md`.
+- For global subagent workflow guidance, Codex sessions use the installed note at `$CODEX_HOME/agents/operating-principles.md`; if `$CODEX_HOME` is unset, use `~/.codex/agents/operating-principles.md`. Other harnesses use only their own native support surface.
 
 ## Internal identifier evolution
 

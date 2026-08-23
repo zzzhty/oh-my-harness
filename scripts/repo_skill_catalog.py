@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the canonical callable-skill catalog directly from repository source."""
+"""Build the canonical skill catalog directly from repository source."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def _resolved_within(path: Path, root: Path, *, label: str) -> Path:
 
 
 def skill_frontmatter_name(skill_file: Path) -> str:
-    """Return the validated bare callable identity from one SKILL.md file."""
+    """Return the validated bare catalog skill name from one SKILL.md file."""
 
     try:
         text = skill_file.read_text(encoding="utf-8")
@@ -79,7 +79,7 @@ def skill_frontmatter_name(skill_file: Path) -> str:
     if not isinstance(name, str) or not name or name != name.strip():
         raise SystemExit(f"skill frontmatter name must be a non-empty trimmed string: {skill_file}")
     if _CALLABLE_NAME.fullmatch(name) is None:
-        raise SystemExit(f"skill frontmatter name is not a portable bare callable identity: {name!r}: {skill_file}")
+        raise SystemExit(f"skill frontmatter name is not a portable bare catalog skill name: {name!r}: {skill_file}")
     return name
 
 
@@ -139,7 +139,7 @@ def load_repo_skill_catalog(repo_root: Path = REPO_ROOT) -> SkillCatalog:
             f"{name}: {', '.join(f'{entry.plugin}/{entry.directory_name}' for entry in entries)}"
             for name, entries in sorted(collisions.items())
         )
-        raise SystemExit(f"duplicate callable skill identities in repository source: {details}")
+        raise SystemExit(f"duplicate catalog skill names in repository source: {details}")
 
     return SkillCatalog(
         sources=tuple(sorted(sources, key=lambda source: (source.name, source.plugin, source.directory_name))),

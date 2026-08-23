@@ -3,18 +3,17 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Usage: scripts/upgrade_my_codex.sh --discovery-profile universal|plugin [options]
+Usage: scripts/upgrade_my_codex.sh [--harness ID] [options]
 
 Options:
-  --discovery-profile PROFILE  Required skill discovery profile: universal or plugin.
+  --harness ID                  Registry harness id. Defaults to the registry value (currently codex).
   --bootstrap-python PATH       Base Python used to create or refresh the tooling venv.
   --codex PATH                  Explicit Codex CLI executable. Otherwise uses CODEX_BIN, PATH, then managed installs.
   --codex-home PATH             Codex home directory. Defaults to CODEX_HOME or ~/.codex.
-  --tooling-python PATH         Tooling Python used for profile helpers and Codex hooks.
-  --marketplace-name NAME       Marketplace name. Defaults to my-codex.
+  --tooling-python PATH         Tooling Python used for harness helpers and Codex hooks.
   --git-marketplace-source URL  Git marketplace source. Defaults to remote.origin.url.
   --git-ref REF                 Git ref for first-time Git marketplace add. Defaults to main.
-  --prune-plugins               Prompt, then remove stale my-codex plugins not selected by the install manifest.
+  --yes                         Confirm missing instructions creation and exact managed-stale prune plans.
   --dry-run                     Print commands without changing Codex state.
   --skip-check                  Skip the final closure check.
   -h, --help                    Show this help.
@@ -50,103 +49,6 @@ resolve_command() {
     exit 1
 }
 
-canonical_path() {
-    path=$1
-    if command -v realpath >/dev/null 2>&1; then
-        resolved=$(realpath "$path" 2>/dev/null || true)
-        if [ -n "$resolved" ]; then
-            printf '%s\n' "$resolved"
-            return
-        fi
-        resolved=$(realpath -m "$path" 2>/dev/null || true)
-        if [ -n "$resolved" ]; then
-            printf '%s\n' "$resolved"
-            return
-        fi
-    fi
-
-    dir=$(dirname -- "$path")
-    base=$(basename -- "$path")
-    if [ -d "$dir" ]; then
-        printf '%s/%s\n' "$(CDPATH= cd -- "$dir" && pwd -P)" "$base"
-    else
-        printf '%s\n' "$path"
-    fi
-}
-
-resolve_link_target() {
-    link_path=$1
-    link_target=$(readlink "$link_path")
-    case "$link_target" in
-        /*)
-            canonical_path "$link_target"
-            ;;
-        *)
-            canonical_path "$(dirname -- "$link_path")/$link_target"
-            ;;
-    esac
-}
-
-confirm_action() {
-    prompt=$1
-    printf '%s [y/N] ' "$prompt"
-    IFS= read -r answer || answer=
-    case "$answer" in
-        y|Y|yes|YES|Yes)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
-sync_agents_instructions() {
-    source_path="$repo_root/AGENTS.md"
-    target_path="$CODEX_HOME/AGENTS.md"
-
-    if [ ! -f "$source_path" ]; then
-        echo "source AGENTS.md does not exist: $source_path" >&2
-        exit 1
-    fi
-
-    desired_target=$(canonical_path "$source_path")
-    if [ -L "$target_path" ]; then
-        current_target=$(resolve_link_target "$target_path")
-        if [ "$current_target" = "$desired_target" ]; then
-            echo "AGENTS.md already points at source: $target_path -> $source_path"
-            return
-        fi
-        echo "AGENTS.md points at a different source."
-        echo "CurrentTarget=$current_target"
-        echo "DesiredTarget=$desired_target"
-    elif [ -e "$target_path" ]; then
-        if [ -d "$target_path" ]; then
-            echo "refusing to replace directory target: $target_path" >&2
-            exit 1
-        fi
-        echo "AGENTS.md target exists but is not a symlink: $target_path"
-        echo "DesiredTarget=$desired_target"
-    else
-        echo "AGENTS.md target is missing: $target_path"
-        echo "DesiredTarget=$desired_target"
-    fi
-
-    if [ "$dry_run" -eq 1 ]; then
-        echo "+ ln -sfn $source_path $target_path"
-        return
-    fi
-
-    if ! confirm_action "Link source AGENTS.md to target"; then
-        echo "AGENTS.md sync was not confirmed" >&2
-        exit 1
-    fi
-
-    mkdir -p "$CODEX_HOME"
-    ln -sfn "$source_path" "$target_path"
-    echo "AGENTS.md linked: $target_path -> $source_path"
-}
-
 find_bootstrap_python() {
     if [ -n "${MY_CODEX_BOOTSTRAP_PYTHON:-}" ]; then
         resolve_command "Bootstrap Python" "$MY_CODEX_BOOTSTRAP_PYTHON"
@@ -171,13 +73,12 @@ bootstrap_python=${MY_CODEX_BOOTSTRAP_PYTHON:-}
 codex_path=
 codex_home=${CODEX_HOME:-"$HOME/.codex"}
 tooling_python=${MY_CODEX_PYTHON:-}
-marketplace_name=my-codex
-discovery_profile=
+harness=
 git_marketplace_source=
 git_ref=
 dry_run=0
 skip_check=0
-prune_plugins=0
+assume_yes=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -218,23 +119,14 @@ while [ "$#" -gt 0 ]; do
             tooling_python=${1#*=}
             shift
             ;;
-        --marketplace-name)
+        --harness)
             require_value "$1" "${2-}"
-            marketplace_name=$2
+            harness=$2
             shift 2
             ;;
-        --marketplace-name=*)
-            marketplace_name=${1#*=}
-            shift
-            ;;
-        --discovery-profile)
-            require_value "$1" "${2-}"
-            discovery_profile=$2
-            shift 2
-            ;;
-        --discovery-profile=*)
-            discovery_profile=${1#*=}
-            require_value "--discovery-profile" "$discovery_profile"
+        --harness=*)
+            harness=${1#*=}
+            require_value "--harness" "$harness"
             shift
             ;;
         --git-marketplace-source)
@@ -259,8 +151,8 @@ while [ "$#" -gt 0 ]; do
             dry_run=1
             shift
             ;;
-        --prune-plugins)
-            prune_plugins=1
+        --yes)
+            assume_yes=1
             shift
             ;;
         --skip-check)
@@ -278,24 +170,6 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
-
-case "$discovery_profile" in
-    universal|plugin)
-        ;;
-    "")
-        echo "missing required --discovery-profile universal|plugin" >&2
-        exit 2
-        ;;
-    *)
-        echo "invalid --discovery-profile: $discovery_profile (expected universal or plugin)" >&2
-        exit 2
-        ;;
-esac
-
-if [ "$discovery_profile" = universal ] && [ "$prune_plugins" -eq 1 ]; then
-    echo "--prune-plugins is incompatible with --discovery-profile universal" >&2
-    exit 2
-fi
 
 if [ -z "$bootstrap_python" ]; then
     bootstrap_python=$(find_bootstrap_python)
@@ -320,24 +194,10 @@ echo "MY_CODEX_PYTHON=$MY_CODEX_PYTHON"
 echo "MY_CODEX_TOOLING_PYTHON=$MY_CODEX_TOOLING_PYTHON"
 echo "PLUGIN_VALIDATOR=$PLUGIN_VALIDATOR"
 echo "BootstrapPython=$bootstrap_python"
-echo "CodexPath=${codex_path:-auto-if-plugin-removal-is-required}"
-echo "MarketplaceName=$marketplace_name"
-echo "DiscoveryProfile=$discovery_profile"
-if [ "$prune_plugins" -eq 1 ]; then
-    echo "PrunePlugins=enabled"
-else
-    echo "PrunePlugins=disabled"
-fi
+echo "CodexPath=${codex_path:-auto-if-required-by-harness}"
+echo "Harness=${harness:-registry-default}"
 
 cd "$repo_root"
-
-if [ "$prune_plugins" -eq 1 ] && [ "$dry_run" -eq 0 ]; then
-    echo "Plugin pruning removes installed or cached $marketplace_name plugins that are not selected by .agents/plugins/install-manifest.json."
-    if ! confirm_action "Prune stale $marketplace_name plugins during refresh"; then
-        echo "plugin pruning was requested but not confirmed" >&2
-        exit 1
-    fi
-fi
 
 set -- "$repo_root/scripts/bootstrap_tooling_env.py" --venv "$venv_path"
 if [ "$dry_run" -eq 1 ]; then
@@ -355,13 +215,14 @@ if [ ! -f "$MY_CODEX_PYTHON" ]; then
 fi
 
 set -- "$repo_root/scripts/refresh_my_codex.py" \
-    --discovery-profile "$discovery_profile" \
     --codex-home "$CODEX_HOME" \
     --venv "$venv_path" \
     --python "$MY_CODEX_PYTHON" \
-    --marketplace-name "$marketplace_name" \
-    --marketplace-source "$repo_root" \
     --skip-bootstrap
+
+if [ -n "$harness" ]; then
+    set -- "$@" --harness "$harness"
+fi
 
 if [ -n "$codex_path" ]; then
     set -- "$@" --codex "$codex_path"
@@ -376,8 +237,8 @@ fi
 if [ "$dry_run" -eq 1 ]; then
     set -- "$@" --dry-run
 fi
-if [ "$prune_plugins" -eq 1 ]; then
-    set -- "$@" --prune-plugins
+if [ "$assume_yes" -eq 1 ]; then
+    set -- "$@" --yes
 fi
 
 echo "+ $MY_CODEX_PYTHON $*"
@@ -387,16 +248,15 @@ if [ "$dry_run" -eq 1 ] && [ "$skip_check" -eq 0 ]; then
     echo "Dry run: skipping closure check because no local state was changed."
 elif [ "$skip_check" -eq 0 ]; then
     set -- "$repo_root/scripts/check_my_codex.py" \
-        --discovery-profile "$discovery_profile" \
         --codex-home "$CODEX_HOME" \
         --venv "$venv_path" \
-        --python "$MY_CODEX_PYTHON" \
-        --marketplace-name "$marketplace_name"
+        --python "$MY_CODEX_PYTHON"
+    if [ -n "$harness" ]; then
+        set -- "$@" --harness "$harness"
+    fi
     if [ -n "$codex_path" ]; then
         set -- "$@" --codex "$codex_path"
     fi
     echo "+ $MY_CODEX_PYTHON $*"
     "$MY_CODEX_PYTHON" "$@"
 fi
-
-sync_agents_instructions

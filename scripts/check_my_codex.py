@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run final closure checks for the local my-codex installation."""
+"""Run final closure checks for one registry-selected harness distribution."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -11,38 +12,37 @@ from pathlib import Path
 from check_skill_discovery import (
     PluginListRow,
     codex_plugin_rows,
+    excluded_skill_root_issues,
     marketplace_plugin_sources,
     plugin_installation_issues,
     plugin_package_issues,
-    universal_profile_issues,
+)
+from harness_registry import (
+    REGISTRY_FILE,
+    HarnessPlan,
+    HarnessRegistryError,
+    ensure_codex_harness_covers_catalog,
+    load_harness_registry,
+    resolve_harness_plan,
 )
 from refresh_my_codex import (
     CODEX_HOME,
-    DEFAULT_AGENTS_SKILLS_ROOT,
-    DEFAULT_VENV,
     REPO_ROOT,
     build_env,
     cached_plugin_names,
     command_text,
     configured_marketplace_source_binding,
     configured_plugin_names,
-    enabled_configured_plugin_selectors,
     expand_path,
+    load_install_manifest,
     marketplace_source_binding_issues,
     resolve_codex_executable,
-    selected_plugins,
+    codex_plugin_selectors,
     stale_plugin_names,
     tooling_python_from_args,
 )
 from repo_skill_catalog import SkillCatalog, load_repo_skill_catalog
-from skill_discovery_profiles import (
-    DISCOVERY_PROFILE_CHOICES,
-    CheckProfileOptions,
-    DiscoveryProfile,
-    ensure_plugin_profile_covers_catalog,
-    parse_discovery_profile,
-    validate_check_profile,
-)
+from sync_harness_instructions import check_instruction_sync
 
 
 WATCHER_SCRIPTS = REPO_ROOT / "plugins" / "watcher" / "scripts"
@@ -112,9 +112,13 @@ class CheckRunner:
         expected_plugins: list[str],
         *,
         source_root: Path = REPO_ROOT,
+        marketplace_file: Path | None = None,
     ) -> dict[str, Path] | None:
         try:
-            marketplace_name, sources = marketplace_plugin_sources(source_root)
+            marketplace_name, sources = marketplace_plugin_sources(
+                source_root,
+                marketplace_file=marketplace_file,
+            )
         except ValueError as exc:
             self.fail(str(exc))
             return None
@@ -131,7 +135,9 @@ class CheckRunner:
         if missing:
             self.fail(f"marketplace is missing plugins: {', '.join(missing)}")
             return None
-        marketplace = source_root / ".agents" / "plugins" / "marketplace.json"
+        marketplace = marketplace_file or (
+            source_root / ".agents" / "plugins" / "marketplace.json"
+        )
         self.ok(f"marketplace file includes exact local plugin identities: {marketplace}")
         return sources
 
@@ -195,61 +201,36 @@ class CheckRunner:
             self.fail(f"failed to parse `codex plugin list` output: {exc}")
             return None
 
-    def check_universal_discovery_profile(
+    def check_excluded_skill_roots(
         self,
         catalog: SkillCatalog,
         *,
-        target_root: Path,
-        marketplace_name: str,
-        rows: dict[tuple[str, str], PluginListRow],
-        configured_enabled_selectors: set[tuple[str, str]],
+        roots: tuple[Path, ...],
     ) -> None:
-        expected = set(catalog.plugin_names)
-        all_enabled = {
-            (marketplace, plugin_name)
-            for (marketplace, plugin_name), row in rows.items()
-            if row.status == "installed, enabled"
-        }
-        enabled = {
-            plugin_name
-            for _, plugin_name in all_enabled
-            if plugin_name in expected
-        }
-        unclassified = sorted(
-            plugin_name
-            for marketplace, plugin_name in all_enabled
-            if marketplace == marketplace_name and plugin_name not in expected
-        )
-        issues = universal_profile_issues(
-            catalog,
-            target_root=target_root,
-            enabled_plugin_names=enabled,
-        )
-        missing_from_cli = sorted(configured_enabled_selectors - all_enabled)
-        if missing_from_cli:
-            issues.append(
-                "Codex config and `codex plugin list` disagree about enabled discovery plugins: "
-                + ", ".join(
-                    f"{plugin_name}@{marketplace}"
-                    for marketplace, plugin_name in missing_from_cli
-                )
-            )
-        if unclassified:
-            issues.append(
-                "unclassified enabled my-codex plugins are outside the frozen discovery profile: "
-                + ", ".join(unclassified)
-            )
+        issues = excluded_skill_root_issues(catalog, roots=roots)
         if issues:
             for issue in issues:
                 self.fail(issue)
+            cleanup = REPO_ROOT / "scripts" / "sync_agents_skills.py"
+            for root in roots:
+                base = [
+                    sys.executable,
+                    str(cleanup),
+                    "--repo-root",
+                    str(catalog.repo_root),
+                    "--target-root",
+                    str(root),
+                    "--remove-managed",
+                ]
+                print_text("     preview: " + command_text([*base, "--dry-run"]))
+                print_text("     apply after review: " + command_text([*base, "--yes"]))
             return
-        self.ok(f"universal discovery profile is closed under {target_root}")
+        self.ok("excluded skill roots contain no repository catalog identities")
 
-    def check_plugin_discovery_profile(
+    def check_codex_harness(
         self,
         catalog: SkillCatalog,
         *,
-        target_root: Path,
         codex_home: Path,
         marketplace_name: str,
         rows: dict[tuple[str, str], PluginListRow],
@@ -258,7 +239,7 @@ class CheckRunner:
         issues = plugin_installation_issues(
             catalog,
             marketplace_name=marketplace_name,
-            target_root=target_root,
+            excluded_skill_roots=(),
             codex_home=codex_home,
             rows=rows,
             plugin_sources=plugin_sources,
@@ -267,7 +248,7 @@ class CheckRunner:
             for issue in issues:
                 self.fail(issue)
             return
-        self.ok("plugin discovery profile matches repository, CLI, cache, and inactive universal layer")
+        self.ok("Codex harness matches repository, CLI, and cache")
 
     def check_no_stale_my_codex_plugins(
         self,
@@ -294,12 +275,20 @@ class CheckRunner:
                     locations.append("cache")
                 details.append(f"{name} ({'+'.join(locations) or 'unknown'})")
             self.fail(
-                "stale my-codex plugins remain. "
-                "Run scripts/refresh_my_codex.py --discovery-profile plugin --prune-plugins. "
+                "stale managed my-codex plugins remain. "
+                "Run scripts/refresh_my_codex.py --harness codex. "
                 f"Stale={', '.join(details)}"
             )
             return
         self.ok("no stale my-codex plugin config or cache entries remain")
+
+    def check_harness_instructions(self, plan: HarnessPlan) -> None:
+        issues = check_instruction_sync(plan)
+        if issues:
+            for issue in issues:
+                self.fail(issue)
+            return
+        self.ok(f"global instructions match for harness {plan.harness_id}")
 
     def check_hook_config(self, tooling_python: Path, *, hook_config: Path) -> None:
         if not hook_config.is_file():
@@ -319,7 +308,7 @@ class CheckRunner:
         if issues:
             self.fail(
                 "Watcher skill hook config has stale managed handlers. "
-                "Run scripts/refresh_my_codex.py with the same explicit discovery profile. "
+                "Run scripts/refresh_my_codex.py with the same harness. "
                 f"Issues: {issues}"
             )
             return
@@ -403,7 +392,7 @@ class CheckRunner:
             output = (result.stderr or result.stdout).strip()
             self.fail(f"subagent support file is not synced: {output}")
 
-    def check_agents_skills_layer(
+    def check_skill_projection(
         self,
         tooling_python: Path,
         *,
@@ -412,7 +401,7 @@ class CheckRunner:
     ) -> None:
         sync_script = REPO_ROOT / "scripts" / "sync_agents_skills.py"
         if not sync_script.is_file():
-            self.fail(f"agents skills sync script missing: {sync_script}")
+            self.fail(f"skills projection sync script missing: {sync_script}")
             return
         result = self.run_command(
             [
@@ -428,10 +417,10 @@ class CheckRunner:
             env=env,
         )
         if result.returncode == 0:
-            self.ok("agents skills exposure layer is synced")
+            self.ok("skills projection is synced")
         else:
             output = (result.stderr or result.stdout).strip()
-            self.fail(f"agents skills exposure layer is not synced: {output}")
+            self.fail(f"skills projection is not synced: {output}")
 
     def check_watcher_runtime_cutover(self, *, codex_home: Path) -> None:
         legacy_roots = [codex_home / "skill-watcher", codex_home / "doc-watcher"]
@@ -456,135 +445,155 @@ class CheckRunner:
 def main() -> None:
     configure_output_streams()
 
-    parser = argparse.ArgumentParser(description="Final checks for my-codex plugin and hook state.")
+    parser = argparse.ArgumentParser(description="Check one registry-selected harness distribution.")
     parser.add_argument(
-        "--discovery-profile",
-        required=True,
-        choices=DISCOVERY_PROFILE_CHOICES,
-        help="Required skill discovery profile: universal or plugin.",
+        "--harness",
+        help="Harness id from .agents/harnesses/registry.json (default: registry-owned).",
     )
+    parser.add_argument("--registry", default=str(REGISTRY_FILE), help="Harness registry JSON path.")
     parser.add_argument(
         "--codex",
         help="Explicit Codex CLI executable. Defaults to CODEX_BIN, PATH, then managed install fallbacks.",
     )
-    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex home directory.")
-    parser.add_argument("--venv", default=str(DEFAULT_VENV), help="Shared my-codex tooling venv path.")
-    parser.add_argument("--python", help="Explicit tooling Python expected in hooks and diagnostics.")
-    parser.add_argument("--marketplace-name", default="my-codex", help="Configured marketplace name.")
-    parser.add_argument("--plugin", action="append", help="Plugin name or selector to check. May be repeated.")
-    parser.add_argument("--skip-plugins", action="store_true", help="Deprecated profile bypass; rejected.")
-    parser.add_argument("--skip-hooks", action="store_true", help="Skip Watcher skill hook config checks.")
-    parser.add_argument("--skip-agents", action="store_true", help="Skip subagent support-file sync checks.")
-    parser.add_argument("--skip-agents-skills", action="store_true", help="Deprecated profile bypass; rejected.")
+    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex and tooling home directory.")
     parser.add_argument(
-        "--agents-skills-root",
-        default=str(DEFAULT_AGENTS_SKILLS_ROOT),
-        help="Universal skill projection root (default: ~/.agents/skills).",
+        "--venv",
+        help="Shared tooling venv path (default: <resolved Codex home>/venvs/my-codex).",
     )
-    parser.add_argument("--skip-plugin-validation", action="store_true", help="Skip plugin validator checks.")
-    parser.add_argument("--skip-doctor", action="store_true", help="Skip Watcher skill doctor.")
+    parser.add_argument("--python", help="Explicit tooling Python expected in hooks and diagnostics.")
+    parser.add_argument("--skip-hooks", action="store_true", help="Skip Codex Watcher hook checks.")
+    parser.add_argument("--skip-agents", action="store_true", help="Skip Codex subagent support-file checks.")
+    parser.add_argument("--skip-plugin-validation", action="store_true", help="Skip Codex package validation.")
+    parser.add_argument("--skip-doctor", action="store_true", help="Skip the Codex Watcher doctor.")
     parser.add_argument("--strict-warnings", action="store_true", help="Treat warnings as failures.")
     args = parser.parse_args()
 
-    profile = parse_discovery_profile(args.discovery_profile)
-    validate_check_profile(
-        CheckProfileOptions(
-            profile=profile,
-            skip_plugins=args.skip_plugins,
-            skip_agents_skills=args.skip_agents_skills,
-            selected_plugins=tuple(args.plugin or ()),
-        )
-    )
-    catalog = load_repo_skill_catalog()
     codex_home = expand_path(args.codex_home)
-    agents_skills_root = expand_path(args.agents_skills_root)
-    venv_path = expand_path(args.venv)
+    venv_path = (
+        expand_path(args.venv)
+        if args.venv
+        else codex_home / "venvs" / "my-codex"
+    )
     tooling_python = tooling_python_from_args(args, venv_path)
     env = build_env(codex_home=codex_home, tooling_python=tooling_python)
+    registry_environment = dict(os.environ)
+    registry_environment["CODEX_HOME"] = str(codex_home)
+    try:
+        registry = load_harness_registry(expand_path(args.registry), repo_root=REPO_ROOT)
+        plan = resolve_harness_plan(
+            registry,
+            args.harness,
+            repo_root=REPO_ROOT,
+            environ=registry_environment,
+        )
+    except HarnessRegistryError as exc:
+        raise SystemExit(str(exc)) from exc
+    if plan.harness_id != "codex":
+        irrelevant = []
+        if args.skip_hooks:
+            irrelevant.append("--skip-hooks")
+        if args.skip_agents:
+            irrelevant.append("--skip-agents")
+        if args.skip_plugin_validation:
+            irrelevant.append("--skip-plugin-validation")
+        if args.skip_doctor:
+            irrelevant.append("--skip-doctor")
+        if irrelevant:
+            raise SystemExit(
+                "Codex-only check options require --harness codex: " + ", ".join(irrelevant)
+            )
+
+    catalog = load_repo_skill_catalog()
+    marketplace_name: str | None = None
+    if plan.harness_id == "codex":
+        if plan.marketplace_path is None or plan.install_manifest_path is None:
+            raise SystemExit("codex harness did not resolve marketplace metadata paths")
+        manifest = load_install_manifest(plan.install_manifest_path)
+        raw_marketplace_name = manifest.get("marketplace")
+        if not isinstance(raw_marketplace_name, str) or not raw_marketplace_name.strip():
+            raise SystemExit(
+                "install manifest marketplace must be a non-empty string: "
+                f"{plan.install_manifest_path}"
+            )
+        marketplace_name = raw_marketplace_name.strip()
     codex: str | None = None
-    configured_for_discovery = {
-        (marketplace, plugin_name)
-        for marketplace, plugin_name in enabled_configured_plugin_selectors(codex_home)
-        if plugin_name in set(catalog.plugin_names) or marketplace == args.marketplace_name
-    }
-    if profile is DiscoveryProfile.PLUGIN or configured_for_discovery:
-        codex = resolve_codex_executable(args.codex, codex_home=codex_home)
+    if plan.harness_id == "codex":
+        codex = resolve_codex_executable(args.codex, codex_home=plan.root)
 
-    source_plugins = [
-        f"{plugin_name}@{args.marketplace_name}"
-        for plugin_name in catalog.plugin_names
-    ]
+    source_plugins = (
+        [f"{plugin_name}@{marketplace_name}" for plugin_name in catalog.plugin_names]
+        if marketplace_name is not None
+        else []
+    )
     validator = Path(env["PLUGIN_VALIDATOR"])
-
     runner = CheckRunner()
     runner.check_tooling_python(tooling_python, env=env)
-    if profile is DiscoveryProfile.PLUGIN:
+    runner.check_excluded_skill_roots(catalog, roots=plan.excluded_skill_roots)
+
+    if plan.harness_id == "codex":
         assert codex is not None
+        assert marketplace_name is not None
         runner.check_marketplace_source_binding(
             catalog,
-            codex_home=codex_home,
-            marketplace_name=args.marketplace_name,
+            codex_home=plan.root,
+            marketplace_name=marketplace_name,
         )
-        desired_plugins = selected_plugins(
-            None,
-            args.marketplace_name,
+        desired_plugins = codex_plugin_selectors(
+            marketplace_name,
             action="check",
+            manifest_file=plan.install_manifest_path,
+            marketplace_file=plan.marketplace_path,
         )
-        ensure_plugin_profile_covers_catalog(
+        ensure_codex_harness_covers_catalog(
             catalog,
             desired_plugins,
-            marketplace_name=args.marketplace_name,
+            marketplace_name=marketplace_name,
         )
-        plugin_sources = runner.check_marketplace_file(desired_plugins)
+        plugin_sources = runner.check_marketplace_file(
+            desired_plugins,
+            marketplace_file=plan.marketplace_path,
+        )
         rows = runner.read_plugin_rows(codex, env=env)
         if plugin_sources is not None:
             runner.check_plugin_packages(catalog, plugin_sources=plugin_sources)
         if plugin_sources is not None and rows is not None:
-            runner.check_plugin_discovery_profile(
+            runner.check_codex_harness(
                 catalog,
-                target_root=agents_skills_root,
-                codex_home=codex_home,
-                marketplace_name=args.marketplace_name,
+                codex_home=plan.root,
+                marketplace_name=marketplace_name,
                 rows=rows,
                 plugin_sources=plugin_sources,
             )
         runner.check_no_stale_my_codex_plugins(
             desired_plugins,
-            codex_home=codex_home,
-            marketplace_name=args.marketplace_name,
+            codex_home=plan.root,
+            marketplace_name=marketplace_name,
         )
     else:
-        rows: dict[tuple[str, str], PluginListRow] = {}
-        if codex is not None:
-            inspected = runner.read_plugin_rows(codex, env=env)
-            if inspected is not None:
-                rows = inspected
-        runner.check_universal_discovery_profile(
-            catalog,
-            target_root=agents_skills_root,
-            marketplace_name=args.marketplace_name,
-            rows=rows,
-            configured_enabled_selectors=configured_for_discovery,
-        )
-    if not args.skip_hooks:
-        runner.check_hook_config(tooling_python, hook_config=codex_home / "hooks.json")
-    runner.check_watcher_runtime_cutover(codex_home=codex_home)
-    if not args.skip_agents:
-        runner.check_agent_sync(codex_home=codex_home, env=env)
-    if profile is DiscoveryProfile.UNIVERSAL:
-        runner.check_agents_skills_layer(
-            tooling_python,
-            target_root=agents_skills_root,
-            env=env,
-        )
-    if not args.skip_plugin_validation:
+        if plan.skills_root is None:
+            runner.fail(f"harness has no skills projection root: {plan.harness_id}")
+        else:
+            runner.check_skill_projection(
+                tooling_python,
+                target_root=plan.skills_root,
+                env=env,
+            )
+
+    runner.check_harness_instructions(plan)
+    if "watcher-hooks" in plan.harness.extras and not args.skip_hooks:
+        runner.check_hook_config(tooling_python, hook_config=plan.root / "hooks.json")
+    if plan.harness.extras:
+        runner.check_watcher_runtime_cutover(codex_home=plan.root)
+    if "codex-agent-support" in plan.harness.extras and not args.skip_agents:
+        runner.check_agent_sync(codex_home=plan.root, env=env)
+    if plan.harness_id == "codex" and not args.skip_plugin_validation:
         runner.check_plugin_validation(
             tooling_python,
             source_plugins,
             env=env,
             validator=validator,
         )
-    if not args.skip_doctor:
+    if "watcher-doctor" in plan.harness.extras and not args.skip_doctor:
         runner.check_doctor(tooling_python, env=env)
     runner.finish(strict_warnings=args.strict_warnings)
 

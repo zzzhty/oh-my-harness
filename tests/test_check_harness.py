@@ -15,13 +15,13 @@ import check_my_codex  # noqa: E402
 from check_skill_discovery import (  # noqa: E402
     PluginListRow,
     codex_plugin_rows,
+    excluded_skill_root_issues,
     plugin_installation_issues,
     plugin_package_issues,
-    plugin_profile_issues,
-    universal_profile_issues,
+    codex_harness_issues,
 )
 from repo_skill_catalog import load_repo_skill_catalog  # noqa: E402
-from sync_agents_skills import sync_layer  # noqa: E402
+from sync_agents_skills import create_projection_link, sync_layer  # noqa: E402
 
 
 def write_skill(root: Path, plugin: str, name: str) -> Path:
@@ -34,7 +34,7 @@ def write_skill(root: Path, plugin: str, name: str) -> Path:
     return skill
 
 
-class DiscoveryProfileClosureTests(unittest.TestCase):
+class HarnessClosureTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
@@ -45,57 +45,56 @@ class DiscoveryProfileClosureTests(unittest.TestCase):
         self.target = root / "agents" / "skills"
         self.addCleanup(self._tmp.cleanup)
 
-    def test_universal_requires_exact_links_and_no_enabled_skill_plugins(self) -> None:
-        sync_layer(self.catalog, target_root=self.target, dry_run=False, prune=True)
+    def test_excluded_root_allows_unrelated_user_skills(self) -> None:
+        user_skill = self.target / "user-skill"
+        user_skill.mkdir(parents=True)
+        user_skill.joinpath("SKILL.md").write_text(
+            "---\nname: user-skill\n---\n",
+            encoding="utf-8",
+        )
         self.assertEqual(
-            universal_profile_issues(
+            excluded_skill_root_issues(
                 self.catalog,
-                target_root=self.target,
-                enabled_plugin_names=set(),
+                roots=(self.target,),
             ),
             [],
         )
-        issues = universal_profile_issues(
-            self.catalog,
-            target_root=self.target,
-            enabled_plugin_names={"alpha"},
-        )
-        self.assertTrue(any("remain enabled" in issue for issue in issues))
 
-    def test_universal_rejects_missing_drift_unmanaged_and_stale_owned_links(self) -> None:
+    def test_excluded_root_rejects_catalog_entries_and_stale_owned_links(self) -> None:
         self.target.mkdir(parents=True)
-        (self.target / "one").symlink_to(self.two)
-        (self.target / "two").mkdir()
-        (self.target / "stale").symlink_to(self.one)
-        issues = universal_profile_issues(
+        create_projection_link(self.target / "one", self.two)
+        unmanaged = self.target / "two"
+        unmanaged.mkdir()
+        (unmanaged / "keep.txt").write_text("user content", encoding="utf-8")
+        create_projection_link(self.target / "stale", self.one)
+        issues = excluded_skill_root_issues(
             self.catalog,
-            target_root=self.target,
-            enabled_plugin_names=set(),
+            roots=(self.target,),
         )
         report = "\n".join(issues)
-        self.assertIn("link drift", report)
-        self.assertIn("unmanaged universal entry", report)
-        self.assertIn("stale repository-owned", report)
+        self.assertIn("excluded skill root contains catalog identity one", report)
+        self.assertIn("excluded skill root contains catalog identity two", report)
+        self.assertIn("stale repository-owned projection", report)
 
-    def test_plugin_requires_exact_plugins_and_no_universal_entries(self) -> None:
+    def test_codex_requires_exact_plugins_and_clear_excluded_roots(self) -> None:
         self.assertEqual(
-            plugin_profile_issues(
+            codex_harness_issues(
                 self.catalog,
-                target_root=self.target,
+                excluded_skill_roots=(self.target,),
                 enabled_plugin_names={"alpha", "beta"},
             ),
             [],
         )
         sync_layer(self.catalog, target_root=self.target, dry_run=False, prune=True)
-        issues = plugin_profile_issues(
+        issues = codex_harness_issues(
             self.catalog,
-            target_root=self.target,
+            excluded_skill_roots=(self.target,),
             enabled_plugin_names={"alpha", "adapter"},
         )
         report = "\n".join(issues)
         self.assertIn("not enabled: beta", report)
         self.assertIn("no canonical repository skills: adapter", report)
-        self.assertIn("universal callable identity remains active", report)
+        self.assertIn("excluded skill root contains catalog identity", report)
 
 
 class PluginListParserTests(unittest.TestCase):
@@ -127,7 +126,7 @@ class PluginListParserTests(unittest.TestCase):
 
 
 class PluginInstallationClosureTests(unittest.TestCase):
-    def test_cli_and_cache_version_drift_are_reported_by_shared_closure(self) -> None:
+    def test_cli_and_cache_version_drift_are_reported_by_installation_closure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repo = root / "repo"
@@ -148,7 +147,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
             issues = plugin_installation_issues(
                 catalog,
                 marketplace_name="test",
-                target_root=root / "agents" / "skills",
+                excluded_skill_roots=(root / "agents" / "skills",),
                 codex_home=codex_home,
                 rows={
                     ("test", "alpha"): PluginListRow(
@@ -163,7 +162,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
         self.assertIn("installed version mismatch", report)
         self.assertIn("expected exactly one inspectable cache version", report)
 
-    def test_manifest_schema_and_identity_failures_are_reported_by_shared_closure(self) -> None:
+    def test_manifest_schema_and_identity_failures_are_reported_by_installation_closure(self) -> None:
         cases = (
             (
                 "source-json",
@@ -239,7 +238,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
                 issues = plugin_installation_issues(
                     catalog,
                     marketplace_name="test",
-                    target_root=root / "agents" / "skills",
+                    excluded_skill_roots=(root / "agents" / "skills",),
                     codex_home=root / "codex",
                     rows={
                         ("test", "alpha"): PluginListRow(
@@ -260,7 +259,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
                 "source manifest skills must be exactly './skills/'",
             ),
             ("extra-directory", "extra", "outside the loaded catalog"),
-            ("identity-drift", "identity", "callable identity changed after catalog load"),
+            ("identity-drift", "identity", "catalog skill name changed after catalog load"),
             (
                 "symlink-escape",
                 "symlink",
@@ -334,7 +333,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
 
             self.assertIn(expected, "\n".join(issues))
 
-    def test_plugin_installation_closure_rejects_universal_links_with_valid_package(self) -> None:
+    def test_plugin_installation_closure_rejects_excluded_root_links_with_valid_package(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repo = root / "repo"
@@ -366,7 +365,7 @@ class PluginInstallationClosureTests(unittest.TestCase):
             issues = plugin_installation_issues(
                 catalog,
                 marketplace_name="test",
-                target_root=target,
+                excluded_skill_roots=(target,),
                 codex_home=root / "codex",
                 rows={
                     ("test", "alpha"): PluginListRow(
@@ -377,65 +376,76 @@ class PluginInstallationClosureTests(unittest.TestCase):
                 plugin_sources={"alpha": source_root},
             )
 
-        self.assertIn("universal callable identity remains active", "\n".join(issues))
+        self.assertIn("excluded skill root contains catalog identity", "\n".join(issues))
 
 
-class CheckDiscoveryProfileCliTests(unittest.TestCase):
+class CheckHarnessCliTests(unittest.TestCase):
     def run_main(self, arguments: list[str]) -> None:
         with mock.patch.object(sys, "argv", ["check_my_codex.py", *arguments]):
             check_my_codex.main()
 
-    def test_missing_profile_fails_before_catalog_or_runtime_checks(self) -> None:
+    def test_legacy_discovery_profile_option_is_rejected(self) -> None:
         with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaises(SystemExit) as raised:
-                self.run_main([])
+                self.run_main(["--discovery-profile", "universal"])
         self.assertEqual(raised.exception.code, 2)
         load_catalog.assert_not_called()
 
-    def test_universal_without_configured_plugins_does_not_resolve_codex_or_marketplace(self) -> None:
+    def test_default_harness_is_codex(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            arguments = [
-                "--discovery-profile",
-                "universal",
-                "--codex-home",
-                str(root / "codex"),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
-                "--skip-hooks",
-                "--skip-agents",
-                "--skip-plugin-validation",
-                "--skip-doctor",
-            ]
             with (
                 mock.patch.object(
                     check_my_codex,
                     "resolve_codex_executable",
-                    side_effect=AssertionError("Codex must not be resolved"),
-                ),
+                    side_effect=SystemExit("resolved default Codex harness"),
+                ) as resolve,
+            ):
+                with self.assertRaisesRegex(SystemExit, "resolved default Codex harness"):
+                    self.run_main(["--codex-home", str(root / "codex")])
+        resolve.assert_called_once()
+
+    def test_removed_shared_harness_fails_before_catalog_load(self) -> None:
+        with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
+            with self.assertRaisesRegex(SystemExit, "unknown harness 'shared'"):
+                self.run_main(["--harness", "shared"])
+        load_catalog.assert_not_called()
+
+    def test_legacy_bypass_option_is_rejected_before_runtime_checks(self) -> None:
+        with mock.patch.object(check_my_codex, "resolve_codex_executable") as resolve:
+            with self.assertRaises(SystemExit) as raised:
+                self.run_main(["--skip-plugins"])
+        self.assertEqual(raised.exception.code, 2)
+        resolve.assert_not_called()
+
+    def test_unknown_harness_fails_before_catalog_load(self) -> None:
+        with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
+            with self.assertRaisesRegex(SystemExit, "unknown harness"):
+                self.run_main(["--harness", "unknown"])
+        load_catalog.assert_not_called()
+
+    def test_native_harness_does_not_read_codex_marketplace_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
                 mock.patch.object(
                     check_my_codex,
-                    "marketplace_plugin_sources",
-                    side_effect=AssertionError("marketplace must not be read"),
+                    "load_install_manifest",
+                    side_effect=AssertionError("Codex manifest must not be read"),
                 ),
                 mock.patch.object(check_my_codex.CheckRunner, "check_tooling_python"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_universal_discovery_profile"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_agents_skills_layer"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_watcher_runtime_cutover"),
+                mock.patch.object(check_my_codex.CheckRunner, "check_excluded_skill_roots"),
+                mock.patch.object(check_my_codex.CheckRunner, "check_skill_projection"),
+                mock.patch.object(check_my_codex.CheckRunner, "check_harness_instructions"),
+                mock.patch.object(check_my_codex.CheckRunner, "finish"),
             ):
-                self.run_main(arguments)
-
-    def test_legacy_bypass_fails_before_runtime_checks(self) -> None:
-        with mock.patch.object(check_my_codex, "resolve_codex_executable") as resolve:
-            with self.assertRaisesRegex(SystemExit, "legacy bypass"):
                 self.run_main(
                     [
-                        "--discovery-profile",
-                        "universal",
-                        "--skip-plugins",
+                        "--harness",
+                        "zcode",
+                        "--codex-home",
+                        str(Path(tmp) / "codex"),
                     ]
                 )
-        resolve.assert_not_called()
 
 
 if __name__ == "__main__":

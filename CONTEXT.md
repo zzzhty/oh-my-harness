@@ -1,26 +1,54 @@
 # Watcher
 
-This context describes the language used for canonical skill source, discovery and distribution profiles, Watcher usage data, documentation audits, and plugin-provided skill systems.
+This context describes the language used for canonical skill source, harness distributions, Watcher usage data, documentation audits, and plugin-provided skill systems.
 
 ## Language
 
-### Universal Skill Distribution
+### Harness Distribution
 
 **Canonical Skill Source**:
 The version-controlled repository content from which every discovery or distribution projection is derived.
 _Avoid_: plugin cache authority, marketplace authority, installed source
 
 **Catalog Skill Name**:
-The bare name declared by a skill's `SKILL.md` frontmatter and used as the repository catalog key and universal projection basename.
-_Avoid_: callable identity, plugin-qualified identity, directory identity
+The bare name declared by a skill's `SKILL.md` frontmatter and used as the repository catalog key and directory-projection basename.
+_Avoid_: harness-independent invocation identity, plugin-qualified identity, physical directory name
+
+**Harness**:
+A named distribution target that owns one complete plan for skills, global instructions, root resolution, materialization, reconciliation, and optional runtime extras.
+_Avoid_: skills target plus instructions target, mode, product name without a registry entry
+
+**Harness Registry**:
+The strict repository-owned JSON authority at `.agents/harnesses/registry.json` that declares supported harnesses and their structured distribution behavior.
+_Avoid_: shell path table, command template registry, duplicated wrapper defaults
+
+**Harness Plan**:
+The validated, platform-resolved distribution plan produced from one Harness Registry entry.
+_Avoid_: independently selected skills and instructions plans, implicit fallback plan
+
+**Excluded Skill Root**:
+A skill-discovery root that is intentionally outside every Harness Plan because it cannot carry the complete skills-and-instructions bundle or would duplicate catalog identities; registry-selected refresh and closure require canonical repository identities to be absent there.
+_Avoid_: shared harness, partial harness, implicit cleanup target
+
+**Harness Skill Projection**:
+A managed user-level exposure of canonical skill directories for harness-native discovery; it is neither source nor cache.
+_Avoid_: direct source, copied catalog, plugin cache
+
+**Codex Marketplace Distribution**:
+The `codex` harness skills driver that installs the exact skills-bearing package set selected by the Codex install manifest and requires every Excluded Skill Root to be clear of repository catalog identities.
+_Avoid_: `$CODEX_HOME/skills` projection, optional partial plugin mode, directory projection
+
+**Harness Instructions Projection**:
+The registry-selected global instructions file derived from the repository root `AGENTS.md`; every Harness Plan owns exactly one such projection.
+_Avoid_: `~/.agents/AGENTS.md`, independently selected instructions harness, silent replacement
 
 **Codex Invocation Identity**:
-The qualified identity that Codex exposes for an invocable skill and resolves consistently across supported discovery profiles.
-_Avoid_: catalog skill name, request reference, distribution package identity
+The plugin-qualified identity `${plugin}:${catalog-name}` that Codex exposes through the Codex Marketplace Distribution.
+_Avoid_: bare catalog name, cross-harness identity promise, request reference, distribution package identity
 
 **Skill Request Reference**:
-A prompt-level name or explicit token used to request a skill; it may be bare and resolve to a qualified Codex invocation identity.
-_Avoid_: canonical runtime identity, distribution identity
+A prompt-level name or explicit token used to request a skill; a bare reference may match a harness-native identity or resolve to a plugin-qualified Codex identity.
+_Avoid_: harness-independent invocation identity, distribution identity
 
 **Watcher Skill Identity**:
 A namespaced durable identifier used for Watcher attribution and historical interpretation; it may share spelling with a Codex invocation identity while remaining a separate persisted concept.
@@ -29,18 +57,6 @@ _Avoid_: catalog skill name, request reference
 **Distribution Package Identity**:
 The installable plugin coordinate used to package and select a group of skills, separate from skill names and invocation identities.
 _Avoid_: Codex invocation identity, Watcher skill identity
-
-**Universal Discovery Projection**:
-A managed user-level exposure of canonical skills for harness-native discovery; it is neither source nor cache.
-_Avoid_: universal source, copied skills, plugin cache
-
-**Discovery Profile**:
-An explicitly selected, mutually exclusive runtime mode that activates either universal discovery or skills-bearing plugin discovery.
-_Avoid_: implicit default, mixed discovery, fallback mode
-
-**Plugin Distribution Profile**:
-An optional skills-bearing Codex package projection used for compatibility and rollback while remaining inactive during universal discovery.
-_Avoid_: canonical source, universal adapter, concurrent plugin mode
 
 ### Watcher Attribution and Runtime
 

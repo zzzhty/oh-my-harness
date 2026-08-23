@@ -53,11 +53,11 @@ from watcher_runtime.skill.propose_skill_patch import build_proposal  # noqa: E4
 from watcher_runtime.skill.redact_event import REDACTION, redact_event  # noqa: E402
 from refresh_my_codex import (  # noqa: E402
     cached_plugin_names,
+    codex_plugin_selectors,
     configured_plugin_names,
     default_plugin_names,
     marketplace_source_arg,
     resolve_codex_executable,
-    selected_plugins,
     stale_plugin_names,
 )
 from repo_skill_catalog import load_repo_skill_catalog  # noqa: E402
@@ -422,16 +422,8 @@ class SkillWatcherTests(unittest.TestCase):
             expected,
         )
         self.assertEqual(
-            selected_plugins(None, "my-codex", action="install"),
+            codex_plugin_selectors("my-codex", action="install"),
             [f"{plugin}@my-codex" for plugin in expected],
-        )
-        self.assertEqual(
-            selected_plugins(["watcher"], "my-codex", action="install"),
-            ["watcher@my-codex"],
-        )
-        self.assertEqual(
-            selected_plugins(["external@other-market"], "my-codex", action="install"),
-            ["external@other-market"],
         )
 
     def test_install_manifest_fails_when_selected_plugin_is_missing_from_marketplace(self) -> None:
@@ -442,8 +434,8 @@ class SkillWatcherTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "schemaVersion": 2,
-                        "discoveryProfile": "plugin",
+                        "schemaVersion": 4,
+                        "harness": "codex",
                         "marketplace": "my-codex",
                         "plugins": [
                             {"name": "missing-plugin", "install": True, "check": True},
@@ -458,8 +450,7 @@ class SkillWatcherTests(unittest.TestCase):
             )
 
             with self.assertRaises(SystemExit) as raised:
-                selected_plugins(
-                    None,
+                codex_plugin_selectors(
                     "my-codex",
                     action="install",
                     manifest_file=manifest,
@@ -1006,7 +997,7 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(result.hook_event_name, "UserPromptSubmit")
         self.assertEqual(result.event["skill_attribution"]["primary"]["name"], "mattpocock-skills:diagnosing-bugs")
 
-    def test_explicit_repo_root_resolves_runtime_from_universal_skill_symlink(self) -> None:
+    def test_explicit_repo_root_resolves_runtime_from_agents_skill_symlink(self) -> None:
         payload = json.dumps(
             {
                 "hook_event_name": "UserPromptSubmit",
@@ -1016,10 +1007,10 @@ class SkillWatcherTests(unittest.TestCase):
         )
         watcher = ROOT / "scripts" / "watcher"
         with tempfile.TemporaryDirectory() as tmp:
-            universal_skill = Path(tmp) / "agents" / "skills" / "diagnosing-bugs"
-            universal_skill.parent.mkdir(parents=True)
+            agents_skill = Path(tmp) / "agents" / "skills" / "diagnosing-bugs"
+            agents_skill.parent.mkdir(parents=True)
             try:
-                universal_skill.symlink_to(
+                agents_skill.symlink_to(
                     REPO_ROOT / "plugins" / "mattpocock-skills" / "skills" / "diagnosing-bugs",
                     target_is_directory=True,
                 )
@@ -1027,7 +1018,7 @@ class SkillWatcherTests(unittest.TestCase):
                 self.skipTest(f"directory symlinks unavailable: {exc}")
 
             events = []
-            for cwd in (REPO_ROOT, universal_skill):
+            for cwd in (REPO_ROOT, agents_skill):
                 result = subprocess.run(
                     [
                         sys.executable,

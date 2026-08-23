@@ -17,11 +17,11 @@ def write_skill(
     plugin: str,
     directory_name: str,
     *,
-    callable_name: str | None = None,
+    catalog_name: str | None = None,
 ) -> Path:
     skill_dir = repo_root / "plugins" / plugin / "skills" / directory_name
     skill_dir.mkdir(parents=True)
-    name = callable_name or directory_name
+    name = catalog_name or directory_name
     (skill_dir / "SKILL.md").write_text(
         f"---\nname: {name}\ndescription: test skill\n---\n",
         encoding="utf-8",
@@ -30,10 +30,10 @@ def write_skill(
 
 
 class RepoSkillCatalogTests(unittest.TestCase):
-    def test_catalog_uses_frontmatter_identity_without_marketplace(self) -> None:
+    def test_catalog_uses_frontmatter_name_without_marketplace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
-            source = write_skill(root, "alpha", "physical-name", callable_name="callable-name")
+            source = write_skill(root, "alpha", "physical-name", catalog_name="catalog-name")
             marketplace = root / ".agents" / "plugins" / "marketplace.json"
             marketplace.parent.mkdir(parents=True)
             marketplace.write_text("not json", encoding="utf-8")
@@ -41,16 +41,16 @@ class RepoSkillCatalogTests(unittest.TestCase):
             catalog = repo_skill_catalog.load_repo_skill_catalog(root)
 
         self.assertEqual(len(catalog.sources), 1)
-        self.assertEqual(catalog.sources[0].name, "callable-name")
+        self.assertEqual(catalog.sources[0].name, "catalog-name")
         self.assertEqual(catalog.sources[0].directory_name, "physical-name")
         self.assertEqual(catalog.sources[0].path, source.resolve())
 
-    def test_duplicate_frontmatter_identities_are_rejected(self) -> None:
+    def test_duplicate_catalog_names_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
-            write_skill(root, "alpha", "one", callable_name="shared")
-            write_skill(root, "beta", "two", callable_name="shared")
-            with self.assertRaisesRegex(SystemExit, "duplicate callable skill identities"):
+            write_skill(root, "alpha", "one", catalog_name="shared")
+            write_skill(root, "beta", "two", catalog_name="shared")
+            with self.assertRaisesRegex(SystemExit, "duplicate catalog skill names"):
                 repo_skill_catalog.load_repo_skill_catalog(root)
 
     def test_missing_or_malformed_frontmatter_is_rejected(self) -> None:

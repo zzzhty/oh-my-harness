@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure closure checks for mutually exclusive universal and plugin discovery."""
+"""Pure closure checks for registry-selected harness skill distributions."""
 
 from __future__ import annotations
 
@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_skill_catalog import SkillCatalog, skill_frontmatter_name
-from sync_agents_skills import managed_destination
+from sync_agents_skills import (
+    is_projection_link,
+    managed_destination,
+)
 
 
 @dataclass(frozen=True)
@@ -147,14 +150,26 @@ def marketplace_plugin_names(marketplace: Path) -> set[str]:
     return names
 
 
-def marketplace_plugin_sources(source_root: Path) -> tuple[str, dict[str, Path]]:
+def marketplace_plugin_sources(
+    source_root: Path,
+    *,
+    marketplace_file: Path | None = None,
+) -> tuple[str, dict[str, Path]]:
     """Load exact local marketplace package owners beneath ``source_root``."""
 
     try:
         resolved_source_root = source_root.resolve(strict=True)
     except OSError as exc:
         raise ValueError(f"source root cannot be resolved: {source_root}: {exc}") from exc
-    marketplace = resolved_source_root / ".agents" / "plugins" / "marketplace.json"
+    marketplace = (
+        marketplace_file.resolve(strict=False)
+        if marketplace_file is not None
+        else resolved_source_root / ".agents" / "plugins" / "marketplace.json"
+    )
+    try:
+        marketplace.relative_to(resolved_source_root)
+    except ValueError as exc:
+        raise ValueError(f"marketplace file escapes source root: {marketplace}") from exc
     marketplace_name, plugins = _marketplace_payload(marketplace)
 
     sources: dict[str, Path] = {}
@@ -392,7 +407,7 @@ def plugin_package_issues(
             expected_identity = expected_source.name
             if actual_identity != expected_identity:
                 issues.append(
-                    f"{plugin_name}/{directory_name}: callable identity changed after catalog load; "
+                    f"{plugin_name}/{directory_name}: catalog skill name changed after catalog load; "
                     f"expected {expected_identity!r}, found {actual_identity!r}"
                 )
     return issues
@@ -439,14 +454,14 @@ def plugin_cache_shape_issues(
     return issues
 
 
-def plugin_cache_profile_issues(
+def plugin_cache_harness_issues(
     catalog: SkillCatalog,
     *,
     codex_home: Path,
     marketplace_name: str,
     ignored_plugin_names: set[str] | None = None,
 ) -> list[str]:
-    """Require cache names to match the active profile after structural safety passes."""
+    """Require cache names to match the active Codex harness package set."""
 
     issues = plugin_cache_shape_issues(
         codex_home=codex_home,
@@ -500,7 +515,7 @@ def _cached_skill_identities(version_root: Path) -> tuple[set[str], list[str]]:
             issues.append(str(exc))
             continue
         if identity in identities:
-            issues.append(f"duplicate cached callable identity {identity!r} under {skills_root}")
+            issues.append(f"duplicate cached catalog skill name {identity!r} under {skills_root}")
             continue
         identities.add(identity)
     return identities, issues
@@ -510,7 +525,7 @@ def plugin_installation_issues(
     catalog: SkillCatalog,
     *,
     marketplace_name: str,
-    target_root: Path,
+    excluded_skill_roots: tuple[Path, ...],
     codex_home: Path,
     rows: dict[tuple[str, str], PluginListRow],
     plugin_sources: dict[str, Path],
@@ -519,7 +534,7 @@ def plugin_installation_issues(
 
     issues = [
         *plugin_package_issues(catalog, plugin_sources=plugin_sources),
-        *plugin_cache_profile_issues(
+        *plugin_cache_harness_issues(
             catalog,
             codex_home=codex_home,
             marketplace_name=marketplace_name,
@@ -527,9 +542,9 @@ def plugin_installation_issues(
     ]
     enabled = enabled_plugin_names(rows, marketplace_name=marketplace_name)
     issues.extend(
-        plugin_profile_issues(
+        codex_harness_issues(
             catalog,
-            target_root=target_root,
+            excluded_skill_roots=excluded_skill_roots,
             enabled_plugin_names=enabled,
         )
     )
@@ -631,56 +646,58 @@ def plugin_installation_issues(
             if extra_identities:
                 details.append("extra " + ", ".join(extra_identities))
             issues.append(
-                f"{plugin_name}@{marketplace_name}: cached callable identities differ from "
+                f"{plugin_name}@{marketplace_name}: cached catalog skill names differ from "
                 f"canonical source ({'; '.join(details)})"
             )
     return issues
 
 
-def universal_profile_issues(
+def excluded_skill_root_issues(
     catalog: SkillCatalog,
     *,
-    target_root: Path,
-    enabled_plugin_names: set[str],
+    roots: tuple[Path, ...],
 ) -> list[str]:
-    issues: list[str] = []
-    expected = catalog.by_name
-    for name, source in expected.items():
-        target = target_root / name
-        if target.is_symlink():
-            destination = managed_destination(target, catalog)
-            if destination is None:
-                issues.append(f"unmanaged universal symlink occupies callable identity {name}: {target}")
-            elif destination != source.path:
-                issues.append(
-                    f"universal link drift for {name}: expected {source.path}, found {destination}"
-                )
-        elif target.exists():
-            issues.append(f"unmanaged universal entry occupies callable identity {name}: {target}")
-        else:
-            issues.append(f"universal skill link missing for {name}: expected {target} -> {source.path}")
+    """Reject duplicate catalog identities in roots outside harness ownership."""
 
-    if target_root.is_dir():
-        for target in sorted(target_root.iterdir()):
-            if target.name in expected or not target.is_symlink():
+    issues: list[str] = []
+    expected_names = set(catalog.by_name)
+    for root in roots:
+        for name in sorted(expected_names):
+            target = root / name
+            if is_projection_link(target):
+                destination = managed_destination(target, catalog)
+                suffix = f" -> {destination}" if destination is not None else ""
+                issues.append(
+                    f"excluded skill root contains catalog identity {name}: {target}{suffix}"
+                )
+            elif target.exists():
+                issues.append(
+                    f"excluded skill root contains catalog identity {name}: {target}"
+                )
+
+        if not root.is_dir():
+            continue
+        try:
+            entries = sorted(root.iterdir(), key=lambda path: path.name)
+        except OSError as exc:
+            issues.append(f"excluded skill root is not inspectable: {root}: {exc}")
+            continue
+        for target in entries:
+            if target.name in expected_names or not is_projection_link(target):
                 continue
             destination = managed_destination(target, catalog)
             if destination is not None:
-                issues.append(f"stale repository-owned universal link: {target} -> {destination}")
-
-    active_conflicts = sorted(enabled_plugin_names & set(catalog.plugin_names))
-    if active_conflicts:
-        issues.append(
-            "skills-bearing plugins remain enabled during universal discovery: "
-            + ", ".join(active_conflicts)
-        )
+                issues.append(
+                    "excluded skill root contains stale repository-owned projection: "
+                    f"{target} -> {destination}"
+                )
     return issues
 
 
-def plugin_profile_issues(
+def codex_harness_issues(
     catalog: SkillCatalog,
     *,
-    target_root: Path,
+    excluded_skill_roots: tuple[Path, ...],
     enabled_plugin_names: set[str],
 ) -> list[str]:
     issues: list[str] = []
@@ -695,26 +712,13 @@ def plugin_profile_issues(
             + ", ".join(extra_plugins)
         )
 
-    if target_root.is_dir():
-        for target in sorted(target_root.iterdir()):
-            if target.name in catalog.by_name:
-                issues.append(
-                    f"universal callable identity remains active during plugin discovery: {target}"
-                )
-                continue
-            if target.is_symlink():
-                destination = managed_destination(target, catalog)
-                if destination is not None:
-                    issues.append(
-                        f"stale repository-owned universal link remains during plugin discovery: "
-                        f"{target} -> {destination}"
-                    )
+    issues.extend(excluded_skill_root_issues(catalog, roots=excluded_skill_roots))
     return issues
 
 
-def require_profile_closure(profile: str, issues: list[str]) -> None:
+def require_harness_closure(harness: str, issues: list[str]) -> None:
     if issues:
         raise SystemExit(
-            f"{profile} discovery profile closure failed with {len(issues)} issue(s): "
+            f"{harness} harness closure failed with {len(issues)} issue(s): "
             + "; ".join(issues)
         )

@@ -1,0 +1,276 @@
+{
+  "$schema": "./registry.schema.json",
+  "schemaVersion": 1,
+  "defaults": {
+    "harness": "codex"
+  },
+  "sources": {
+    "instructions": "AGENTS.md"
+  },
+  "excludedSkillRoots": {
+    "agents-skills": {
+      "root": {
+        "candidates": [
+          {
+            "source": "user-home",
+            "append": ".agents"
+          }
+        ]
+      },
+      "relativePath": "skills"
+    }
+  },
+  "harnesses": {
+    "codex": {
+      "displayName": "Codex",
+      "root": {
+        "candidates": [
+          {
+            "source": "environment",
+            "name": "CODEX_HOME",
+            "append": ""
+          },
+          {
+            "source": "user-home",
+            "append": ".codex"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "codex-marketplace",
+        "marketplacePath": ".agents/plugins/marketplace.json",
+        "installManifestPath": ".agents/plugins/install-manifest.json",
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "when-nonempty"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "AGENTS.md",
+        "materialization": {
+          "posix": "symlink",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": [
+          "AGENTS.override.md"
+        ]
+      },
+      "extras": [
+        "codex-agent-support",
+        "watcher-hooks",
+        "watcher-doctor"
+      ]
+    },
+    "zcode": {
+      "displayName": "ZCode",
+      "root": {
+        "candidates": [
+          {
+            "source": "user-home",
+            "append": ".zcode"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "AGENTS.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    },
+    "claude-code": {
+      "displayName": "Claude Code",
+      "root": {
+        "candidates": [
+          {
+            "source": "environment",
+            "name": "CLAUDE_CONFIG_DIR",
+            "append": ""
+          },
+          {
+            "source": "user-home",
+            "append": ".claude"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "CLAUDE.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    },
+    "copilot-cli": {
+      "displayName": "GitHub Copilot CLI",
+      "root": {
+        "candidates": [
+          {
+            "source": "environment",
+            "name": "COPILOT_HOME",
+            "append": ""
+          },
+          {
+            "source": "user-home",
+            "append": ".copilot"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "copilot-instructions.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    },
+    "gemini-cli": {
+      "displayName": "Gemini CLI",
+      "root": {
+        "candidates": [
+          {
+            "source": "environment",
+            "name": "GEMINI_CLI_HOME",
+            "append": ".gemini"
+          },
+          {
+            "source": "user-home",
+            "append": ".gemini"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "settings-derived-file",
+        "settingsPath": "settings.json",
+        "settingPath": [
+          "context",
+          "fileName"
+        ],
+        "defaultRelativePath": "GEMINI.md",
+        "multipleTargetsPolicy": "reject",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    },
+    "opencode": {
+      "displayName": "OpenCode",
+      "root": {
+        "candidates": [
+          {
+            "source": "user-home",
+            "append": ".config/opencode"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "AGENTS.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    }
+  }
+}

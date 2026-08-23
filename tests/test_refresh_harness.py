@@ -12,18 +12,55 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import refresh_my_codex as refresh  # noqa: E402
-from check_skill_discovery import PluginListRow  # noqa: E402
 
 
-class RefreshDiscoveryProfileCliTests(unittest.TestCase):
+class RefreshHarnessCliTests(unittest.TestCase):
     def run_main(self, arguments: list[str]) -> None:
         with mock.patch.object(sys, "argv", ["refresh_my_codex.py", *arguments]):
             refresh.main()
 
-    def test_missing_profile_fails_before_any_refresh_work(self) -> None:
+    def test_retired_prune_option_is_rejected_before_any_refresh_work(self) -> None:
         with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaises(SystemExit) as raised:
-                self.run_main(["--dry-run"])
+                self.run_main(["--prune-plugins", "--dry-run"])
+        self.assertEqual(raised.exception.code, 2)
+        load_catalog.assert_not_called()
+
+    def test_nonempty_codex_prune_plan_requires_confirmation_by_default(self) -> None:
+        plan = refresh.CodexPrunePlan(
+            configured=frozenset({"retired"}),
+            cached=frozenset({"retired"}),
+        )
+        with mock.patch("builtins.input", return_value="no") as prompt:
+            with self.assertRaisesRegex(SystemExit, "was not confirmed"):
+                refresh.confirm_codex_prune(
+                    plan,
+                    marketplace_name="my-codex",
+                    confirmation="when-nonempty",
+                    dry_run=False,
+                    assume_yes=False,
+                )
+        prompt.assert_called_once()
+
+    def test_yes_confirms_only_the_precomputed_codex_prune_plan(self) -> None:
+        plan = refresh.CodexPrunePlan(
+            configured=frozenset({"configured-only"}),
+            cached=frozenset({"cache-only"}),
+        )
+        with mock.patch("builtins.input") as prompt:
+            refresh.confirm_codex_prune(
+                plan,
+                marketplace_name="my-codex",
+                confirmation="when-nonempty",
+                dry_run=False,
+                assume_yes=True,
+            )
+        prompt.assert_not_called()
+
+    def test_legacy_discovery_profile_option_is_rejected(self) -> None:
+        with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
+            with self.assertRaises(SystemExit) as raised:
+                self.run_main(["--discovery-profile", "universal", "--dry-run"])
         self.assertEqual(raised.exception.code, 2)
         load_catalog.assert_not_called()
 
@@ -150,21 +187,14 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
         self.assertEqual(binding, refresh.MarketplaceSourceBinding("local", str(REPO_ROOT)))
         ensure_local.assert_called_once()
 
-    def test_cli_tracks_a_git_ref_as_an_explicit_git_request(self) -> None:
+    def test_cli_tracks_a_git_ref_as_an_explicit_codex_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            catalog = mock.Mock()
-            catalog.plugin_names = ()
-            catalog.repo_root = REPO_ROOT
             arguments = [
-                "--discovery-profile",
-                "plugin",
                 "--git-ref",
                 "release",
                 "--codex-home",
                 str(root / "codex"),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
                 "--dry-run",
                 "--skip-bootstrap",
                 "--skip-agents",
@@ -172,12 +202,12 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
                 "--skip-doctor",
             ]
             with (
-                mock.patch.object(refresh, "load_repo_skill_catalog", return_value=catalog),
-                mock.patch.object(refresh, "preflight_plugin_distribution"),
+                mock.patch.object(refresh, "require_excluded_skill_roots_clear"),
+                mock.patch.object(refresh, "prepare_instruction_sync"),
+                mock.patch.object(refresh, "preflight_codex_distribution"),
                 mock.patch.object(refresh, "resolve_codex_executable", return_value="/fake/codex"),
                 mock.patch.object(refresh, "require_codex_plugin_commands"),
-                mock.patch.object(refresh, "_enabled_profile_plugins", return_value=set()),
-                mock.patch.object(refresh, "universal_layer_active", return_value=False),
+                mock.patch.object(refresh, "_enabled_codex_harness_plugins", return_value=set()),
                 mock.patch.object(refresh, "git_remote_source", return_value="git@example/repo.git"),
                 mock.patch.object(
                     refresh,
@@ -191,7 +221,7 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
         self.assertEqual(ensure_marketplace.call_args.kwargs["git_ref"], "release")
         self.assertTrue(ensure_marketplace.call_args.kwargs["git_request_explicit"])
 
-    def test_invalid_marketplace_policy_fails_before_codex_or_marketplace_mutation(self) -> None:
+    def test_invalid_marketplace_policy_fails_codex_preflight(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             repo = root / "repo"
@@ -227,8 +257,8 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
             metadata.joinpath("install-manifest.json").write_text(
                 json.dumps(
                     {
-                        "schemaVersion": 2,
-                        "discoveryProfile": "plugin",
+                        "schemaVersion": 4,
+                        "harness": "codex",
                         "marketplace": "test",
                         "plugins": [{"name": "demo", "install": True, "check": True}],
                     }
@@ -236,51 +266,34 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             catalog = refresh.load_repo_skill_catalog(repo)
-            arguments = [
-                "--discovery-profile",
-                "plugin",
-                "--marketplace-name",
-                "test",
-                "--codex-home",
-                str(root / "codex"),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
-                "--dry-run",
-                "--skip-bootstrap",
-                "--skip-agents",
-                "--skip-hooks",
-                "--skip-doctor",
-            ]
-            with (
-                mock.patch.object(refresh, "load_repo_skill_catalog", return_value=catalog),
-                mock.patch.object(refresh, "resolve_codex_executable") as resolve_codex,
-                mock.patch.object(refresh, "ensure_marketplace_source") as ensure_marketplace,
-                mock.patch.object(refresh, "run") as run,
-            ):
-                with self.assertRaisesRegex(SystemExit, "installation policy must be 'AVAILABLE'"):
-                    self.run_main(arguments)
+            with self.assertRaisesRegex(SystemExit, "installation policy must be 'AVAILABLE'"):
+                refresh.preflight_codex_distribution(
+                    catalog,
+                    codex_home=root / "codex",
+                    marketplace_name="test",
+                    marketplace_file=metadata / "marketplace.json",
+                    manifest_file=metadata / "install-manifest.json",
+                )
 
-        resolve_codex.assert_not_called()
-        ensure_marketplace.assert_not_called()
-        run.assert_not_called()
-
-    def test_invalid_profile_fails_closed(self) -> None:
+    def test_retired_skill_mode_option_is_rejected(self) -> None:
         with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaises(SystemExit) as raised:
-                self.run_main(["--discovery-profile", "mixed", "--dry-run"])
+                self.run_main(["--skill-mode", "mixed", "--dry-run"])
         self.assertEqual(raised.exception.code, 2)
         load_catalog.assert_not_called()
 
-    def test_universal_without_configured_plugins_does_not_resolve_codex_or_marketplace(self) -> None:
+    def test_unknown_harness_fails_before_catalog_load(self) -> None:
+        with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
+            with self.assertRaisesRegex(SystemExit, "unknown harness"):
+                self.run_main(["--harness", "unknown", "--dry-run"])
+        load_catalog.assert_not_called()
+
+    def test_default_harness_is_codex(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             arguments = [
-                "--discovery-profile",
-                "universal",
                 "--codex-home",
                 str(root / "codex"),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
                 "--dry-run",
                 "--skip-bootstrap",
                 "--skip-agents",
@@ -288,157 +301,83 @@ class RefreshDiscoveryProfileCliTests(unittest.TestCase):
                 "--skip-doctor",
             ]
             with (
+                mock.patch.object(refresh, "require_excluded_skill_roots_clear"),
+                mock.patch.object(refresh, "prepare_instruction_sync"),
+                mock.patch.object(refresh, "preflight_codex_distribution"),
                 mock.patch.object(
                     refresh,
                     "resolve_codex_executable",
-                    side_effect=AssertionError("Codex must not be resolved"),
-                ),
-                mock.patch.object(
-                    refresh,
-                    "marketplace_plugin_sources",
-                    side_effect=AssertionError("marketplace must not be read"),
-                ),
+                    side_effect=SystemExit("resolved default Codex harness"),
+                ) as resolve,
             ):
-                self.run_main(arguments)
-
-    def test_universal_installs_only_repo_owned_hooks_and_never_adds_a_plugin(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            arguments = [
-                "--discovery-profile",
-                "universal",
-                "--codex-home",
-                str(root / "codex"),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
-                "--dry-run",
-                "--skip-bootstrap",
-                "--skip-agents",
-                "--skip-doctor",
-            ]
-            with (
-                mock.patch.object(
-                    refresh,
-                    "resolve_codex_executable",
-                    side_effect=AssertionError("Codex must not be resolved"),
-                ),
-                mock.patch.object(
-                    refresh,
-                    "marketplace_plugin_sources",
-                    side_effect=AssertionError("marketplace must not be read"),
-                ),
-                mock.patch.object(refresh, "run", return_value=0) as run,
-            ):
-                self.run_main(arguments)
-
-        commands = [call.args[0] for call in run.call_args_list]
-        self.assertEqual(len(commands), 1)
-        self.assertEqual(commands[0][2:5], ["skill", "install-hook", "--apply"])
-        self.assertEqual(commands[0][-2:], ["--repo-root", str(REPO_ROOT)])
-        self.assertNotIn("plugin", commands[0])
-
-    def test_universal_with_configured_plugins_inspects_exact_enabled_set(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            codex_home = root / "codex"
-            codex_home.mkdir()
-            codex_home.joinpath("config.toml").write_text(
-                '\n'.join(
-                    [
-                        '[plugins."watcher@my-codex"]',
-                        'enabled = true',
-                        '[plugins."workflow@my-codex"]',
-                        'enabled = true',
-                        '[plugins."mattpocock-skills@my-codex"]',
-                        'enabled = true',
-                    ]
-                ),
-                encoding="utf-8",
-            )
-            rows = {
-                ("my-codex", name): PluginListRow("installed, enabled", "fixture")
-                for name in ("watcher", "workflow", "mattpocock-skills")
-            }
-            arguments = [
-                "--discovery-profile",
-                "universal",
-                "--codex-home",
-                str(codex_home),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
-                "--dry-run",
-                "--skip-bootstrap",
-                "--skip-agents",
-                "--skip-hooks",
-                "--skip-doctor",
-            ]
-            with (
-                mock.patch.object(refresh, "resolve_codex_executable", return_value="/fake/codex") as resolve,
-                mock.patch.object(refresh, "require_codex_plugin_commands") as require_commands,
-                mock.patch.object(refresh, "read_codex_plugin_rows", return_value=rows) as inspect,
-            ):
-                self.run_main(arguments)
-
+                with self.assertRaisesRegex(SystemExit, "resolved default Codex harness"):
+                    self.run_main(arguments)
         resolve.assert_called_once()
-        inspect.assert_called_once()
-        self.assertTrue(require_commands.call_args.kwargs["require_remove"])
-        self.assertFalse(require_commands.call_args.kwargs["require_marketplace"])
 
-    def test_universal_removes_a_canonical_skill_plugin_from_an_alternate_marketplace(self) -> None:
+    def test_default_tooling_venv_follows_the_resolved_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            codex_home = root / "codex"
-            codex_home.mkdir()
-            codex_home.joinpath("config.toml").write_text(
-                '[plugins."watcher@legacy-marketplace"]\nenabled = true\n',
-                encoding="utf-8",
-            )
-            rows = {
-                ("legacy-marketplace", "watcher"): PluginListRow(
-                    "installed, enabled",
-                    "fixture",
-                )
-            }
-            arguments = [
-                "--discovery-profile",
-                "universal",
-                "--codex-home",
-                str(codex_home),
-                "--agents-skills-root",
-                str(root / "agents" / "skills"),
-                "--dry-run",
-                "--skip-bootstrap",
-                "--skip-agents",
-                "--skip-hooks",
-                "--skip-doctor",
-            ]
-            with (
-                mock.patch.object(refresh, "resolve_codex_executable", return_value="/fake/codex"),
-                mock.patch.object(refresh, "require_codex_plugin_commands"),
-                mock.patch.object(refresh, "read_codex_plugin_rows", return_value=rows),
-                mock.patch.object(refresh, "run", return_value=0) as run,
-            ):
-                self.run_main(arguments)
+            codex_home = Path(tmp) / "custom-codex"
+            with mock.patch.object(
+                refresh,
+                "tooling_python_from_args",
+                side_effect=SystemExit("captured venv"),
+            ) as tooling:
+                with self.assertRaisesRegex(SystemExit, "captured venv"):
+                    self.run_main(["--codex-home", str(codex_home), "--dry-run"])
 
-        self.assertTrue(
-            any(
-                call.args[0][-1] == "watcher@legacy-marketplace"
-                and call.args[0][2] == "remove"
-                for call in run.call_args_list
-            )
-        )
+        self.assertEqual(tooling.call_args.args[1], codex_home / "venvs" / "my-codex")
+
+    def test_removed_shared_harness_fails_before_catalog_load(self) -> None:
+        with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
+            with self.assertRaisesRegex(SystemExit, "unknown harness 'shared'"):
+                self.run_main(["--harness", "shared", "--dry-run"])
+        load_catalog.assert_not_called()
+
+    def test_native_harness_does_not_read_codex_marketplace_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(refresh, "require_excluded_skill_roots_clear"),
+                mock.patch.object(
+                    refresh,
+                    "load_install_manifest",
+                    side_effect=AssertionError("Codex manifest must not be read"),
+                ),
+                mock.patch.object(refresh, "prepare_instruction_sync"),
+                mock.patch.object(refresh, "sync_layer") as sync,
+                mock.patch.object(refresh, "apply_instruction_sync"),
+            ):
+                self.run_main(
+                    [
+                        "--harness",
+                        "zcode",
+                        "--codex-home",
+                        str(Path(tmp) / "codex"),
+                        "--dry-run",
+                        "--skip-bootstrap",
+                    ]
+                )
+        sync.assert_called_once()
+
+    def test_excluded_root_failure_precedes_instruction_preflight_and_bootstrap(self) -> None:
+        with (
+            mock.patch.object(
+                refresh,
+                "require_excluded_skill_roots_clear",
+                side_effect=SystemExit("excluded skill root closure failed"),
+            ),
+            mock.patch.object(refresh, "prepare_instruction_sync") as prepare,
+            mock.patch.object(refresh, "run_tooling_bootstrap") as bootstrap,
+        ):
+            with self.assertRaisesRegex(SystemExit, "excluded skill root closure failed"):
+                self.run_main(["--harness", "zcode", "--dry-run"])
+        prepare.assert_not_called()
+        bootstrap.assert_not_called()
 
     def test_legacy_bypass_fails_before_bootstrap(self) -> None:
         with mock.patch.object(refresh, "run_tooling_bootstrap") as bootstrap:
-            with self.assertRaisesRegex(SystemExit, "legacy bypass"):
-                self.run_main(
-                    [
-                        "--discovery-profile",
-                        "universal",
-                        "--skip-agents-skills",
-                        "--dry-run",
-                    ]
-                )
+            with self.assertRaises(SystemExit) as raised:
+                self.run_main(["--skip-agents-skills", "--dry-run"])
+        self.assertEqual(raised.exception.code, 2)
         bootstrap.assert_not_called()
 
 

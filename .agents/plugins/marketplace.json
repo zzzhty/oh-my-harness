@@ -1,7 +1,7 @@
 {
   "name": "my-codex",
   "interface": {
-    "displayName": "My Codex (Plugin Profile)"
+    "displayName": "My Codex"
   },
   "plugins": [
     {
