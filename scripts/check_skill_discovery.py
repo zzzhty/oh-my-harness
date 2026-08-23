@@ -477,7 +477,7 @@ def plugin_cache_harness_issues(
     extra = sorted(cached_plugins - allowed)
     if extra:
         issues.append(
-            "cached my-codex plugins have no canonical repository skills: "
+            "cached oh-my-harness plugins have no canonical repository skills: "
             + ", ".join(extra)
         )
     return issues
@@ -529,6 +529,7 @@ def plugin_installation_issues(
     codex_home: Path,
     rows: dict[tuple[str, str], PluginListRow],
     plugin_sources: dict[str, Path],
+    ignored_alternate_marketplaces: set[str] | frozenset[str] | None = None,
 ) -> list[str]:
     """Validate the complete active plugin projection against canonical source."""
 
@@ -552,6 +553,7 @@ def plugin_installation_issues(
         f"{plugin_name}@{marketplace}"
         for (marketplace, plugin_name), row in rows.items()
         if marketplace != marketplace_name
+        and marketplace not in set(ignored_alternate_marketplaces or ())
         and plugin_name in set(catalog.plugin_names)
         and row.status == "installed, enabled"
     )
@@ -708,7 +710,7 @@ def codex_harness_issues(
         issues.append("skills-bearing plugins are not enabled: " + ", ".join(missing_plugins))
     if extra_plugins:
         issues.append(
-            "enabled my-codex plugins have no canonical repository skills: "
+            "enabled oh-my-harness plugins have no canonical repository skills: "
             + ", ".join(extra_plugins)
         )
 

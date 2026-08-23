@@ -12,7 +12,7 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised by the bootstrap contract
     raise SystemExit(
         "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
-        "this script with the my-codex tooling Python."
+        "this script with the oh-my-harness tooling Python."
     ) from exc
 
 

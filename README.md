@@ -1,4 +1,4 @@
-# My Codex
+# Oh My Harness
 
 Registry-managed distribution of personal development skills and global instructions across coding harnesses, including the local Codex marketplace.
 
@@ -41,38 +41,38 @@ Source-package validation is independent of the selected harness:
 
 ```bash
 PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py}"
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" "$PLUGIN_VALIDATOR" plugins/watcher
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" "$PLUGIN_VALIDATOR" plugins/workflow
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/update_mattpocock_skills.py --validate-only
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/watcher
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/workflow
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/update_mattpocock_skills.py --validate-only
 ```
 
 Refresh and closure use the same selector:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py --harness codex
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/check_my_codex.py --harness codex
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py --harness zcode
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness codex
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_harness.py --harness codex
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness zcode
 ```
 
 `scripts/sync_agents_skills.py` is the low-level directory-projection tool. It has no default target. Use the harness-aware refresh entry point for normal activation; supply the exact root when inspecting an already selected projection:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.zcode/skills" --check --prune
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.zcode/skills" --check --prune
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py
 ```
 
 To retire repository-owned links from the excluded `~/.agents/skills` root, preview first and then run the separately confirmed cleanup. It removes only links revalidated against this checkout and exact canonical empty interruption residues; unmanaged canonical names and a linked/reparse/mount target root remain hard stops:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.agents/skills" --remove-managed --dry-run
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.agents/skills" --remove-managed --yes
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.agents/skills" --remove-managed --dry-run
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/sync_agents_skills.py --target-root "$HOME/.agents/skills" --remove-managed --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
-$ToolingPython = Join-Path $CodexHome "venvs\my-codex\Scripts\python.exe"
+$ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $HOME ".oh-my-harness" }
+$ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
 & $ToolingPython scripts\sync_agents_skills.py --target-root (Join-Path $HOME ".agents\skills") --remove-managed --dry-run
 & $ToolingPython scripts\sync_agents_skills.py --target-root (Join-Path $HOME ".agents\skills") --remove-managed --yes
 ```
@@ -83,7 +83,7 @@ The repo-owned updater for the `mattpocock-skills` package lives outside the Wat
 
 ```bash
 python3 scripts/bootstrap_tooling_env.py
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/update_mattpocock_skills.py
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/update_mattpocock_skills.py
 ```
 
 By default it selects the latest upstream semantic-version tag, clones the source under `~/.codex/sources`, and copies every skill published by the upstream manifest without content rewrites or omissions. It then regenerates only the local plugin wrapper and Watcher metadata, updates the cachebuster, and validates byte parity plus upstream's native Codex invocation contract. Use `--source-dir <upstream-checkout> --tag <vX.Y.Z>` to sync from an existing checkout, or `--validate-only` to check the currently packaged plugin without fetching or changing files.
@@ -93,7 +93,7 @@ Never edit `plugins/mattpocock-skills/skills/` directly. Its updater-owned upstr
 After reviewing the source diff, reconcile the complete Codex harness distribution:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py --harness codex
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness codex
 ```
 
 ## Orchestration Workflow
@@ -120,47 +120,90 @@ in this repository.
 
 ## Local Install
 
-For routine install or refresh, prefer the platform wrapper in
-[Harness Refresh And Hook Debugging](#harness-refresh-and-hook-debugging). The manual
-commands below are a fallback and should mirror
-`.agents/plugins/install-manifest.json`.
+The initializer creates one manager-owned installation under
+`${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}`. It clones the current checkout's
+`remote.origin.url` into `repo/`, rebuilds `venv/`, writes `state/install.json`,
+and creates ordinary `oh-my-harness` and `omh` launchers under `bin/`. Pass
+`--repository <url>` only when the initializer is not running from a checkout
+with a configured origin.
 
 Unix:
 
 ```bash
-export MY_CODEX_ROOT="${MY_CODEX_ROOT:-$PWD}"
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-export MY_CODEX_PYTHON="${MY_CODEX_PYTHON:-$CODEX_HOME/venvs/my-codex/bin/python}"
-export PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py}"
+./install.sh --harness codex --yes
+export PATH="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/bin:$PATH"
+omh --help
+```
 
-codex plugin marketplace add "$MY_CODEX_ROOT"
-codex plugin add watcher@my-codex
-codex plugin add workflow@my-codex
-codex plugin add mattpocock-skills@my-codex
+To relocate an existing authoritative checkout into the manager home, move it
+first and then adopt that exact path. This is a one-time migration, not an
+alternate install layout. When Codex instructions still point to the former
+checkout, `--migrate-from-repo` permits only that exact symlink to enter the
+normal replacement flow; answer the live replacement prompt after inspecting
+the printed source and target. `--yes` still cannot approve this replacement.
+
+Unix example:
+
+```bash
+old_repo="$HOME/.codex/my-codex"
+manager_home="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}"
+mkdir -p "$manager_home"
+mv "$old_repo" "$manager_home/repo"
+cd "$manager_home/repo"
+./install.sh --adopt-current-checkout --migrate-from-repo "$old_repo" --migrate-marketplace --yes
+```
+
+Windows PowerShell example:
+
+```powershell
+$OldRepo = Join-Path $HOME ".codex\my-codex"
+$ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $HOME ".oh-my-harness" }
+New-Item -ItemType Directory -Force -Path $ManagerHome | Out-Null
+Move-Item -LiteralPath $OldRepo -Destination (Join-Path $ManagerHome "repo")
+Set-Location -LiteralPath (Join-Path $ManagerHome "repo")
+.\install.ps1 --adopt-current-checkout --migrate-from-repo $OldRepo --migrate-marketplace --yes
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:MY_CODEX_ROOT = (Get-Location).Path
-$env:CODEX_HOME = "$env:USERPROFILE\.codex"
-$env:MY_CODEX_PYTHON = "$env:CODEX_HOME\venvs\my-codex\Scripts\python.exe"
-$env:PLUGIN_VALIDATOR = "$env:CODEX_HOME\skills\.system\plugin-creator\scripts\validate_plugin.py"
-
-Set-Location $env:MY_CODEX_ROOT
-codex plugin marketplace add $env:MY_CODEX_ROOT
-codex plugin add watcher@my-codex
-codex plugin add workflow@my-codex
-codex plugin add mattpocock-skills@my-codex
+.\install.ps1 --harness codex --yes
+$env:PATH = "$env:USERPROFILE\.oh-my-harness\bin;$env:PATH"
+omh --help
 ```
 
-Install directly from this repository checkout. Do not clone or copy the repo to an extra local path just to install the marketplace.
+The initializer does not edit shell profiles or the machine-wide `PATH`. Add the
+manager `bin/` directory through the shell configuration you own. Both command
+names dispatch to the same platform wrapper; `oh-my-harness` is canonical and
+`omh` is the short form. Neither launcher is a symlink.
+
+The managed installation layout is:
+
+```text
+~/.oh-my-harness/
+├── repo/
+├── venv/
+├── bin/
+│   ├── oh-my-harness
+│   └── omh
+└── state/install.json
+```
+
+On Windows the two launcher files use the `.cmd` suffix. Development checkouts
+may exist elsewhere, but installed hooks and marketplace state bind to the one
+managed `repo/` checkout.
+
+If initialization fails, `state/install.json` remains `installing`. Rerun the
+same adopt command: recovery proceeds only when the recorded identity, paths,
+revision, launcher set and launcher content still match exactly. It refuses
+ready installations, links, extra entries and changed state; normal updates to
+a ready installation use `omh`.
 
 Use the harness-aware refresh command for global instructions. It resolves the target from the registry and applies the required confirmation policy; do not force-copy over an existing instructions file.
 
 ## Tooling Runtime
 
-Shared my-codex Python tooling uses a runtime venv outside plugin source trees:
+Shared oh-my-harness Python tooling uses a runtime venv outside plugin source trees:
 
 Unix:
 
@@ -177,19 +220,26 @@ py scripts\bootstrap_tooling_env.py
 The shared interpreter is:
 
 ```text
-$MY_CODEX_PYTHON
+${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python
+%USERPROFILE%\.oh-my-harness\venv\Scripts\python.exe
 ```
 
-Use this interpreter for Codex hooks, Watcher maintenance scripts, and skill/plugin validation that needs my-codex tooling dependencies.
+Use this interpreter for Codex hooks, Watcher maintenance scripts, and skill/plugin validation that needs oh-my-harness tooling dependencies.
 
 ## Windows/Unix Compatibility Notes
 
-This repository is the Windows-oriented checkout of the original Unix-first `zzzhty/my-codex` workflow. The compatibility surface is intentionally narrow: it does not add separate plugins, skills, manifests, or top-level modules for Windows. Windows support lives in install documentation, shared tooling venv path selection, Watcher hook command generation, hook schema alignment, and Windows-aware error messages.
+This repository evolved from the Unix-first `zzzhty/my-codex` workflow; that
+name is historical, not a current product or marketplace alias. The
+cross-platform compatibility surface is intentionally narrow: it does not add
+separate plugins, skills, manifests, or top-level modules for Windows. Windows
+support lives in install documentation, shared tooling venv path selection,
+Watcher hook command generation, hook schema alignment, and Windows-aware error
+messages.
 
 Key platform differences:
 
-- Unix venv Python: `$CODEX_HOME/venvs/my-codex/bin/python`
-- Windows venv Python: `$env:CODEX_HOME\venvs\my-codex\Scripts\python.exe`
+- Unix venv Python: `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python`
+- Windows venv Python: `%USERPROFILE%\.oh-my-harness\venv\Scripts\python.exe` by default
 - POSIX directory projections: directory symlinks
 - Windows directory projections: directory junctions
 - POSIX Codex instructions: symlink into `$CODEX_HOME/AGENTS.md`
@@ -204,7 +254,9 @@ Windows skill projection does not require file-symlink privilege. The projection
 
 The bootstrap resolves the selected base Python to its real executable before creating the venv. This prevents PATH aliases or uv-managed Python symlinks from producing a `pyvenv.cfg` that cannot locate the standard library. If an existing tooling venv cannot start, reports the wrong prefix, or was created from a different base interpreter, bootstrap rebuilds it and restores the previous directory if creation or dependency validation fails. `--dry-run` performs the same read-only health preflight and prints whether a rebuild would occur.
 
-If a Watcher script fails because `PyYAML` is missing, refresh the shared tooling venv from the repository root:
+If a tooling command reports that `PyYAML` or the registry validator
+`jsonschema` is missing, refresh the shared tooling venv from the repository
+root:
 
 Unix:
 
@@ -225,7 +277,7 @@ Refresh the selected harness with the platform wrapper:
 Unix:
 
 ```bash
-scripts/upgrade_my_codex.sh
+omh
 # alternatives: --harness zcode, --harness claude-code, --harness copilot-cli, ...
 # add --yes to confirm a missing instructions target or an exact Codex prune plan
 ```
@@ -233,7 +285,7 @@ scripts/upgrade_my_codex.sh
 Windows PowerShell:
 
 ```powershell
-.\scripts\upgrade_my_codex.ps1
+omh
 # alternatives: -Harness zcode, -Harness claude-code, -Harness copilot-cli, ...
 # add -Yes to confirm a missing instructions target or an exact Codex prune plan
 ```
@@ -244,13 +296,30 @@ For `codex`, refresh validates the complete manifest, marketplace policy, nested
 
 Codex stale-plugin reconciliation is on by default because the registry declares `managed-stale`. Only configured entries and cache directories inside the selected marketplace namespace are eligible. A nonempty exact plan is printed before mutation and requires confirmation; `--yes` or `-Yes` may confirm it. An enabled plugin visible only through the CLI and not proven by managed config/cache remains a hard failure. Other harnesses use only their registry-selected directory projection and never prune Codex plugins.
 
+The registry records `my-codex` only as the retired marketplace identity consumed
+by the explicit one-time migration. A normal refresh stops after printing the
+bounded legacy config/cache plan. Run `omh --migrate-marketplace --yes` (or the
+PowerShell equivalents `-MigrateMarketplace -Yes`) to install and verify the
+new marketplace, retire the old selectors and source, and remove the validated
+old cache namespace. The closure check rejects any remaining retired state.
+The registry `schemaVersion` is an ISO calendar date (`YYYY-MM-DD`), currently
+`2026-08-22`; advance it only when the registry schema changes.
+
+`--migrate-from-repo <absolute-path>` is independent of marketplace discovery:
+it authorizes only recognition of an exact former repo-owned Codex instructions
+symlink and, when relocation has already made that exact retired local
+marketplace source unavailable, detaches only the broken source registration so
+Codex discovery can continue. Retired selectors and cache remain until the new
+marketplace passes closure. This does not make the former path a fallback
+checkout or compatibility alias; dry-run stops at this detachment breakpoint.
+
 `--yes` never authorizes replacement of a different existing instructions file. That action always requires a live confirmation after the target type and content digest are shown.
 
 Migrate legacy Watcher runtime roots explicitly before final checks:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" plugins/watcher/scripts/watcher migrate-state --dry-run
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" plugins/watcher/scripts/watcher migrate-state --apply
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" plugins/watcher/scripts/watcher migrate-state --dry-run
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" plugins/watcher/scripts/watcher migrate-state --apply
 ```
 
 This moves `$CODEX_HOME/skill-watcher/` to `$CODEX_HOME/watcher/skill/` and `$CODEX_HOME/doc-watcher/` to `$CODEX_HOME/watcher/doc/`. It refuses to merge when a target directory already exists.
@@ -258,17 +327,17 @@ This moves `$CODEX_HOME/skill-watcher/` to `$CODEX_HOME/watcher/skill/` and `$CO
 Direct Python entry-point usage remains supported after `scripts/bootstrap_tooling_env.py` has created the shared tooling venv:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py
-# alternative: "${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/refresh_my_codex.py --harness zcode
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py
+# alternative: "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness zcode
 ```
 
 Windows PowerShell:
 
 ```powershell
-$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
-$ToolingPython = Join-Path $CodexHome "venvs\my-codex\Scripts\python.exe"
-& $ToolingPython scripts\refresh_my_codex.py
-# alternative: & $ToolingPython scripts\refresh_my_codex.py --harness zcode
+$ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $HOME ".oh-my-harness" }
+$ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
+& $ToolingPython scripts\refresh_harness.py
+# alternative: & $ToolingPython scripts\refresh_harness.py --harness zcode
 ```
 
 Run the final closure check after refresh:
@@ -276,17 +345,17 @@ Run the final closure check after refresh:
 Unix:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/check_my_codex.py
-# alternative: "${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python" scripts/check_my_codex.py --harness zcode
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_harness.py
+# alternative: "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_harness.py --harness zcode
 ```
 
 Windows PowerShell:
 
 ```powershell
-$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
-$ToolingPython = Join-Path $CodexHome "venvs\my-codex\Scripts\python.exe"
-& $ToolingPython scripts\check_my_codex.py
-# alternative: & $ToolingPython scripts\check_my_codex.py --harness zcode
+$ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $HOME ".oh-my-harness" }
+$ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
+& $ToolingPython scripts\check_harness.py
+# alternative: & $ToolingPython scripts\check_harness.py --harness zcode
 ```
 
 The check script verifies the selected harness skills and instructions plus the excluded-root policy. Codex closure also verifies the exact marketplace/source package set, manifest `./skills/` projection, enabled CLI state, cache identities, tooling Python, Watcher hooks, subagent support, source plugin validation, and Watcher doctor. Native directory harnesses verify their selected projection and instructions. The check is read-only.
@@ -294,21 +363,6 @@ The check script verifies the selected harness skills and instructions plus the 
 After the helper refreshes hooks, open `/hooks` in Codex and trust the refreshed Watcher skill command hook definitions. Codex skips non-managed command hooks until the exact hook definition is trusted.
 
 The refresh preflights global instructions before distribution mutation and verifies them after an atomic write. The final closure check reads the same registry-resolved plan.
-
-Manual Windows PowerShell marketplace reinstall checklist:
-
-```powershell
-$env:MY_CODEX_ROOT = (Get-Location).Path
-$env:CODEX_HOME = "$env:USERPROFILE\.codex"
-$env:MY_CODEX_PYTHON = "$env:CODEX_HOME\venvs\my-codex\Scripts\python.exe"
-$env:PLUGIN_VALIDATOR = "$env:CODEX_HOME\skills\.system\plugin-creator\scripts\validate_plugin.py"
-
-py scripts\bootstrap_tooling_env.py
-codex plugin marketplace add $env:MY_CODEX_ROOT
-codex plugin add watcher@my-codex
-codex plugin add workflow@my-codex
-codex plugin add mattpocock-skills@my-codex
-```
 
 Watcher installs user-level Codex command hooks in `$CODEX_HOME/hooks.json`. It does not use plugin manifest hooks and does not modify `.codex-plugin/plugin.json`.
 
@@ -327,7 +381,7 @@ Expected command-hook schema:
 {
   "type": "command",
   "async": false,
-  "command": "... watcher skill observe --repo-root <my-codex-root>",
+  "command": "... watcher skill observe --repo-root <oh-my-harness-root>",
   "timeoutSec": 10,
   "statusMessage": "Watcher skill: observe <event>"
 }
@@ -340,16 +394,16 @@ Install or refresh Watcher skill hooks from the source checkout:
 Unix:
 
 ```bash
-"$MY_CODEX_PYTHON" "$MY_CODEX_ROOT/plugins/watcher/scripts/watcher" skill install-hook --repo-root "$MY_CODEX_ROOT" --dry-run
-"$MY_CODEX_PYTHON" "$MY_CODEX_ROOT/plugins/watcher/scripts/watcher" skill install-hook --repo-root "$MY_CODEX_ROOT" --apply
+"$OH_MY_HARNESS_PYTHON" "$OH_MY_HARNESS_ROOT/plugins/watcher/scripts/watcher" skill install-hook --repo-root "$OH_MY_HARNESS_ROOT" --dry-run
+"$OH_MY_HARNESS_PYTHON" "$OH_MY_HARNESS_ROOT/plugins/watcher/scripts/watcher" skill install-hook --repo-root "$OH_MY_HARNESS_ROOT" --apply
 ```
 
 Windows PowerShell:
 
 ```powershell
-$python = "$env:USERPROFILE\.codex\venvs\my-codex\Scripts\python.exe"
-& $python "$env:MY_CODEX_ROOT\plugins\watcher\scripts\watcher" skill install-hook --repo-root $env:MY_CODEX_ROOT --dry-run --python $python
-& $python "$env:MY_CODEX_ROOT\plugins\watcher\scripts\watcher" skill install-hook --repo-root $env:MY_CODEX_ROOT --apply --python $python
+$python = "$env:USERPROFILE\.oh-my-harness\venv\Scripts\python.exe"
+& $python "$env:OH_MY_HARNESS_ROOT\plugins\watcher\scripts\watcher" skill install-hook --repo-root $env:OH_MY_HARNESS_ROOT --dry-run --python $python
+& $python "$env:OH_MY_HARNESS_ROOT\plugins\watcher\scripts\watcher" skill install-hook --repo-root $env:OH_MY_HARNESS_ROOT --apply --python $python
 ```
 
 After applying hooks, open `/hooks` in Codex and trust the Watcher skill command hook definitions. Codex skips non-managed command hooks until the exact hook definition is trusted.
@@ -381,23 +435,23 @@ python3 -m json.tool .agents/plugins/marketplace.json >/dev/null
 python3 -m json.tool .agents/plugins/install-manifest.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.schema.json >/dev/null
-"$MY_CODEX_PYTHON" "$PLUGIN_VALIDATOR" "$MY_CODEX_ROOT/plugins/watcher"
-"$MY_CODEX_PYTHON" "$PLUGIN_VALIDATOR" "$MY_CODEX_ROOT/plugins/workflow"
-"$MY_CODEX_PYTHON" "$MY_CODEX_ROOT/scripts/update_mattpocock_skills.py" --validate-only
-"$MY_CODEX_PYTHON" -m unittest discover -s tests -p 'test_*.py' -v
+"$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/watcher"
+"$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/workflow"
+"$OH_MY_HARNESS_PYTHON" "$OH_MY_HARNESS_ROOT/scripts/update_mattpocock_skills.py" --validate-only
+"$OH_MY_HARNESS_PYTHON" -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 Windows PowerShell:
 
 ```powershell
-& $env:MY_CODEX_PYTHON -m json.tool .agents\plugins\marketplace.json | Out-Null
-& $env:MY_CODEX_PYTHON -m json.tool .agents\plugins\install-manifest.json | Out-Null
-& $env:MY_CODEX_PYTHON -m json.tool .agents\harnesses\registry.json | Out-Null
-& $env:MY_CODEX_PYTHON -m json.tool .agents\harnesses\registry.schema.json | Out-Null
-& $env:MY_CODEX_PYTHON $env:PLUGIN_VALIDATOR "$env:MY_CODEX_ROOT\plugins\watcher"
-& $env:MY_CODEX_PYTHON $env:PLUGIN_VALIDATOR "$env:MY_CODEX_ROOT\plugins\workflow"
-& $env:MY_CODEX_PYTHON "$env:MY_CODEX_ROOT\scripts\update_mattpocock_skills.py" --validate-only
-& $env:MY_CODEX_PYTHON -m unittest discover -s tests -p 'test_*.py' -v
+& $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\plugins\marketplace.json | Out-Null
+& $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\plugins\install-manifest.json | Out-Null
+& $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.json | Out-Null
+& $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.schema.json | Out-Null
+& $env:OH_MY_HARNESS_PYTHON $env:PLUGIN_VALIDATOR "$env:OH_MY_HARNESS_ROOT\plugins\watcher"
+& $env:OH_MY_HARNESS_PYTHON $env:PLUGIN_VALIDATOR "$env:OH_MY_HARNESS_ROOT\plugins\workflow"
+& $env:OH_MY_HARNESS_PYTHON "$env:OH_MY_HARNESS_ROOT\scripts\update_mattpocock_skills.py" --validate-only
+& $env:OH_MY_HARNESS_PYTHON -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 ## Layout
@@ -413,16 +467,17 @@ plugins/
   mattpocock-skills/
 requirements.txt
 scripts/bootstrap_tooling_env.py
-scripts/check_my_codex.py
+scripts/check_harness.py
 scripts/harness_registry.py
-scripts/harness_runtime.py
-scripts/refresh_my_codex.py
+scripts/install_oh_my_harness.py
+scripts/manager_paths.py
+scripts/refresh_harness.py
 scripts/sync_agents_skills.py
 scripts/sync_codex_agents.py
 scripts/sync_harness_instructions.py
 scripts/update_mattpocock_skills.py
-scripts/upgrade_my_codex.ps1
-scripts/upgrade_my_codex.sh
+scripts/upgrade_oh_my_harness.ps1
+scripts/upgrade_oh_my_harness.sh
 tests/
 agents/
 ```

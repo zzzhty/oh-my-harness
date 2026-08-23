@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "harness": "codex",
-  "marketplace": "my-codex",
+  "marketplace": "oh-my-harness",
   "plugins": [
     {
       "name": "watcher",

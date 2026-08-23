@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync the my-codex subagent support file into a Codex agents directory."""
+"""Sync the oh-my-harness subagent support file into a Codex agents directory."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_ROOT = REPO_ROOT / "agents"
 DEFAULT_CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-MANAGED_MARKER = "Managed by my-codex scripts/sync_codex_agents.py."
+MANAGED_MARKER = "Managed by oh-my-harness scripts/sync_codex_agents.py."
+RETIRED_MANAGED_MARKERS = frozenset(
+    {"Managed by my-codex scripts/sync_codex_agents.py."}
+)
 SUPPORT_SOURCE_NAMES = ("operating-principles.md",)
 
 
@@ -75,7 +78,11 @@ def is_managed(path: Path) -> bool:
     if len(first_lines) < 3:
         return False
     return (
-        first_lines[0] == managed_header("<source>")[0]
+        first_lines[0]
+        in {
+            managed_header("<source>")[0],
+            *(f"# {marker}" for marker in RETIRED_MANAGED_MARKERS),
+        }
         and first_lines[1].startswith("# Source: ")
         and first_lines[2] == managed_header("<source>")[2]
     )

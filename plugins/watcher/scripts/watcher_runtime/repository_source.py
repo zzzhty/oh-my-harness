@@ -12,7 +12,7 @@ from types import ModuleType
 from typing import Any
 
 
-REPOSITORY_ROOT_ENV = "MY_CODEX_ROOT"
+REPOSITORY_ROOT_ENV = "OH_MY_HARNESS_ROOT"
 _CATALOG_MODULES: dict[Path, ModuleType] = {}
 
 
@@ -64,16 +64,16 @@ def resolve_repository_source(repo_root: str | Path | None = None) -> Repository
     raw_root = repo_root if repo_root is not None else os.environ.get(REPOSITORY_ROOT_ENV)
     if raw_root is None or not str(raw_root).strip():
         raise SystemExit(
-            "my-codex repository root is required; pass --repo-root or set "
+            "oh-my-harness repository root is required; pass --repo-root or set "
             f"{REPOSITORY_ROOT_ENV}"
         )
     candidate = expand_path(raw_root)
     try:
         root = candidate.resolve(strict=True)
     except OSError as exc:
-        raise SystemExit(f"cannot resolve my-codex repository root {candidate}: {exc}") from exc
+        raise SystemExit(f"cannot resolve oh-my-harness repository root {candidate}: {exc}") from exc
     if not root.is_dir():
-        raise SystemExit(f"my-codex repository root is not a directory: {root}")
+        raise SystemExit(f"oh-my-harness repository root is not a directory: {root}")
 
     catalog_module = resolve_repository_path(
         root / "scripts" / "repo_skill_catalog.py",

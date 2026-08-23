@@ -33,7 +33,7 @@ A minimal summary input is:
 {
   "title": "Workflow Plugin Summary",
   "scope_label": "plugins/workflow",
-  "source_root": "/workspace/my-codex",
+  "source_root": "/workspace/oh-my-harness",
   "evidence": [{"path": "workflow.inputs.json", "label": "Inventory"}],
   "sections": [
     {

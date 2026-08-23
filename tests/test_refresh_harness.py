@@ -11,12 +11,12 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import refresh_my_codex as refresh  # noqa: E402
+import refresh_harness as refresh  # noqa: E402
 
 
 class RefreshHarnessCliTests(unittest.TestCase):
     def run_main(self, arguments: list[str]) -> None:
-        with mock.patch.object(sys, "argv", ["refresh_my_codex.py", *arguments]):
+        with mock.patch.object(sys, "argv", ["refresh_harness.py", *arguments]):
             refresh.main()
 
     def test_retired_prune_option_is_rejected_before_any_refresh_work(self) -> None:
@@ -35,7 +35,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "was not confirmed"):
                 refresh.confirm_codex_prune(
                     plan,
-                    marketplace_name="my-codex",
+                    marketplace_name="oh-my-harness",
                     confirmation="when-nonempty",
                     dry_run=False,
                     assume_yes=False,
@@ -50,12 +50,141 @@ class RefreshHarnessCliTests(unittest.TestCase):
         with mock.patch("builtins.input") as prompt:
             refresh.confirm_codex_prune(
                 plan,
-                marketplace_name="my-codex",
+                marketplace_name="oh-my-harness",
                 confirmation="when-nonempty",
                 dry_run=False,
                 assume_yes=True,
             )
         prompt.assert_not_called()
+
+    def test_retired_marketplace_requires_the_explicit_migration_flag(self) -> None:
+        state = refresh.RetiredMarketplaceState(
+            name="my-codex",
+            configured_plugins=frozenset({"watcher"}),
+            cached_plugins=frozenset({"watcher"}),
+            source_config=(("source", "/repo"), ("source_type", "local")),
+        )
+        with self.assertRaisesRegex(SystemExit, "--migrate-marketplace"):
+            refresh.confirm_retired_marketplace_migration(
+                (state,),
+                requested=False,
+                dry_run=False,
+                assume_yes=True,
+            )
+
+    def test_retired_marketplace_migration_inventory_is_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp)
+            codex_home.joinpath("config.toml").write_text(
+                '[plugins."watcher@my-codex"]\n'
+                "enabled = true\n\n"
+                "[marketplaces.my-codex]\n"
+                'source_type = "local"\n'
+                'source = "/repo"\n',
+                encoding="utf-8",
+            )
+            cache = codex_home / "plugins" / "cache" / "my-codex" / "watcher"
+            cache.mkdir(parents=True)
+
+            states = refresh.retired_marketplace_states(codex_home, ("my-codex",))
+
+        self.assertEqual(len(states), 1)
+        self.assertEqual(states[0].configured_plugins, frozenset({"watcher"}))
+        self.assertEqual(states[0].cached_plugins, frozenset({"watcher"}))
+        self.assertEqual(dict(states[0].source_config)["source"], "/repo")
+
+    def test_dry_run_marketplace_migration_uses_only_the_preflight_snapshot(self) -> None:
+        state = refresh.RetiredMarketplaceState(
+            name="my-codex",
+            configured_plugins=frozenset({"watcher"}),
+            cached_plugins=frozenset({"watcher"}),
+            source_config=(("source", "/repo"), ("source_type", "local")),
+        )
+        with (
+            mock.patch.object(
+                refresh,
+                "retired_marketplace_states",
+                return_value=(state,),
+            ),
+            mock.patch.object(refresh, "run") as run,
+            mock.patch.object(refresh, "remove_marketplace_source") as remove_marketplace,
+        ):
+            refresh.apply_retired_marketplace_migration(
+                "codex",
+                codex_home=Path("/codex"),
+                states=(state,),
+                env={},
+                dry_run=True,
+            )
+
+        run.assert_called_once_with(
+            ["codex", "plugin", "remove", "watcher@my-codex"],
+            env={},
+            dry_run=True,
+        )
+        remove_marketplace.assert_called_once_with(
+            "codex",
+            codex_home=Path("/codex"),
+            marketplace_name="my-codex",
+            env={},
+            dry_run=True,
+        )
+
+    def test_missing_exact_relocated_marketplace_source_is_detached_before_discovery(self) -> None:
+        state = refresh.RetiredMarketplaceState(
+            name="my-codex",
+            configured_plugins=frozenset({"watcher"}),
+            cached_plugins=frozenset({"watcher"}),
+            source_config=(("source", "/former/repo"), ("source_type", "local")),
+        )
+        detached = refresh.RetiredMarketplaceState(
+            name="my-codex",
+            configured_plugins=state.configured_plugins,
+            cached_plugins=state.cached_plugins,
+            source_config=(),
+        )
+        with (
+            mock.patch.object(refresh, "remove_marketplace_source") as remove,
+            mock.patch.object(
+                refresh,
+                "retired_marketplace_states",
+                return_value=(detached,),
+            ),
+        ):
+            current = refresh.detach_relocated_retired_marketplace_sources(
+                "codex",
+                codex_home=Path("/codex"),
+                states=(state,),
+                retired_repo=Path("/former/repo"),
+                env={},
+                dry_run=False,
+            )
+
+        self.assertEqual(current, (detached,))
+        remove.assert_called_once_with(
+            "codex",
+            codex_home=Path("/codex"),
+            marketplace_name="my-codex",
+            env={},
+            dry_run=False,
+        )
+
+    def test_relocated_source_detach_dry_run_stops_before_false_discovery(self) -> None:
+        state = refresh.RetiredMarketplaceState(
+            name="my-codex",
+            configured_plugins=frozenset({"watcher"}),
+            cached_plugins=frozenset({"watcher"}),
+            source_config=(("source", "/former/repo"), ("source_type", "local")),
+        )
+        with self.assertRaisesRegex(SystemExit, "dry-run cannot simulate"):
+            refresh.detach_relocated_retired_marketplace_sources(
+                "codex",
+                codex_home=Path("/codex"),
+                states=(state,),
+                retired_repo=Path("/former/repo"),
+                env={},
+                dry_run=True,
+            )
 
     def test_legacy_discovery_profile_option_is_rejected(self) -> None:
         with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
@@ -83,7 +212,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                 binding = refresh.ensure_marketplace_source(
                     "codex",
                     codex_home=Path(tmp) / "codex",
-                    marketplace_name="my-codex",
+                    marketplace_name="oh-my-harness",
                     git_source="git@example/repo.git",
                     git_ref="main",
                     git_request_explicit=True,
@@ -120,7 +249,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     refresh.ensure_marketplace_source(
                         "codex",
                         codex_home=Path(tmp) / "codex",
-                        marketplace_name="my-codex",
+                        marketplace_name="oh-my-harness",
                         git_source="git@example/repo.git",
                         git_ref="release",
                         git_request_explicit=True,
@@ -148,7 +277,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     refresh.ensure_marketplace_source(
                         "codex",
                         codex_home=Path(tmp) / "codex",
-                        marketplace_name="my-codex",
+                        marketplace_name="oh-my-harness",
                         git_source="git@example/repo.git",
                         git_ref="main",
                         git_request_explicit=True,
@@ -175,7 +304,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                 binding = refresh.ensure_marketplace_source(
                     "codex",
                     codex_home=Path(tmp) / "codex",
-                    marketplace_name="my-codex",
+                    marketplace_name="oh-my-harness",
                     git_source="git@example/repo.git",
                     git_ref="main",
                     git_request_explicit=False,
@@ -314,18 +443,27 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     self.run_main(arguments)
         resolve.assert_called_once()
 
-    def test_default_tooling_venv_follows_the_resolved_codex_home(self) -> None:
+    def test_default_tooling_venv_follows_the_manager_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             codex_home = Path(tmp) / "custom-codex"
+            manager_home = Path(tmp) / "custom-manager"
             with mock.patch.object(
                 refresh,
                 "tooling_python_from_args",
                 side_effect=SystemExit("captured venv"),
             ) as tooling:
                 with self.assertRaisesRegex(SystemExit, "captured venv"):
-                    self.run_main(["--codex-home", str(codex_home), "--dry-run"])
+                    self.run_main(
+                        [
+                            "--home",
+                            str(manager_home),
+                            "--codex-home",
+                            str(codex_home),
+                            "--dry-run",
+                        ]
+                    )
 
-        self.assertEqual(tooling.call_args.args[1], codex_home / "venvs" / "my-codex")
+        self.assertEqual(tooling.call_args.args[1], manager_home / "venv")
 
     def test_removed_shared_harness_fails_before_catalog_load(self) -> None:
         with mock.patch.object(refresh, "load_repo_skill_catalog") as load_catalog:
@@ -357,6 +495,49 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     ]
                 )
         sync.assert_called_once()
+
+    def test_repo_relocation_migration_is_codex_only(self) -> None:
+        with self.assertRaisesRegex(
+            SystemExit,
+            "Codex marketplace options require --harness codex: --migrate-from-repo",
+        ):
+            self.run_main(
+                [
+                    "--harness",
+                    "zcode",
+                    "--migrate-from-repo",
+                    "/former/repo",
+                    "--dry-run",
+                ]
+            )
+
+    def test_codex_repo_relocation_passes_only_the_exact_former_agents_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            former_repo = root / "former-repo"
+            with (
+                mock.patch.object(refresh, "require_excluded_skill_roots_clear"),
+                mock.patch.object(
+                    refresh,
+                    "prepare_instruction_sync",
+                    side_effect=SystemExit("captured instruction migration"),
+                ) as prepare,
+            ):
+                with self.assertRaisesRegex(SystemExit, "captured instruction migration"):
+                    self.run_main(
+                        [
+                            "--codex-home",
+                            str(root / "codex"),
+                            "--migrate-from-repo",
+                            str(former_repo),
+                            "--dry-run",
+                        ]
+                    )
+
+        self.assertEqual(
+            prepare.call_args.kwargs["managed_retired_sources"],
+            (former_repo / "AGENTS.md",),
+        )
 
     def test_excluded_root_failure_precedes_instruction_preflight_and_bootstrap(self) -> None:
         with (

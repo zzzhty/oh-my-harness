@@ -12,8 +12,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 
-import check_my_codex  # noqa: E402
-from check_my_codex import CheckRunner  # noqa: E402
+import check_harness  # noqa: E402
+from check_harness import CheckRunner  # noqa: E402
 
 
 def write_manifest(path: Path, *, name: str, version: str) -> None:
@@ -58,7 +58,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
         runner = PluginValidationCheckRunner()
         runner.check_plugin_validation(
             Path("/tooling/python"),
-            ["mattpocock-skills@my-codex"],
+            ["mattpocock-skills@oh-my-harness"],
             env={},
             validator=Path("/missing/bundled-validator.py"),
         )
@@ -82,7 +82,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
             runner = PluginValidationCheckRunner()
             runner.check_plugin_validation(
                 Path("/tooling/python"),
-                ["watcher@my-codex", "mattpocock-skills@my-codex"],
+                ["watcher@oh-my-harness", "mattpocock-skills@oh-my-harness"],
                 env={},
                 validator=validator,
             )
@@ -121,7 +121,7 @@ class MarketplaceCatalogIdentityTests(unittest.TestCase):
             marketplace.write_text(
                 json.dumps(
                     {
-                        "name": "my-codex",
+                        "name": "oh-my-harness",
                         "plugins": [
                             {
                                 "name": "demo",
@@ -141,7 +141,7 @@ class MarketplaceCatalogIdentityTests(unittest.TestCase):
             )
 
             runner = RecordingCheckRunner()
-            sources = runner.check_marketplace_file(["demo@my-codex"], source_root=source_root)
+            sources = runner.check_marketplace_file(["demo@oh-my-harness"], source_root=source_root)
 
         self.assertEqual(runner.failures, 0)
         self.assertEqual(sources, {"demo": plugin_dir.resolve()})
@@ -201,12 +201,12 @@ class MarketplaceCatalogIdentityTests(unittest.TestCase):
                 marketplace = source_root / ".agents" / "plugins" / "marketplace.json"
                 marketplace.parent.mkdir(parents=True)
                 marketplace.write_text(
-                    json.dumps({"name": "my-codex", "plugins": plugins}),
+                    json.dumps({"name": "oh-my-harness", "plugins": plugins}),
                     encoding="utf-8",
                 )
 
                 runner = RecordingCheckRunner()
-                sources = runner.check_marketplace_file(["demo@my-codex"], source_root=source_root)
+                sources = runner.check_marketplace_file(["demo@oh-my-harness"], source_root=source_root)
 
             self.assertIsNone(sources)
             self.assertEqual(runner.failures, 1)

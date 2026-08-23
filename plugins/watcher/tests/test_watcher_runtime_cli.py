@@ -21,7 +21,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from watcher_runtime import cli as watcher_cli  # noqa: E402
 from watcher_runtime.doc import audit_repo, audit_runtime  # noqa: E402
-from refresh_my_codex import (  # noqa: E402
+from refresh_harness import (  # noqa: E402
     cached_plugin_names,
     plugin_prune_plan,
     prune_stale_plugins,
@@ -164,16 +164,16 @@ class WatcherRuntimeCliTests(unittest.TestCase):
             config.write_text(
                 "\n".join(
                     [
-                        '[plugins."old-plugin@my-codex"]',
+                        '[plugins."old-plugin@oh-my-harness"]',
                         "enabled = true",
-                        '[plugins."workflow@my-codex"]',
+                        '[plugins."workflow@oh-my-harness"]',
                         "enabled = true",
                     ]
                 )
                 + "\n",
                 encoding="utf-8",
             )
-            cache_root = codex_home / "plugins" / "cache" / "my-codex"
+            cache_root = codex_home / "plugins" / "cache" / "oh-my-harness"
             (cache_root / "cached-only" / "0.1.0").mkdir(parents=True)
             calls: list[list[str]] = []
 
@@ -181,22 +181,22 @@ class WatcherRuntimeCliTests(unittest.TestCase):
                 calls.append(command)
                 return 0
 
-            with mock.patch("refresh_my_codex.run", fake_run):
+            with mock.patch("refresh_harness.run", fake_run):
                 prune_stale_plugins(
                     "codex",
                     codex_home=codex_home,
-                    marketplace_name="my-codex",
+                    marketplace_name="oh-my-harness",
                     plan=plugin_prune_plan(
                         codex_home=codex_home,
-                        marketplace_name="my-codex",
+                        marketplace_name="oh-my-harness",
                         desired_plugin_names=["workflow"],
                     ),
                     env={},
                     dry_run=False,
                 )
 
-            self.assertEqual(calls, [["codex", "plugin", "remove", "old-plugin@my-codex"]])
-            self.assertEqual(cached_plugin_names(codex_home, "my-codex"), set())
+            self.assertEqual(calls, [["codex", "plugin", "remove", "old-plugin@oh-my-harness"]])
+            self.assertEqual(cached_plugin_names(codex_home, "oh-my-harness"), set())
 
 
 if __name__ == "__main__":

@@ -25,8 +25,9 @@ from harness_registry import (
     load_harness_registry,
     resolve_harness_plan,
 )
-from refresh_my_codex import (
+from refresh_harness import (
     CODEX_HOME,
+    MANAGER_HOME,
     REPO_ROOT,
     build_env,
     cached_plugin_names,
@@ -37,10 +38,13 @@ from refresh_my_codex import (
     load_install_manifest,
     marketplace_source_binding_issues,
     resolve_codex_executable,
+    retired_marketplace_states,
     codex_plugin_selectors,
     stale_plugin_names,
     tooling_python_from_args,
 )
+from manager_paths import manager_home as resolve_manager_home
+from manager_paths import venv_path as manager_venv_path
 from repo_skill_catalog import SkillCatalog, load_repo_skill_catalog
 from sync_harness_instructions import check_instruction_sync
 
@@ -160,6 +164,23 @@ class CheckRunner:
             return
         self.ok("configured marketplace is bound to the validated repository source")
 
+    def check_retired_marketplaces(
+        self,
+        *,
+        codex_home: Path,
+        retired_names: tuple[str, ...],
+    ) -> None:
+        states = retired_marketplace_states(codex_home, retired_names)
+        if states:
+            for state in states:
+                self.fail(
+                    "retired marketplace state remains: "
+                    f"{state.name} (configured={sorted(state.configured_plugins)}, "
+                    f"cached={sorted(state.cached_plugins)}, source={dict(state.source_config)})"
+                )
+            return
+        self.ok("retired marketplace config and cache state are absent")
+
     def check_plugin_packages(
         self,
         catalog: SkillCatalog,
@@ -250,7 +271,7 @@ class CheckRunner:
             return
         self.ok("Codex harness matches repository, CLI, and cache")
 
-    def check_no_stale_my_codex_plugins(
+    def check_no_stale_managed_plugins(
         self,
         plugins: list[str],
         *,
@@ -275,12 +296,12 @@ class CheckRunner:
                     locations.append("cache")
                 details.append(f"{name} ({'+'.join(locations) or 'unknown'})")
             self.fail(
-                "stale managed my-codex plugins remain. "
-                "Run scripts/refresh_my_codex.py --harness codex. "
+                "stale managed oh-my-harness plugins remain. "
+                "Run scripts/refresh_harness.py --harness codex. "
                 f"Stale={', '.join(details)}"
             )
             return
-        self.ok("no stale my-codex plugin config or cache entries remain")
+        self.ok("no stale oh-my-harness plugin config or cache entries remain")
 
     def check_harness_instructions(self, plan: HarnessPlan) -> None:
         issues = check_instruction_sync(plan)
@@ -308,7 +329,7 @@ class CheckRunner:
         if issues:
             self.fail(
                 "Watcher skill hook config has stale managed handlers. "
-                "Run scripts/refresh_my_codex.py with the same harness. "
+                "Run scripts/refresh_harness.py with the same harness. "
                 f"Issues: {issues}"
             )
             return
@@ -455,10 +476,15 @@ def main() -> None:
         "--codex",
         help="Explicit Codex CLI executable. Defaults to CODEX_BIN, PATH, then managed install fallbacks.",
     )
-    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex and tooling home directory.")
+    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex harness home directory.")
+    parser.add_argument(
+        "--home",
+        default=str(MANAGER_HOME),
+        help="oh-my-harness manager home (default: OH_MY_HARNESS_HOME or ~/.oh-my-harness).",
+    )
     parser.add_argument(
         "--venv",
-        help="Shared tooling venv path (default: <resolved Codex home>/venvs/my-codex).",
+        help="Shared tooling venv path (default: <manager home>/venv).",
     )
     parser.add_argument("--python", help="Explicit tooling Python expected in hooks and diagnostics.")
     parser.add_argument("--skip-hooks", action="store_true", help="Skip Codex Watcher hook checks.")
@@ -469,13 +495,21 @@ def main() -> None:
     args = parser.parse_args()
 
     codex_home = expand_path(args.codex_home)
+    try:
+        manager_home = resolve_manager_home(args.home)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     venv_path = (
         expand_path(args.venv)
         if args.venv
-        else codex_home / "venvs" / "my-codex"
+        else manager_venv_path(manager_home)
     )
     tooling_python = tooling_python_from_args(args, venv_path)
-    env = build_env(codex_home=codex_home, tooling_python=tooling_python)
+    env = build_env(
+        codex_home=codex_home,
+        tooling_python=tooling_python,
+        manager_home=manager_home,
+    )
     registry_environment = dict(os.environ)
     registry_environment["CODEX_HOME"] = str(codex_home)
     try:
@@ -533,6 +567,14 @@ def main() -> None:
     if plan.harness_id == "codex":
         assert codex is not None
         assert marketplace_name is not None
+        migration = plan.harness.skills.marketplace_migration
+        if migration is None:
+            runner.fail("codex harness has no registry-owned marketplace migration policy")
+        else:
+            runner.check_retired_marketplaces(
+                codex_home=plan.root,
+                retired_names=migration.retired_marketplace_names,
+            )
         runner.check_marketplace_source_binding(
             catalog,
             codex_home=plan.root,
@@ -564,7 +606,7 @@ def main() -> None:
                 rows=rows,
                 plugin_sources=plugin_sources,
             )
-        runner.check_no_stale_my_codex_plugins(
+        runner.check_no_stale_managed_plugins(
             desired_plugins,
             codex_home=plan.root,
             marketplace_name=marketplace_name,

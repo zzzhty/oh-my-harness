@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param(
     [string]$Harness,
+    [string]$ManagerHome,
     [string]$BootstrapPython,
     [string]$CodexPath,
     [string]$CodexHome,
     [string]$ToolingPython,
     [string]$GitMarketplaceSource,
     [string]$GitRef = "main",
+    [string]$MigrateFromRepo,
+    [switch]$MigrateMarketplace,
     [switch]$Yes,
     [switch]$DryRun,
     [switch]$SkipCheck
@@ -83,11 +86,11 @@ function Resolve-BootstrapPython {
     return Resolve-Executable `
         -Label "Bootstrap Python" `
         -Candidates @(
-            $env:MY_CODEX_BOOTSTRAP_PYTHON,
+            $env:OH_MY_HARNESS_BOOTSTRAP_PYTHON,
             "python",
             "py",
             (Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"),
-            (Join-Path $env:USERPROFILE ".codex\venvs\my-codex\Scripts\python.exe")
+            (Join-Path $env:USERPROFILE ".oh-my-harness\venv\Scripts\python.exe")
         )
 }
 
@@ -113,7 +116,19 @@ function Invoke-Checked {
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location -LiteralPath $repoRoot
 
-$env:MY_CODEX_ROOT = $repoRoot
+$env:OH_MY_HARNESS_ROOT = $repoRoot
+if (-not $ManagerHome) {
+    if ($env:OH_MY_HARNESS_HOME) {
+        $ManagerHome = $env:OH_MY_HARNESS_HOME
+    }
+    else {
+        $ManagerHome = Join-Path $env:USERPROFILE ".oh-my-harness"
+    }
+}
+if (-not [System.IO.Path]::IsPathRooted($ManagerHome)) {
+    throw "Manager home must be an absolute path: $ManagerHome"
+}
+$env:OH_MY_HARNESS_HOME = [System.IO.Path]::GetFullPath($ManagerHome)
 if (-not $CodexHome) {
     if ($env:CODEX_HOME) {
         $CodexHome = $env:CODEX_HOME
@@ -132,18 +147,19 @@ else {
 }
 
 if (-not $ToolingPython) {
-    $ToolingPython = Join-Path $env:CODEX_HOME "venvs\my-codex\Scripts\python.exe"
+    $ToolingPython = Join-Path $env:OH_MY_HARNESS_HOME "venv\Scripts\python.exe"
 }
-$env:MY_CODEX_PYTHON = [System.IO.Path]::GetFullPath($ToolingPython)
-$env:MY_CODEX_TOOLING_PYTHON = $env:MY_CODEX_PYTHON
+$env:OH_MY_HARNESS_PYTHON = [System.IO.Path]::GetFullPath($ToolingPython)
+$env:OH_MY_HARNESS_TOOLING_PYTHON = $env:OH_MY_HARNESS_PYTHON
 $env:PLUGIN_VALIDATOR = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\validate_plugin.py"
 
-$venvPath = Join-Path $env:CODEX_HOME "venvs\my-codex"
+$venvPath = Join-Path $env:OH_MY_HARNESS_HOME "venv"
 
-Write-Host "MY_CODEX_ROOT=$env:MY_CODEX_ROOT"
+Write-Host "OH_MY_HARNESS_HOME=$env:OH_MY_HARNESS_HOME"
+Write-Host "OH_MY_HARNESS_ROOT=$env:OH_MY_HARNESS_ROOT"
 Write-Host "CODEX_HOME=$env:CODEX_HOME"
-Write-Host "MY_CODEX_PYTHON=$env:MY_CODEX_PYTHON"
-Write-Host "MY_CODEX_TOOLING_PYTHON=$env:MY_CODEX_TOOLING_PYTHON"
+Write-Host "OH_MY_HARNESS_PYTHON=$env:OH_MY_HARNESS_PYTHON"
+Write-Host "OH_MY_HARNESS_TOOLING_PYTHON=$env:OH_MY_HARNESS_TOOLING_PYTHON"
 Write-Host "PLUGIN_VALIDATOR=$env:PLUGIN_VALIDATOR"
 Write-Host "BootstrapPython=$BootstrapPython"
 if ($CodexPathWasProvided) {
@@ -169,20 +185,21 @@ if ($DryRun) {
 Invoke-Checked `
     -Exe $BootstrapPython `
     -Arguments $bootstrapArgs `
-    -Label "my-codex tooling bootstrap"
+    -Label "oh-my-harness tooling bootstrap"
 
-if (-not (Test-Path -LiteralPath $env:MY_CODEX_PYTHON -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $env:OH_MY_HARNESS_PYTHON -PathType Leaf)) {
     if ($DryRun) {
-        throw "tooling Python is unavailable after dry-run bootstrap: $env:MY_CODEX_PYTHON. Run the wrapper without -DryRun once to create the tooling environment."
+        throw "tooling Python is unavailable after dry-run bootstrap: $env:OH_MY_HARNESS_PYTHON. Run the wrapper without -DryRun once to create the tooling environment."
     }
-    throw "tooling Python is unavailable after bootstrap: $env:MY_CODEX_PYTHON"
+    throw "tooling Python is unavailable after bootstrap: $env:OH_MY_HARNESS_PYTHON"
 }
 
 $refreshArgs = @(
-    "scripts\refresh_my_codex.py",
+    "scripts\refresh_harness.py",
+    "--home", $env:OH_MY_HARNESS_HOME,
     "--codex-home", $env:CODEX_HOME,
     "--venv", $venvPath,
-    "--python", $env:MY_CODEX_PYTHON,
+    "--python", $env:OH_MY_HARNESS_PYTHON,
     "--skip-bootstrap"
 )
 if ($HarnessWasProvided) {
@@ -203,21 +220,28 @@ if ($DryRun) {
 if ($Yes) {
     $refreshArgs += "--yes"
 }
+if ($MigrateMarketplace) {
+    $refreshArgs += "--migrate-marketplace"
+}
+if ($MigrateFromRepo) {
+    $refreshArgs += @("--migrate-from-repo", $MigrateFromRepo)
+}
 
 Invoke-Checked `
-    -Exe $env:MY_CODEX_PYTHON `
+    -Exe $env:OH_MY_HARNESS_PYTHON `
     -Arguments $refreshArgs `
-    -Label "my-codex refresh"
+    -Label "oh-my-harness refresh"
 
 if ($DryRun -and -not $SkipCheck) {
     Write-Host "Dry run: skipping closure check because no local state was changed."
 }
 elseif (-not $SkipCheck) {
     $checkArgs = @(
-        "scripts\check_my_codex.py",
+        "scripts\check_harness.py",
+        "--home", $env:OH_MY_HARNESS_HOME,
         "--codex-home", $env:CODEX_HOME,
         "--venv", $venvPath,
-        "--python", $env:MY_CODEX_PYTHON
+        "--python", $env:OH_MY_HARNESS_PYTHON
     )
     if ($HarnessWasProvided) {
         $checkArgs += @("--harness", $Harness)
@@ -226,7 +250,7 @@ elseif (-not $SkipCheck) {
         $checkArgs += @("--codex", $CodexPath)
     }
     Invoke-Checked `
-        -Exe $env:MY_CODEX_PYTHON `
+        -Exe $env:OH_MY_HARNESS_PYTHON `
         -Arguments $checkArgs `
-        -Label "my-codex closure check"
+        -Label "oh-my-harness closure check"
 }

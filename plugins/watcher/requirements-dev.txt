@@ -1,2 +1,2 @@
-# Compatibility wrapper for the shared my-codex tooling dependencies.
+# Compatibility wrapper for the shared oh-my-harness tooling dependencies.
 -r ../../requirements.txt

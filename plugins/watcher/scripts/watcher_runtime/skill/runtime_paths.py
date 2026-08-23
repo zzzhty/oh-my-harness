@@ -15,8 +15,11 @@ def expand_path(raw: str | Path) -> Path:
 
 
 CODEX_HOME = expand_path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+MANAGER_HOME = expand_path(
+    os.environ.get("OH_MY_HARNESS_HOME", Path.home() / ".oh-my-harness")
+)
 DEFAULT_STATE_DIR = CODEX_HOME / "watcher" / "skill"
-DEFAULT_TOOLING_VENV = CODEX_HOME / "venvs" / "my-codex"
+DEFAULT_TOOLING_VENV = MANAGER_HOME / "venv"
 DEFAULT_HOOK_TARGET = CODEX_HOME / "hooks.json"
 
 

@@ -1,7 +1,7 @@
 {
-  "name": "my-codex",
+  "name": "oh-my-harness",
   "interface": {
-    "displayName": "My Codex"
+    "displayName": "Oh My Harness"
   },
   "plugins": [
     {

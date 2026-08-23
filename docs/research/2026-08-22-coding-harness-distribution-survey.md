@@ -134,7 +134,7 @@ Registry 应是纯结构化 JSON。它只引用代码中 allowlist 的 resolver/
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": "2026-08-22",
   "defaults": {
     "skillsTarget": "codex",
     "instructionsHarness": "codex"

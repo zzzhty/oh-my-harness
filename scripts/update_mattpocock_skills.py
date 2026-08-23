@@ -27,7 +27,7 @@ try:
 except ModuleNotFoundError as exc:
     raise SystemExit(
         "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
-        "this updater with `${CODEX_HOME:-$HOME/.codex}/venvs/my-codex/bin/python`."
+        "this updater with `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python`."
     ) from exc
 
 
@@ -573,11 +573,11 @@ the lock; validation fails on drift before an upstream update can replace it.
 
 ## Updating From Upstream
 
-From the `my-codex` repository root, run:
+From the `oh-my-harness` repository root, run:
 
 ```bash
 python3 scripts/bootstrap_tooling_env.py
-"${{CODEX_HOME:-$HOME/.codex}}/venvs/my-codex/bin/python" scripts/update_mattpocock_skills.py
+"${{OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}}/venv/bin/python" scripts/update_mattpocock_skills.py
 ```
 
 The updater selects an upstream release, copies its published skills unchanged,

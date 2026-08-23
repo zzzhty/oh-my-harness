@@ -22,7 +22,7 @@ ROOT_SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 sys.path.insert(0, str(SCRIPTS))
 
-import refresh_my_codex  # noqa: E402
+import refresh_harness  # noqa: E402
 from watcher_runtime.skill.codex_hook_adapter import (  # noqa: E402
     HookRuntimePaths,
     discover_watcher_skill_identities,
@@ -38,7 +38,7 @@ from watcher_runtime.skill.codex_hook_config import (  # noqa: E402
     remove_skill_watcher_hooks,
     skill_watcher_command,
 )
-from check_my_codex import CheckRunner, decode_subprocess_output  # noqa: E402
+from check_harness import CheckRunner, decode_subprocess_output  # noqa: E402
 from watcher_runtime.skill.doctor import find_managed_hook_issues, main as doctor_main  # noqa: E402
 from watcher_runtime.skill.migrate_skill_watcher_schema import main as reset_schema_main  # noqa: E402
 from watcher_runtime.skill.report_pipeline import (  # noqa: E402
@@ -51,7 +51,7 @@ from watcher_runtime.skill.report_pipeline import (  # noqa: E402
 )
 from watcher_runtime.skill.propose_skill_patch import build_proposal  # noqa: E402
 from watcher_runtime.skill.redact_event import REDACTION, redact_event  # noqa: E402
-from refresh_my_codex import (  # noqa: E402
+from refresh_harness import (  # noqa: E402
     cached_plugin_names,
     codex_plugin_selectors,
     configured_plugin_names,
@@ -163,7 +163,7 @@ class SkillWatcherTests(unittest.TestCase):
         def denied_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
             raise PermissionError("denied")
 
-        with mock.patch("check_my_codex.subprocess.run", denied_run):
+        with mock.patch("check_harness.subprocess.run", denied_run):
             result = runner.run_command(["codex", "plugin", "list"], env={})
 
         self.assertEqual(result.returncode, 126)
@@ -193,8 +193,8 @@ class SkillWatcherTests(unittest.TestCase):
                 candidate.write_text("", encoding="utf-8")
             path_cli = root / "WindowsApps" / "OpenAI.Codex" / "codex.exe"
 
-            with mock.patch.object(refresh_my_codex.sys, "platform", "win32"):
-                with mock.patch("refresh_my_codex.platform.machine", return_value="AMD64"):
+            with mock.patch.object(refresh_harness.sys, "platform", "win32"):
+                with mock.patch("refresh_harness.platform.machine", return_value="AMD64"):
                     with mock.patch.dict(
                         os.environ,
                         {
@@ -204,13 +204,13 @@ class SkillWatcherTests(unittest.TestCase):
                         },
                         clear=True,
                     ):
-                        with mock.patch("refresh_my_codex.shutil.which", return_value=str(path_cli)):
+                        with mock.patch("refresh_harness.shutil.which", return_value=str(path_cli)):
                             self.assertEqual(
                                 resolve_codex_executable(None, codex_home=codex_home),
                                 str(path_cli),
                             )
 
-                        with mock.patch("refresh_my_codex.shutil.which", return_value=None):
+                        with mock.patch("refresh_harness.shutil.which", return_value=None):
                             self.assertEqual(
                                 resolve_codex_executable(None, codex_home=codex_home),
                                 str(visible_cli),
@@ -259,8 +259,8 @@ class SkillWatcherTests(unittest.TestCase):
                 candidate.write_text("", encoding="utf-8")
             path_cli = root / "path" / "codex"
 
-            with mock.patch.object(refresh_my_codex.sys, "platform", "linux"):
-                with mock.patch("refresh_my_codex.platform.machine", return_value="x86_64"):
+            with mock.patch.object(refresh_harness.sys, "platform", "linux"):
+                with mock.patch("refresh_harness.platform.machine", return_value="x86_64"):
                     with mock.patch.dict(
                         os.environ,
                         {
@@ -269,13 +269,13 @@ class SkillWatcherTests(unittest.TestCase):
                         },
                         clear=True,
                     ):
-                        with mock.patch("refresh_my_codex.shutil.which", return_value=str(path_cli)):
+                        with mock.patch("refresh_harness.shutil.which", return_value=str(path_cli)):
                             self.assertEqual(
                                 resolve_codex_executable(None, codex_home=codex_home),
                                 str(path_cli),
                             )
 
-                        with mock.patch("refresh_my_codex.shutil.which", return_value=None):
+                        with mock.patch("refresh_harness.shutil.which", return_value=None):
                             self.assertEqual(
                                 resolve_codex_executable(None, codex_home=codex_home),
                                 str(custom_visible_cli),
@@ -344,7 +344,7 @@ class SkillWatcherTests(unittest.TestCase):
 
         runner.check_plugin_validation(
             tooling_python,
-            ["watcher@my-codex"],
+            ["watcher@oh-my-harness"],
             env={},
             validator=validator,
         )
@@ -418,12 +418,12 @@ class SkillWatcherTests(unittest.TestCase):
         ]
 
         self.assertEqual(
-            default_plugin_names("install", marketplace_name="my-codex"),
+            default_plugin_names("install", marketplace_name="oh-my-harness"),
             expected,
         )
         self.assertEqual(
-            codex_plugin_selectors("my-codex", action="install"),
-            [f"{plugin}@my-codex" for plugin in expected],
+            codex_plugin_selectors("oh-my-harness", action="install"),
+            [f"{plugin}@oh-my-harness" for plugin in expected],
         )
 
     def test_install_manifest_fails_when_selected_plugin_is_missing_from_marketplace(self) -> None:
@@ -436,7 +436,7 @@ class SkillWatcherTests(unittest.TestCase):
                     {
                         "schemaVersion": 4,
                         "harness": "codex",
-                        "marketplace": "my-codex",
+                        "marketplace": "oh-my-harness",
                         "plugins": [
                             {"name": "missing-plugin", "install": True, "check": True},
                         ],
@@ -445,13 +445,13 @@ class SkillWatcherTests(unittest.TestCase):
                 encoding="utf-8",
             )
             marketplace.write_text(
-                json.dumps({"name": "my-codex", "plugins": [{"name": "skill-watcher"}]}),
+                json.dumps({"name": "oh-my-harness", "plugins": [{"name": "skill-watcher"}]}),
                 encoding="utf-8",
             )
 
             with self.assertRaises(SystemExit) as raised:
                 codex_plugin_selectors(
-                    "my-codex",
+                    "oh-my-harness",
                     action="install",
                     manifest_file=manifest,
                     marketplace_file=marketplace,
@@ -466,9 +466,9 @@ class SkillWatcherTests(unittest.TestCase):
             config.write_text(
                 "\n".join(
                     [
-                        '[plugins."workflow@my-codex"]',
+                        '[plugins."workflow@oh-my-harness"]',
                         "enabled = true",
-                        '[plugins."old-plugin@my-codex"]',
+                        '[plugins."old-plugin@oh-my-harness"]',
                         "enabled = true",
                         '[plugins."github@openai-curated"]',
                         "enabled = true",
@@ -477,16 +477,16 @@ class SkillWatcherTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            cache_root = codex_home / "plugins" / "cache" / "my-codex"
+            cache_root = codex_home / "plugins" / "cache" / "oh-my-harness"
             (cache_root / "workflow" / "0.1.0").mkdir(parents=True)
             (cache_root / "cached-old" / "0.1.0").mkdir(parents=True)
 
-            self.assertEqual(configured_plugin_names(codex_home, "my-codex"), {"workflow", "old-plugin"})
-            self.assertEqual(cached_plugin_names(codex_home, "my-codex"), {"workflow", "cached-old"})
+            self.assertEqual(configured_plugin_names(codex_home, "oh-my-harness"), {"workflow", "old-plugin"})
+            self.assertEqual(cached_plugin_names(codex_home, "oh-my-harness"), {"workflow", "cached-old"})
             self.assertEqual(
                 stale_plugin_names(
                     codex_home=codex_home,
-                    marketplace_name="my-codex",
+                    marketplace_name="oh-my-harness",
                     desired_plugin_names=["workflow"],
                 ),
                 ["cached-old", "old-plugin"],
@@ -827,7 +827,7 @@ class SkillWatcherTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 discover_skill_metadata()
 
-        self.assertIn("pass --repo-root or set MY_CODEX_ROOT", str(raised.exception))
+        self.assertIn("pass --repo-root or set OH_MY_HARNESS_ROOT", str(raised.exception))
 
     def test_metadata_discovery_rejects_catalog_symlink_escape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1097,7 +1097,7 @@ class SkillWatcherTests(unittest.TestCase):
             self.assertFalse((state_dir / "skill-metadata-cache.json").exists())
             self.assertFalse((state_dir / "schema-version.json").exists())
 
-        self.assertIn("pass --repo-root or set MY_CODEX_ROOT", str(raised.exception))
+        self.assertIn("pass --repo-root or set OH_MY_HARNESS_ROOT", str(raised.exception))
 
     def test_reset_schema_uses_prevalidated_explicit_repository_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1139,30 +1139,30 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(metadata["source_root"], source_root)
 
     def test_hook_config_runtime_helpers_and_stale_schema_detection(self) -> None:
-        with mock.patch.dict("os.environ", {"MY_CODEX_PYTHON": "/tmp/shared-python"}, clear=True):
+        with mock.patch.dict("os.environ", {"OH_MY_HARNESS_PYTHON": "/tmp/shared-python"}, clear=True):
             self.assertEqual(default_python(), Path("/tmp/shared-python"))
         with mock.patch.dict(
             "os.environ",
             {
-                "MY_CODEX_PYTHON": "/tmp/shared-python",
-                "MY_CODEX_TOOLING_PYTHON": "/tmp/tooling-python",
+                "OH_MY_HARNESS_PYTHON": "/tmp/shared-python",
+                "OH_MY_HARNESS_TOOLING_PYTHON": "/tmp/tooling-python",
             },
             clear=True,
         ):
             self.assertEqual(default_python(), Path("/tmp/tooling-python"))
 
-        python = Path(r"C:\Users\Max Smith\.codex\venvs\my-codex\Scripts\python.exe")
-        adapter = Path(r"C:\Users\Max Smith\Projects\my-codex\plugins\watcher\scripts\watcher")
+        python = Path(r"C:\Users\Max Smith\.oh-my-harness\venv\Scripts\python.exe")
+        adapter = Path(r"C:\Users\Max Smith\Projects\oh-my-harness\plugins\watcher\scripts\watcher")
         with mock.patch("watcher_runtime.skill.codex_hook_config.os.name", "nt"):
             self.assertEqual(
                 skill_watcher_command(python, adapter, repo_root=REPO_ROOT),
-                r'"C:\Users\Max Smith\.codex\venvs\my-codex\Scripts\python.exe" -B '
-                r'"C:\Users\Max Smith\Projects\my-codex\plugins\watcher\scripts\watcher" skill observe '
+                r'"C:\Users\Max Smith\.oh-my-harness\venv\Scripts\python.exe" -B '
+                r'"C:\Users\Max Smith\Projects\oh-my-harness\plugins\watcher\scripts\watcher" skill observe '
                 f'--repo-root {REPO_ROOT}',
             )
 
-        self.assertEqual(marketplace_source_arg("https://github.com/example/my-codex"), "https://github.com/example/my-codex")
-        self.assertEqual(marketplace_source_arg("example/my-codex"), "example/my-codex")
+        self.assertEqual(marketplace_source_arg("https://github.com/example/oh-my-harness"), "https://github.com/example/oh-my-harness")
+        self.assertEqual(marketplace_source_arg("example/oh-my-harness"), "example/oh-my-harness")
 
         existing = {
             "hooks": {

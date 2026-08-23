@@ -106,6 +106,34 @@ class HarnessInstructionSyncTests(unittest.TestCase):
                 output=lambda _message: None,
             )
 
+    def test_exact_retired_managed_symlink_can_be_replaced_after_live_confirmation(self) -> None:
+        plan = self.plan("codex")
+        retired_source = self.root / "retired-repo" / "AGENTS.md"
+        target = plan.instructions_target
+        target.parent.mkdir(parents=True)
+        target.symlink_to(retired_source)
+
+        with self.assertRaisesRegex(SystemExit, "was not confirmed"):
+            prepare_instruction_sync(
+                plan,
+                dry_run=False,
+                assume_yes=True,
+                managed_retired_sources=(retired_source,),
+                input_fn=lambda _prompt: "no",
+                output=lambda _message: None,
+            )
+
+        prepared = prepare_instruction_sync(
+            plan,
+            dry_run=False,
+            assume_yes=True,
+            managed_retired_sources=(retired_source,),
+            input_fn=lambda _prompt: "yes",
+            output=lambda _message: None,
+        )
+        apply_instruction_sync(prepared, dry_run=False)
+        self.assertEqual(target.resolve(strict=False), self.source.resolve(strict=False))
+
         codex = self.plan("codex")
         shadow = codex.instruction_shadow_paths[0]
         shadow.parent.mkdir(parents=True, exist_ok=True)

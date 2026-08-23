@@ -12,7 +12,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import refresh_my_codex as refresh  # noqa: E402
+import refresh_harness as refresh  # noqa: E402
 from check_skill_discovery import PluginListRow  # noqa: E402
 from harness_registry import load_harness_registry, resolve_harness_plan  # noqa: E402
 from repo_skill_catalog import load_repo_skill_catalog  # noqa: E402
@@ -143,7 +143,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
 
     def run_pruning_main(self, *, dry_run: bool = True) -> None:
         arguments = [
-            "refresh_my_codex.py",
+            "refresh_harness.py",
             "--harness",
             "codex",
             "--marketplace-source",
@@ -368,7 +368,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             SystemExit,
-            "cached my-codex plugins have no canonical repository skills: retired",
+            "cached oh-my-harness plugins have no canonical repository skills: retired",
         ):
             refresh.preflight_codex_distribution(
                 self.fixture.catalog,
@@ -397,7 +397,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             SystemExit,
-            "unclassified enabled my-codex plugins.*retired",
+            "unclassified enabled oh-my-harness plugins.*retired",
         ):
             self.run_pruning_main()
 
@@ -419,7 +419,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
             with self.subTest(dry_run=dry_run):
                 with self.assertRaisesRegex(
                     SystemExit,
-                    "unclassified enabled my-codex plugins.*retired",
+                    "unclassified enabled oh-my-harness plugins.*retired",
                 ):
                     self.run_pruning_main(dry_run=dry_run)
 

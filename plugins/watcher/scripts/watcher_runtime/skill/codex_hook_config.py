@@ -33,7 +33,9 @@ LEGACY_ADAPTER_NAME = "codex_hook_adapter.py"
 
 
 def default_python() -> Path:
-    override = os.environ.get("MY_CODEX_TOOLING_PYTHON") or os.environ.get("MY_CODEX_PYTHON")
+    override = os.environ.get("OH_MY_HARNESS_TOOLING_PYTHON") or os.environ.get(
+        "OH_MY_HARNESS_PYTHON"
+    )
     if override:
         return expand_path(override)
     windows_python = DEFAULT_TOOLING_VENV / "Scripts" / "python.exe"

@@ -3,16 +3,19 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Usage: scripts/upgrade_my_codex.sh [--harness ID] [options]
+Usage: scripts/upgrade_oh_my_harness.sh [--harness ID] [options]
 
 Options:
   --harness ID                  Registry harness id. Defaults to the registry value (currently codex).
+  --home PATH                   Manager home. Defaults to OH_MY_HARNESS_HOME or ~/.oh-my-harness.
   --bootstrap-python PATH       Base Python used to create or refresh the tooling venv.
   --codex PATH                  Explicit Codex CLI executable. Otherwise uses CODEX_BIN, PATH, then managed installs.
   --codex-home PATH             Codex home directory. Defaults to CODEX_HOME or ~/.codex.
   --tooling-python PATH         Tooling Python used for harness helpers and Codex hooks.
   --git-marketplace-source URL  Git marketplace source. Defaults to remote.origin.url.
   --git-ref REF                 Git ref for first-time Git marketplace add. Defaults to main.
+  --migrate-marketplace         Apply the registry-owned retired Codex marketplace migration.
+  --migrate-from-repo PATH      Replace the exact former managed Codex AGENTS.md symlink after live confirmation.
   --yes                         Confirm missing instructions creation and exact managed-stale prune plans.
   --dry-run                     Print commands without changing Codex state.
   --skip-check                  Skip the final closure check.
@@ -50,8 +53,8 @@ resolve_command() {
 }
 
 find_bootstrap_python() {
-    if [ -n "${MY_CODEX_BOOTSTRAP_PYTHON:-}" ]; then
-        resolve_command "Bootstrap Python" "$MY_CODEX_BOOTSTRAP_PYTHON"
+    if [ -n "${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}" ]; then
+        resolve_command "Bootstrap Python" "$OH_MY_HARNESS_BOOTSTRAP_PYTHON"
         return
     fi
     if command -v python3 >/dev/null 2>&1; then
@@ -62,23 +65,26 @@ find_bootstrap_python() {
         command -v python
         return
     fi
-    echo "Bootstrap Python not found. Set MY_CODEX_BOOTSTRAP_PYTHON or install python3." >&2
+    echo "Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install python3." >&2
     exit 1
 }
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
-bootstrap_python=${MY_CODEX_BOOTSTRAP_PYTHON:-}
+bootstrap_python=${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}
 codex_path=
 codex_home=${CODEX_HOME:-"$HOME/.codex"}
-tooling_python=${MY_CODEX_PYTHON:-}
+manager_home=${OH_MY_HARNESS_HOME:-"$HOME/.oh-my-harness"}
+tooling_python=${OH_MY_HARNESS_PYTHON:-}
 harness=
 git_marketplace_source=
 git_ref=
 dry_run=0
 skip_check=0
 assume_yes=0
+migrate_marketplace=0
+migrate_from_repo=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -89,6 +95,15 @@ while [ "$#" -gt 0 ]; do
             ;;
         --bootstrap-python=*)
             bootstrap_python=${1#*=}
+            shift
+            ;;
+        --home)
+            require_value "$1" "${2-}"
+            manager_home=$2
+            shift 2
+            ;;
+        --home=*)
+            manager_home=${1#*=}
             shift
             ;;
         --codex)
@@ -155,6 +170,20 @@ while [ "$#" -gt 0 ]; do
             assume_yes=1
             shift
             ;;
+        --migrate-marketplace)
+            migrate_marketplace=1
+            shift
+            ;;
+        --migrate-from-repo)
+            require_value "$1" "${2-}"
+            migrate_from_repo=$2
+            shift 2
+            ;;
+        --migrate-from-repo=*)
+            migrate_from_repo=${1#*=}
+            require_value "--migrate-from-repo" "$migrate_from_repo"
+            shift
+            ;;
         --skip-check)
             skip_check=1
             shift
@@ -171,6 +200,14 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+case "$manager_home" in
+    /*) ;;
+    *)
+        echo "manager home must be an absolute path: $manager_home" >&2
+        exit 2
+        ;;
+esac
+
 if [ -z "$bootstrap_python" ]; then
     bootstrap_python=$(find_bootstrap_python)
 else
@@ -178,20 +215,22 @@ else
 fi
 
 if [ -z "$tooling_python" ]; then
-    tooling_python="$codex_home/venvs/my-codex/bin/python"
+    tooling_python="$manager_home/venv/bin/python"
 fi
-venv_path="$codex_home/venvs/my-codex"
+venv_path="$manager_home/venv"
 
 export CODEX_HOME="$codex_home"
-export MY_CODEX_ROOT="$repo_root"
-export MY_CODEX_PYTHON="$tooling_python"
-export MY_CODEX_TOOLING_PYTHON="$tooling_python"
+export OH_MY_HARNESS_HOME="$manager_home"
+export OH_MY_HARNESS_ROOT="$repo_root"
+export OH_MY_HARNESS_PYTHON="$tooling_python"
+export OH_MY_HARNESS_TOOLING_PYTHON="$tooling_python"
 export PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py}"
 
-echo "MY_CODEX_ROOT=$MY_CODEX_ROOT"
+echo "OH_MY_HARNESS_HOME=$OH_MY_HARNESS_HOME"
+echo "OH_MY_HARNESS_ROOT=$OH_MY_HARNESS_ROOT"
 echo "CODEX_HOME=$CODEX_HOME"
-echo "MY_CODEX_PYTHON=$MY_CODEX_PYTHON"
-echo "MY_CODEX_TOOLING_PYTHON=$MY_CODEX_TOOLING_PYTHON"
+echo "OH_MY_HARNESS_PYTHON=$OH_MY_HARNESS_PYTHON"
+echo "OH_MY_HARNESS_TOOLING_PYTHON=$OH_MY_HARNESS_TOOLING_PYTHON"
 echo "PLUGIN_VALIDATOR=$PLUGIN_VALIDATOR"
 echo "BootstrapPython=$bootstrap_python"
 echo "CodexPath=${codex_path:-auto-if-required-by-harness}"
@@ -206,18 +245,19 @@ fi
 echo "+ $bootstrap_python $*"
 "$bootstrap_python" "$@"
 
-if [ ! -f "$MY_CODEX_PYTHON" ]; then
-    echo "tooling Python is unavailable after bootstrap: $MY_CODEX_PYTHON" >&2
+if [ ! -f "$OH_MY_HARNESS_PYTHON" ]; then
+    echo "tooling Python is unavailable after bootstrap: $OH_MY_HARNESS_PYTHON" >&2
     if [ "$dry_run" -eq 1 ]; then
         echo "Run the wrapper without --dry-run once to create the tooling environment." >&2
     fi
     exit 1
 fi
 
-set -- "$repo_root/scripts/refresh_my_codex.py" \
+set -- "$repo_root/scripts/refresh_harness.py" \
+    --home "$OH_MY_HARNESS_HOME" \
     --codex-home "$CODEX_HOME" \
     --venv "$venv_path" \
-    --python "$MY_CODEX_PYTHON" \
+    --python "$OH_MY_HARNESS_PYTHON" \
     --skip-bootstrap
 
 if [ -n "$harness" ]; then
@@ -240,23 +280,30 @@ fi
 if [ "$assume_yes" -eq 1 ]; then
     set -- "$@" --yes
 fi
+if [ "$migrate_marketplace" -eq 1 ]; then
+    set -- "$@" --migrate-marketplace
+fi
+if [ -n "$migrate_from_repo" ]; then
+    set -- "$@" --migrate-from-repo "$migrate_from_repo"
+fi
 
-echo "+ $MY_CODEX_PYTHON $*"
-"$MY_CODEX_PYTHON" "$@"
+echo "+ $OH_MY_HARNESS_PYTHON $*"
+"$OH_MY_HARNESS_PYTHON" "$@"
 
 if [ "$dry_run" -eq 1 ] && [ "$skip_check" -eq 0 ]; then
     echo "Dry run: skipping closure check because no local state was changed."
 elif [ "$skip_check" -eq 0 ]; then
-    set -- "$repo_root/scripts/check_my_codex.py" \
+    set -- "$repo_root/scripts/check_harness.py" \
+        --home "$OH_MY_HARNESS_HOME" \
         --codex-home "$CODEX_HOME" \
         --venv "$venv_path" \
-        --python "$MY_CODEX_PYTHON"
+        --python "$OH_MY_HARNESS_PYTHON"
     if [ -n "$harness" ]; then
         set -- "$@" --harness "$harness"
     fi
     if [ -n "$codex_path" ]; then
         set -- "$@" --codex "$codex_path"
     fi
-    echo "+ $MY_CODEX_PYTHON $*"
-    "$MY_CODEX_PYTHON" "$@"
+    echo "+ $OH_MY_HARNESS_PYTHON $*"
+    "$OH_MY_HARNESS_PYTHON" "$@"
 fi

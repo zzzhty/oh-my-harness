@@ -1,6 +1,6 @@
 # Workflow
 
-Reusable agent workflow skills maintained from the my-codex repository.
+Reusable agent workflow skills maintained from the oh-my-harness repository.
 
 ## Skills
 

@@ -1,6 +1,6 @@
 # Codex Agent Support
 
-This document explains how `my-codex` manages Codex agent support files.
+This document explains how `oh-my-harness` manages Codex agent support files.
 
 The repository currently keeps only one managed support file under `agents/`.
 That file is copied into `$CODEX_HOME/agents/` so global instructions can refer

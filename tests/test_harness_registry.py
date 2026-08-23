@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 
@@ -12,6 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from harness_registry import (  # noqa: E402
     REGISTRY_FILE,
+    REGISTRY_SCHEMA_VERSION,
     HarnessRegistryError,
     ensure_codex_harness_covers_catalog,
     load_harness_registry,
@@ -54,9 +56,29 @@ class HarnessRegistryTests(unittest.TestCase):
         self.assertEqual(codex.skills.driver, "codex-marketplace")
         self.assertEqual(codex.skills.reconciliation.prune_policy, "managed-stale")
         self.assertEqual(codex.skills.reconciliation.confirmation, "when-nonempty")
+        self.assertIsNotNone(codex.skills.marketplace_migration)
+        assert codex.skills.marketplace_migration is not None
+        self.assertEqual(
+            codex.skills.marketplace_migration.retired_marketplace_names,
+            ("my-codex",),
+        )
         self.assertEqual(
             set(self.registry.excluded_skill_roots),
             {"agents-skills"},
+        )
+
+    def test_registry_schema_version_is_an_iso_date_shared_by_both_authorities(self) -> None:
+        registry_payload = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        schema_payload = json.loads(
+            REGISTRY_FILE.with_name("registry.schema.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(date.fromisoformat(REGISTRY_SCHEMA_VERSION).isoformat(), REGISTRY_SCHEMA_VERSION)
+        self.assertEqual(registry_payload["schemaVersion"], REGISTRY_SCHEMA_VERSION)
+        self.assertIn("schemaVersion", schema_payload["required"])
+        self.assertEqual(
+            schema_payload["properties"]["schemaVersion"],
+            {"type": "string", "const": REGISTRY_SCHEMA_VERSION},
         )
 
     def test_environment_root_and_environment_home_append_are_distinct(self) -> None:
@@ -186,6 +208,11 @@ class HarnessRegistryTests(unittest.TestCase):
         cases = (
             ("unknown", lambda data: data.update({"command": "echo unsafe"}), "unsupported fields"),
             (
+                "schema-version",
+                lambda data: data.update({"schemaVersion": "v2"}),
+                "schemaVersion must be '2026-08-22'",
+            ),
+            (
                 "driver",
                 lambda data: data["harnesses"]["zcode"]["skills"].update(
                     {"driver": "shell-command"}
@@ -249,22 +276,15 @@ class HarnessRegistryTests(unittest.TestCase):
                 with self.assertRaisesRegex(HarnessRegistryError, expected):
                     load_harness_registry(path)
 
-    def test_registry_rejects_boolean_schema_version_and_duplicate_json_keys(self) -> None:
-        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+    def test_registry_rejects_duplicate_json_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            boolean_version = root / "boolean-version.json"
-            payload = json.loads(json.dumps(original))
-            payload["schemaVersion"] = True
-            write_registry(boolean_version, payload)
-            with self.assertRaisesRegex(HarnessRegistryError, "schemaVersion must be 1"):
-                load_harness_registry(boolean_version)
-
             duplicate = root / "duplicate.json"
             duplicate.write_text(
                 REGISTRY_FILE.read_text(encoding="utf-8").replace(
-                    '"schemaVersion": 1,',
-                    '"schemaVersion": 1,\n  "schemaVersion": 1,',
+                    '"schemaVersion": "2026-08-22",',
+                    '"schemaVersion": "2026-08-22",\n'
+                    '  "schemaVersion": "2026-08-22",',
                     1,
                 ),
                 encoding="utf-8",

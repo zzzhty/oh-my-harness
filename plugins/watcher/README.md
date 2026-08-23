@@ -19,7 +19,7 @@ $CODEX_HOME/watcher/
     └── skill-metadata-cache.json
 ```
 
-On `SessionStart`, Watcher rebuilds `skill-metadata-cache.json` from the repository-authoritative callable catalog at `scripts/repo_skill_catalog.py` under one explicit my-codex repository root. Marketplace metadata, plugin manifests, plugin cache, and the runtime cache never enumerate callable skills. A missing or invalid explicit repository root, canonical catalog failure, unsupported attribution-overlay schema, or invalid skill relationship stops the refresh visibly.
+On `SessionStart`, Watcher rebuilds `skill-metadata-cache.json` from the repository-authoritative callable catalog at `scripts/repo_skill_catalog.py` under one explicit oh-my-harness repository root. Marketplace metadata, plugin manifests, plugin cache, and the runtime cache never enumerate callable skills. A missing or invalid explicit repository root, canonical catalog failure, unsupported attribution-overlay schema, or invalid skill relationship stops the refresh visibly.
 
 Repository-owned `.codex-plugin/skill-watcher.json` files are non-callable attribution overlays keyed by durable namespaced Watcher identities. They retain roles, aliases, supporting-skill relationships, logical groups, and legacy mappings without defining the callable inventory. Overlay entries may declare an optional lowercase kebab-case `logical_group`. Skill reports use the derived runtime metadata cache to render both a group-level usage table and each observed skill's group. Because grouping is applied at report time, existing logs can be reclassified without rewriting historical events.
 
@@ -40,13 +40,13 @@ Current migration scope:
 Use the unified CLI from the Watcher plugin root:
 
 ```bash
-export MY_CODEX_ROOT="$(git rev-parse --show-toplevel)"
+export OH_MY_HARNESS_ROOT="$(git rev-parse --show-toplevel)"
 python3 scripts/watcher doc report --config config/repos.example.json --print-report
 python3 scripts/watcher skill report --since 7d
 python3 scripts/watcher migrate-state --dry-run
 ```
 
-Skill `observe`, `install-hook`, and `doctor` accept `--repo-root`; when omitted they require `MY_CODEX_ROOT`. Installed command hooks embed the resolved root explicitly, so SessionStart behavior does not depend on the process working directory, a plugin-cache path, or adapter-path inference. `$CODEX_HOME/watcher` remains runtime state only.
+Skill `observe`, `install-hook`, and `doctor` accept `--repo-root`; when omitted they require `OH_MY_HARNESS_ROOT`. Installed command hooks embed the resolved root explicitly, so SessionStart behavior does not depend on the process working directory, a plugin-cache path, or adapter-path inference. `$CODEX_HOME/watcher` remains runtime state only.
 
 Doc audit configs may define multiple named profiles for one repository. Keep current authority,
 generated/upstream site, and history scopes separate:

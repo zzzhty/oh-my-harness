@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import refresh_my_codex  # noqa: E402
+import refresh_harness  # noqa: E402
 
 
 class MacOSCodexDiscoveryTests(unittest.TestCase):
@@ -36,22 +36,22 @@ class MacOSCodexDiscoveryTests(unittest.TestCase):
                 candidate.parent.mkdir(parents=True, exist_ok=True)
                 candidate.write_text("", encoding="utf-8")
 
-            with mock.patch.object(refresh_my_codex.sys, "platform", "darwin"):
-                with mock.patch("refresh_my_codex.platform.machine", return_value="arm64"):
+            with mock.patch.object(refresh_harness.sys, "platform", "darwin"):
+                with mock.patch("refresh_harness.platform.machine", return_value="arm64"):
                     with mock.patch.object(
-                        refresh_my_codex,
+                        refresh_harness,
                         "MACOS_APPLICATION_DIRS",
                         (applications,),
                     ):
                         with mock.patch.dict(os.environ, {"HOME": str(user_home)}, clear=True):
-                            with mock.patch("refresh_my_codex.shutil.which", return_value=None):
+                            with mock.patch("refresh_harness.shutil.which", return_value=None):
                                 self.assertEqual(
-                                    refresh_my_codex.resolve_codex_executable(None, codex_home=codex_home),
+                                    refresh_harness.resolve_codex_executable(None, codex_home=codex_home),
                                     str(app_cli),
                                 )
                                 app_cli.unlink()
                                 self.assertEqual(
-                                    refresh_my_codex.resolve_codex_executable(None, codex_home=codex_home),
+                                    refresh_harness.resolve_codex_executable(None, codex_home=codex_home),
                                     str(extension_cli),
                                 )
 
@@ -66,16 +66,16 @@ class MacOSCodexDiscoveryTests(unittest.TestCase):
             app_cli.write_text("", encoding="utf-8")
             path_cli = root / "path" / "codex"
 
-            with mock.patch.object(refresh_my_codex.sys, "platform", "darwin"):
+            with mock.patch.object(refresh_harness.sys, "platform", "darwin"):
                 with mock.patch.object(
-                    refresh_my_codex,
+                    refresh_harness,
                     "MACOS_APPLICATION_DIRS",
                     (applications,),
                 ):
                     with mock.patch.dict(os.environ, {"HOME": str(user_home)}, clear=True):
-                        with mock.patch("refresh_my_codex.shutil.which", return_value=str(path_cli)):
+                        with mock.patch("refresh_harness.shutil.which", return_value=str(path_cli)):
                             self.assertEqual(
-                                refresh_my_codex.resolve_codex_executable(None, codex_home=codex_home),
+                                refresh_harness.resolve_codex_executable(None, codex_home=codex_home),
                                 str(path_cli),
                             )
 

@@ -14,7 +14,7 @@ from repo_skill_catalog import REPO_ROOT, SkillCatalog
 
 
 REGISTRY_FILE = REPO_ROOT / ".agents" / "harnesses" / "registry.json"
-REGISTRY_SCHEMA_VERSION = 1
+REGISTRY_SCHEMA_VERSION = "2026-08-22"
 HARNESS_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 ENVIRONMENT_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -59,6 +59,12 @@ class ReconciliationSpec:
 
 
 @dataclass(frozen=True)
+class MarketplaceMigrationSpec:
+    retired_marketplace_names: tuple[str, ...]
+    confirmation: str
+
+
+@dataclass(frozen=True)
 class SkillsSpec:
     driver: str
     reconciliation: ReconciliationSpec
@@ -67,6 +73,7 @@ class SkillsSpec:
     windows_materialization: str | None = None
     marketplace_path: Path | None = None
     install_manifest_path: Path | None = None
+    marketplace_migration: MarketplaceMigrationSpec | None = None
 
 
 @dataclass(frozen=True)
@@ -262,6 +269,41 @@ def _reconciliation(value: object, *, label: str) -> ReconciliationSpec:
     return ReconciliationSpec(prune_policy=prune_policy, confirmation=confirmation)
 
 
+def _marketplace_migration(value: object, *, label: str) -> MarketplaceMigrationSpec:
+    payload = _object(value, label=label)
+    _keys(
+        payload,
+        label=label,
+        required={"retiredMarketplaceNames", "confirmation"},
+    )
+    raw_names = payload["retiredMarketplaceNames"]
+    if not isinstance(raw_names, list) or not raw_names:
+        raise HarnessRegistryError(
+            f"{label}.retiredMarketplaceNames must be a non-empty array"
+        )
+    names = tuple(
+        _string(name, label=f"{label}.retiredMarketplaceNames[{index}]")
+        for index, name in enumerate(raw_names)
+    )
+    if len(set(names)) != len(names):
+        raise HarnessRegistryError(
+            f"{label}.retiredMarketplaceNames contains duplicate values"
+        )
+    if any(not HARNESS_ID_PATTERN.fullmatch(name) for name in names):
+        raise HarnessRegistryError(
+            f"{label}.retiredMarketplaceNames contains an invalid marketplace name"
+        )
+    confirmation = _string(payload["confirmation"], label=f"{label}.confirmation")
+    if confirmation != "explicit-flag-and-bounded-confirmation":
+        raise HarnessRegistryError(
+            f"{label}.confirmation is unsupported: {confirmation!r}"
+        )
+    return MarketplaceMigrationSpec(
+        retired_marketplace_names=names,
+        confirmation=confirmation,
+    )
+
+
 def _skills(value: object, *, label: str) -> SkillsSpec:
     payload = _object(value, label=label)
     driver = _string(payload.get("driver"), label=f"{label}.driver")
@@ -271,7 +313,13 @@ def _skills(value: object, *, label: str) -> SkillsSpec:
         _keys(
             payload,
             label=label,
-            required={"driver", "marketplacePath", "installManifestPath", "reconciliation"},
+            required={
+                "driver",
+                "marketplacePath",
+                "installManifestPath",
+                "reconciliation",
+                "migration",
+            },
         )
         return SkillsSpec(
             driver=driver,
@@ -283,6 +331,9 @@ def _skills(value: object, *, label: str) -> SkillsSpec:
             ),
             reconciliation=_reconciliation(
                 payload["reconciliation"], label=f"{label}.reconciliation"
+            ),
+            marketplace_migration=_marketplace_migration(
+                payload["migration"], label=f"{label}.migration"
             ),
         )
 
@@ -482,12 +533,9 @@ def load_harness_registry(
     )
     if root["$schema"] != "./registry.schema.json":
         raise HarnessRegistryError("registry.$schema must be './registry.schema.json'")
-    if (
-        type(root["schemaVersion"]) is not int
-        or root["schemaVersion"] != REGISTRY_SCHEMA_VERSION
-    ):
+    if root["schemaVersion"] != REGISTRY_SCHEMA_VERSION:
         raise HarnessRegistryError(
-            f"registry.schemaVersion must be {REGISTRY_SCHEMA_VERSION}"
+            f"registry.schemaVersion must be {REGISTRY_SCHEMA_VERSION!r}"
         )
     defaults = _object(root["defaults"], label="registry.defaults")
     _keys(defaults, label="registry.defaults", required={"harness"})

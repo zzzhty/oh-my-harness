@@ -13,8 +13,8 @@ from repo_skill_catalog import REPO_ROOT, SkillCatalog, load_repo_skill_catalog
 _WINDOWS_JUNCTION_COMMAND = (
     "$ErrorActionPreference = 'Stop'; "
     "New-Item -ItemType Junction "
-    "-Path $env:MY_CODEX_SKILL_LINK_PATH "
-    "-Target $env:MY_CODEX_SKILL_LINK_TARGET | Out-Null"
+    "-Path $env:OH_MY_HARNESS_SKILL_LINK_PATH "
+    "-Target $env:OH_MY_HARNESS_SKILL_LINK_TARGET | Out-Null"
 )
 
 
@@ -78,8 +78,8 @@ def create_projection_link(link: Path, destination: Path) -> None:
         return
 
     env = os.environ.copy()
-    env["MY_CODEX_SKILL_LINK_PATH"] = str(link)
-    env["MY_CODEX_SKILL_LINK_TARGET"] = str(destination)
+    env["OH_MY_HARNESS_SKILL_LINK_PATH"] = str(link)
+    env["OH_MY_HARNESS_SKILL_LINK_TARGET"] = str(destination)
     try:
         completed = subprocess.run(
             [

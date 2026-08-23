@@ -1,6 +1,6 @@
 {
   "$schema": "./registry.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": "2026-08-22",
   "defaults": {
     "harness": "codex"
   },
@@ -43,6 +43,12 @@
         "reconciliation": {
           "prunePolicy": "managed-stale",
           "confirmation": "when-nonempty"
+        },
+        "migration": {
+          "retiredMarketplaceNames": [
+            "my-codex"
+          ],
+          "confirmation": "explicit-flag-and-bounded-confirmation"
         }
       },
       "instructions": {

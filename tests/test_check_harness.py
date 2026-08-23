@@ -11,7 +11,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import check_my_codex  # noqa: E402
+import check_harness  # noqa: E402
 from check_skill_discovery import (  # noqa: E402
     PluginListRow,
     codex_plugin_rows,
@@ -100,26 +100,26 @@ class HarnessClosureTests(unittest.TestCase):
 class PluginListParserTests(unittest.TestCase):
     def test_parses_installed_and_uninstalled_rows(self) -> None:
         output = (
-            "Marketplace `my-codex`\n"
+            "Marketplace `oh-my-harness`\n"
             "/repo/.agents/plugins/marketplace.json\n\n"
             "PLUGIN  STATUS              VERSION  PATH\n"
-            "alpha@my-codex  installed, enabled  1.2.3  /cache/alpha\n"
-            "beta@my-codex  not installed          /repo/plugins/beta\n"
+            "alpha@oh-my-harness  installed, enabled  1.2.3  /cache/alpha\n"
+            "beta@oh-my-harness  not installed          /repo/plugins/beta\n"
         )
         self.assertEqual(
             codex_plugin_rows(output),
             {
-                ("my-codex", "alpha"): PluginListRow("installed, enabled", "1.2.3"),
-                ("my-codex", "beta"): PluginListRow("not installed", ""),
+                ("oh-my-harness", "alpha"): PluginListRow("installed, enabled", "1.2.3"),
+                ("oh-my-harness", "beta"): PluginListRow("not installed", ""),
             },
         )
 
     def test_malformed_candidate_row_fails_closed(self) -> None:
         output = (
-            "Marketplace `my-codex`\n"
+            "Marketplace `oh-my-harness`\n"
             "/repo/.agents/plugins/marketplace.json\n\n"
             "PLUGIN  STATUS              VERSION  PATH\n"
-            "alpha@my-codex installed, enabled 1.2.3 /cache/alpha\n"
+            "alpha@oh-my-harness installed, enabled 1.2.3 /cache/alpha\n"
         )
         with self.assertRaisesRegex(ValueError, "malformed plugin list row"):
             codex_plugin_rows(output)
@@ -381,11 +381,11 @@ class PluginInstallationClosureTests(unittest.TestCase):
 
 class CheckHarnessCliTests(unittest.TestCase):
     def run_main(self, arguments: list[str]) -> None:
-        with mock.patch.object(sys, "argv", ["check_my_codex.py", *arguments]):
-            check_my_codex.main()
+        with mock.patch.object(sys, "argv", ["check_harness.py", *arguments]):
+            check_harness.main()
 
     def test_legacy_discovery_profile_option_is_rejected(self) -> None:
-        with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
+        with mock.patch.object(check_harness, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaises(SystemExit) as raised:
                 self.run_main(["--discovery-profile", "universal"])
         self.assertEqual(raised.exception.code, 2)
@@ -396,7 +396,7 @@ class CheckHarnessCliTests(unittest.TestCase):
             root = Path(tmp)
             with (
                 mock.patch.object(
-                    check_my_codex,
+                    check_harness,
                     "resolve_codex_executable",
                     side_effect=SystemExit("resolved default Codex harness"),
                 ) as resolve,
@@ -406,20 +406,20 @@ class CheckHarnessCliTests(unittest.TestCase):
         resolve.assert_called_once()
 
     def test_removed_shared_harness_fails_before_catalog_load(self) -> None:
-        with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
+        with mock.patch.object(check_harness, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaisesRegex(SystemExit, "unknown harness 'shared'"):
                 self.run_main(["--harness", "shared"])
         load_catalog.assert_not_called()
 
     def test_legacy_bypass_option_is_rejected_before_runtime_checks(self) -> None:
-        with mock.patch.object(check_my_codex, "resolve_codex_executable") as resolve:
+        with mock.patch.object(check_harness, "resolve_codex_executable") as resolve:
             with self.assertRaises(SystemExit) as raised:
                 self.run_main(["--skip-plugins"])
         self.assertEqual(raised.exception.code, 2)
         resolve.assert_not_called()
 
     def test_unknown_harness_fails_before_catalog_load(self) -> None:
-        with mock.patch.object(check_my_codex, "load_repo_skill_catalog") as load_catalog:
+        with mock.patch.object(check_harness, "load_repo_skill_catalog") as load_catalog:
             with self.assertRaisesRegex(SystemExit, "unknown harness"):
                 self.run_main(["--harness", "unknown"])
         load_catalog.assert_not_called()
@@ -428,15 +428,15 @@ class CheckHarnessCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with (
                 mock.patch.object(
-                    check_my_codex,
+                    check_harness,
                     "load_install_manifest",
                     side_effect=AssertionError("Codex manifest must not be read"),
                 ),
-                mock.patch.object(check_my_codex.CheckRunner, "check_tooling_python"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_excluded_skill_roots"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_skill_projection"),
-                mock.patch.object(check_my_codex.CheckRunner, "check_harness_instructions"),
-                mock.patch.object(check_my_codex.CheckRunner, "finish"),
+                mock.patch.object(check_harness.CheckRunner, "check_tooling_python"),
+                mock.patch.object(check_harness.CheckRunner, "check_excluded_skill_roots"),
+                mock.patch.object(check_harness.CheckRunner, "check_skill_projection"),
+                mock.patch.object(check_harness.CheckRunner, "check_harness_instructions"),
+                mock.patch.object(check_harness.CheckRunner, "finish"),
             ):
                 self.run_main(
                     [

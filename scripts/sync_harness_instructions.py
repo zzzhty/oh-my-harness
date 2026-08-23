@@ -109,7 +109,11 @@ def _validated_source_digest(plan: HarnessPlan) -> str:
         ) from exc
 
 
-def _inspect(plan: HarnessPlan) -> PreparedInstructionSync:
+def _inspect(
+    plan: HarnessPlan,
+    *,
+    managed_retired_sources: tuple[Path, ...] = (),
+) -> PreparedInstructionSync:
     source_digest = _validated_source_digest(plan)
     for shadow in plan.instruction_shadow_paths:
         if _lexists(shadow):
@@ -129,12 +133,19 @@ def _inspect(plan: HarnessPlan) -> PreparedInstructionSync:
     if snapshot.kind == "missing":
         return PreparedInstructionSync(plan, "create", snapshot, source_digest, False)
     if snapshot.kind == "symlink":
-        if snapshot.link_target != plan.instructions_source.resolve(strict=False):
+        current_source = plan.instructions_source.resolve(strict=False)
+        retired_sources = {
+            source.resolve(strict=False) for source in managed_retired_sources
+        }
+        if (
+            snapshot.link_target != current_source
+            and snapshot.link_target not in retired_sources
+        ):
             raise SystemExit(
                 "refusing unmanaged instructions symlink: "
                 f"{target} -> {snapshot.link_target}"
             )
-        if materialization == "symlink":
+        if snapshot.link_target == current_source and materialization == "symlink":
             return PreparedInstructionSync(plan, "current", snapshot, source_digest, True)
         return PreparedInstructionSync(plan, "replace", snapshot, source_digest, False)
     if materialization == "copy" and snapshot.digest == source_digest:
@@ -155,10 +166,14 @@ def prepare_instruction_sync(
     *,
     dry_run: bool,
     assume_yes: bool,
+    managed_retired_sources: tuple[Path, ...] = (),
     input_fn: Input = input,
     output: Output = print,
 ) -> PreparedInstructionSync:
-    prepared = _inspect(plan)
+    prepared = _inspect(
+        plan,
+        managed_retired_sources=managed_retired_sources,
+    )
     target = plan.instructions_target
     if prepared.action == "current":
         output(f"instructions already current: {target}")
@@ -172,6 +187,15 @@ def prepare_instruction_sync(
     if prepared.snapshot.digest is not None:
         output(f"InstructionsTargetSHA256={prepared.snapshot.digest}")
         output(f"InstructionsSourceSHA256={prepared.source_digest}")
+    if (
+        prepared.snapshot.kind == "symlink"
+        and prepared.snapshot.link_target
+        in {source.resolve(strict=False) for source in managed_retired_sources}
+    ):
+        output(
+            "InstructionsRetiredManagedSource="
+            f"{prepared.snapshot.link_target}"
+        )
     if dry_run:
         output(f"would {prepared.action} harness instructions: {target}")
         return PreparedInstructionSync(
@@ -228,7 +252,7 @@ def _revalidate(prepared: PreparedInstructionSync) -> None:
 def _atomic_copy(source: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{target.name}.my-codex-",
+        prefix=f".{target.name}.oh-my-harness-",
         dir=target.parent,
     )
     os.close(descriptor)
@@ -244,7 +268,7 @@ def _atomic_copy(source: Path, target: Path) -> None:
 
 def _atomic_symlink(source: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.parent / f".{target.name}.my-codex-{os.getpid()}"
+    temporary = target.parent / f".{target.name}.oh-my-harness-{os.getpid()}"
     if _lexists(temporary):
         raise SystemExit(f"temporary instructions link already exists: {temporary}")
     try:

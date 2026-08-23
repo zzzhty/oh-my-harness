@@ -1,6 +1,6 @@
 # Agent Operating Principles — Repository Map
 
-This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md`. Root `AGENTS.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. This file maps those rules to `my-codex` paths and reusable workflow surfaces; it does not expand their authority.
+This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md`. Root `AGENTS.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. This file maps those rules to `oh-my-harness` paths and reusable workflow surfaces; it does not expand their authority.
 
 ## Managed Source And Target
 

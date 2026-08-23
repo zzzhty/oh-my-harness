@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/my-codex/harness-registry.schema.json",
-  "title": "my-codex harness registry",
+  "$id": "https://example.invalid/oh-my-harness/harness-registry.schema.json",
+  "title": "oh-my-harness harness registry",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "schemaVersion", "defaults", "sources", "excludedSkillRoots", "harnesses"],
   "properties": {
     "$schema": {"type": "string", "const": "./registry.schema.json"},
-    "schemaVersion": {"type": "integer", "const": 1},
+    "schemaVersion": {"type": "string", "const": "2026-08-22"},
     "defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -121,17 +121,32 @@
         "confirmation": {"const": "none"}
       }
     },
+    "marketplaceMigration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retiredMarketplaceNames", "confirmation"],
+      "properties": {
+        "retiredMarketplaceNames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}
+        },
+        "confirmation": {"const": "explicit-flag-and-bounded-confirmation"}
+      }
+    },
     "skills": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["driver", "marketplacePath", "installManifestPath", "reconciliation"],
+          "required": ["driver", "marketplacePath", "installManifestPath", "reconciliation", "migration"],
           "properties": {
             "driver": {"const": "codex-marketplace"},
             "marketplacePath": {"$ref": "#/$defs/relativePath"},
             "installManifestPath": {"$ref": "#/$defs/relativePath"},
-            "reconciliation": {"$ref": "#/$defs/reconciliation"}
+            "reconciliation": {"$ref": "#/$defs/reconciliation"},
+            "migration": {"$ref": "#/$defs/marketplaceMigration"}
           }
         },
         {

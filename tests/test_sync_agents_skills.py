@@ -134,11 +134,11 @@ class SyncLayerTests(unittest.TestCase):
         self.assertNotIn(str(link), command[-1])
         self.assertNotIn(str(self.sandbox.foo), command[-1])
         self.assertEqual(
-            run.call_args.kwargs["env"]["MY_CODEX_SKILL_LINK_PATH"],
+            run.call_args.kwargs["env"]["OH_MY_HARNESS_SKILL_LINK_PATH"],
             str(link),
         )
         self.assertEqual(
-            run.call_args.kwargs["env"]["MY_CODEX_SKILL_LINK_TARGET"],
+            run.call_args.kwargs["env"]["OH_MY_HARNESS_SKILL_LINK_TARGET"],
             str(self.sandbox.foo),
         )
 

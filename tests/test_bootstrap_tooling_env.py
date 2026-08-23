@@ -13,7 +13,7 @@ ROOT_SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 
 import bootstrap_tooling_env as bootstrap  # noqa: E402
-import refresh_my_codex as refresh  # noqa: E402
+import refresh_harness as refresh  # noqa: E402
 
 
 class ToolingBootstrapTests(unittest.TestCase):

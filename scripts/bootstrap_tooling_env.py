@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Bootstrap the shared my-codex tooling Python environment."""
+"""Bootstrap the shared oh-my-harness tooling Python environment."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import subprocess
 import sys
 import uuid
 from pathlib import Path
 
+from manager_paths import manager_home, venv_path, venv_python
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-DEFAULT_VENV = CODEX_HOME / "venvs" / "my-codex"
+DEFAULT_MANAGER_HOME = manager_home()
+DEFAULT_VENV = venv_path(DEFAULT_MANAGER_HOME)
 DEFAULT_REQUIREMENTS = REPO_ROOT / "requirements.txt"
 
 
@@ -23,12 +24,6 @@ def run(command: list[str], *, dry_run: bool = False) -> None:
     if dry_run:
         return
     subprocess.run(command, check=True)
-
-
-def venv_python(venv_path: Path) -> Path:
-    if sys.platform == "win32":
-        return venv_path / "Scripts" / "python.exe"
-    return venv_path / "bin" / "python"
 
 
 def canonical_base_python() -> Path:
@@ -104,7 +99,13 @@ def create_venv(base_python: Path, venv_path: Path, *, dry_run: bool) -> None:
 def refresh_dependencies(python: Path, requirements: Path, *, dry_run: bool) -> None:
     run([str(python), "-m", "pip", "install", "-r", str(requirements)], dry_run=dry_run)
     run(
-        [str(python), "-c", "import yaml; print('PyYAML', yaml.__version__)"],
+        [
+            str(python),
+            "-c",
+            "import jsonschema, yaml; from importlib.metadata import version; "
+            "print('PyYAML', yaml.__version__); "
+            "print('jsonschema', version('jsonschema'))",
+        ],
         dry_run=dry_run,
     )
 
@@ -177,20 +178,20 @@ def bootstrap_tooling_env(venv_path: Path, requirements: Path, *, dry_run: bool)
 
     if backup_path is not None:
         remove_venv_directory(backup_path)
-    print(f"my-codex tooling Python: {venv_python(venv_path)}")
+    print(f"oh-my-harness tooling Python: {venv_python(venv_path)}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create or refresh the shared my-codex tooling venv.")
+    parser = argparse.ArgumentParser(description="Create or refresh the shared oh-my-harness tooling venv.")
     parser.add_argument(
         "--venv",
         default=str(DEFAULT_VENV),
-        help="Target venv path. Defaults to ${CODEX_HOME:-$HOME/.codex}/venvs/my-codex.",
+        help="Target venv path. Defaults to ${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv.",
     )
     parser.add_argument(
         "--requirements",
         default=str(DEFAULT_REQUIREMENTS),
-        help="Requirements file for my-codex tooling dependencies.",
+        help="Requirements file for oh-my-harness tooling dependencies.",
     )
     parser.add_argument(
         "--dry-run",

@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python", dest="python_path", default=str(default_python()), help="Python interpreter for the hook command.")
     parser.add_argument(
         "--repo-root",
-        help="Canonical my-codex repository root embedded in hook commands. Defaults to $MY_CODEX_ROOT.",
+        help="Canonical oh-my-harness repository root embedded in hook commands. Defaults to $OH_MY_HARNESS_ROOT.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show the diff without writing.")
     parser.add_argument("--apply", action="store_true", help="Write the hook config.")

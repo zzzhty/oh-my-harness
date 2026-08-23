@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh one registry-selected my-codex harness distribution."""
+"""Refresh one registry-selected oh-my-harness distribution."""
 
 from __future__ import annotations
 
@@ -36,6 +36,14 @@ from harness_registry import (
     load_harness_registry,
     resolve_harness_plan,
 )
+from manager_paths import (
+    MANAGER_PYTHON_ENV,
+    MANAGER_ROOT_ENV,
+    MANAGER_TOOLING_PYTHON_ENV,
+    manager_home as resolve_manager_home,
+    venv_path as manager_venv_path,
+    venv_python,
+)
 from repo_skill_catalog import SkillCatalog, load_repo_skill_catalog
 from sync_agents_skills import sync_layer
 from sync_harness_instructions import apply_instruction_sync, prepare_instruction_sync
@@ -45,6 +53,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE_FILE = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
 INSTALL_MANIFEST_FILE = REPO_ROOT / ".agents" / "plugins" / "install-manifest.json"
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+MANAGER_HOME = resolve_manager_home()
 MACOS_APPLICATION_DIRS = (Path("/Applications"), Path.home() / "Applications")
 
 
@@ -65,14 +74,24 @@ class CodexPrunePlan:
         return self.configured | self.cached
 
 
+@dataclass(frozen=True)
+class RetiredMarketplaceState:
+    name: str
+    configured_plugins: frozenset[str]
+    cached_plugins: frozenset[str]
+    source_config: tuple[tuple[str, str], ...]
+
+    @property
+    def present(self) -> bool:
+        return bool(
+            self.configured_plugins
+            or self.cached_plugins
+            or self.source_config
+        )
+
+
 def expand_path(raw: str | Path) -> Path:
     return Path(os.path.expandvars(str(raw))).expanduser()
-
-
-def venv_python(venv_path: Path) -> Path:
-    if sys.platform == "win32":
-        return venv_path / "Scripts" / "python.exe"
-    return venv_path / "bin" / "python"
 
 
 def command_text(command: list[str]) -> str:
@@ -317,7 +336,7 @@ def require_codex_subcommand(codex: str, label: str, args: list[str], *, env: di
                 f"CodexPath={codex}",
                 f"CodexVersion={codex_version(codex, env=env)}",
                 f"FailedCommand={command_text(command)}",
-                "Breakpoint=before marketplace refresh in scripts/refresh_my_codex.py",
+                "Breakpoint=before marketplace refresh in scripts/refresh_harness.py",
                 "Upgrade Codex CLI; this refresh flow requires non-interactive plugin marketplace/add/list commands and pruning also requires plugin remove.",
             ]
         )
@@ -508,6 +527,7 @@ def _enabled_codex_harness_plugins(
     marketplace_name: str,
     env: dict[str, str],
     ignored_unclassified: set[str] | None = None,
+    ignored_alternate_marketplaces: set[str] | None = None,
 ) -> set[str]:
     selectors = _enabled_catalog_plugin_selectors(
         catalog,
@@ -520,6 +540,7 @@ def _enabled_codex_harness_plugins(
         f"{plugin_name}@{marketplace}"
         for marketplace, plugin_name in selectors
         if marketplace != marketplace_name
+        and marketplace not in set(ignored_alternate_marketplaces or ())
     )
     if alternate:
         raise SystemExit(
@@ -558,7 +579,7 @@ def _enabled_catalog_plugin_selectors(
     )
     if unclassified:
         raise SystemExit(
-            "unclassified enabled my-codex plugins are outside the Codex harness plan: "
+            "unclassified enabled oh-my-harness plugins are outside the Codex harness plan: "
             + ", ".join(unclassified)
         )
     return {
@@ -668,6 +689,7 @@ def apply_codex_harness(
     dry_run: bool,
     ignored_stale_cache_plugins: set[str] | frozenset[str] | None = None,
     ignored_stale_enabled_plugins: set[str] | frozenset[str] | None = None,
+    ignored_alternate_marketplaces: set[str] | frozenset[str] | None = None,
 ) -> None:
     require_harness_closure(
         "Codex marketplace source binding",
@@ -690,6 +712,7 @@ def apply_codex_harness(
         marketplace_name=marketplace_name,
         env=env,
         ignored_unclassified=set(ignored_stale_enabled_plugins or ()),
+        ignored_alternate_marketplaces=set(ignored_alternate_marketplaces or ()),
     )
     transition_selectors = all_selectors
 
@@ -703,7 +726,7 @@ def apply_codex_harness(
         unclassified = sorted(enabled - expected_names - ignored)
         if unclassified:
             raise SystemExit(
-                "unclassified enabled my-codex plugins are outside the Codex harness plan: "
+                "unclassified enabled oh-my-harness plugins are outside the Codex harness plan: "
                 + ", ".join(unclassified)
             )
         return enabled - ignored
@@ -720,6 +743,9 @@ def apply_codex_harness(
                 codex_home=codex_home,
                 rows=current_rows(),
                 plugin_sources=plugin_sources,
+                ignored_alternate_marketplaces=set(
+                    ignored_alternate_marketplaces or ()
+                ),
             ),
         )
 
@@ -772,6 +798,218 @@ def cached_plugin_names(codex_home: Path, marketplace_name: str) -> set[str]:
     if not cache_root.is_dir():
         return set()
     return {path.name for path in cache_root.iterdir() if path.is_dir()}
+
+
+def retired_marketplace_states(
+    codex_home: Path,
+    retired_names: tuple[str, ...],
+) -> tuple[RetiredMarketplaceState, ...]:
+    states: list[RetiredMarketplaceState] = []
+    for name in retired_names:
+        config = configured_marketplace(codex_home, name) or {}
+        state = RetiredMarketplaceState(
+            name=name,
+            configured_plugins=frozenset(configured_plugin_names(codex_home, name)),
+            cached_plugins=frozenset(cached_plugin_names(codex_home, name)),
+            source_config=tuple(sorted(config.items())),
+        )
+        if state.present:
+            states.append(state)
+    return tuple(states)
+
+
+def confirm_retired_marketplace_migration(
+    states: tuple[RetiredMarketplaceState, ...],
+    *,
+    requested: bool,
+    dry_run: bool,
+    assume_yes: bool,
+) -> None:
+    if not states:
+        if requested:
+            print("no retired marketplace state requires migration")
+        return
+
+    print("Retired Codex marketplace migration plan:")
+    for state in states:
+        source = dict(state.source_config).get("source", "<none>")
+        print(f"- marketplace {state.name} (source: {source})")
+        for plugin_name in sorted(state.configured_plugins | state.cached_plugins):
+            locations: list[str] = []
+            if plugin_name in state.configured_plugins:
+                locations.append("config")
+            if plugin_name in state.cached_plugins:
+                locations.append("cache")
+            print(f"  - {plugin_name} ({'+'.join(locations)})")
+
+    if not requested:
+        raise SystemExit(
+            "retired marketplace state requires an explicit migration; "
+            "rerun with --migrate-marketplace after reviewing the bounded plan"
+        )
+    if dry_run:
+        return
+    if assume_yes:
+        print("Retired marketplace migration [auto-confirmed]")
+        return
+    try:
+        answer = input("Migrate the listed retired marketplace state [y/N] ")
+    except (EOFError, OSError):
+        answer = ""
+    if answer.strip() not in {"y", "Y", "yes", "YES", "Yes"}:
+        raise SystemExit("retired marketplace migration was not confirmed")
+
+
+def detach_relocated_retired_marketplace_sources(
+    codex: str,
+    *,
+    codex_home: Path,
+    states: tuple[RetiredMarketplaceState, ...],
+    retired_repo: Path | None,
+    env: dict[str, str],
+    dry_run: bool,
+) -> tuple[RetiredMarketplaceState, ...]:
+    """Detach an exact local source made unreadable by checkout relocation."""
+
+    if retired_repo is None:
+        return states
+    detached_names: list[str] = []
+    for state in states:
+        config = dict(state.source_config)
+        source = config.get("source")
+        if config.get("source_type") != "local" or not source:
+            continue
+        source_path = expand_path(source)
+        if not same_path(source_path, retired_repo) or source_path.exists():
+            continue
+        print(
+            "Relocated retired marketplace source is unavailable; detaching only "
+            f"its source registration before discovery: {state.name} -> {source_path}"
+        )
+        if dry_run:
+            raise SystemExit(
+                "dry-run cannot simulate Codex discovery after detaching a missing "
+                "retired marketplace source; rerun without --dry-run after reviewing "
+                "the exact migration plan"
+            )
+        remove_marketplace_source(
+            codex,
+            codex_home=codex_home,
+            marketplace_name=state.name,
+            env=env,
+            dry_run=False,
+        )
+        detached_names.append(state.name)
+
+    if not detached_names:
+        return states
+    current = retired_marketplace_states(
+        codex_home,
+        tuple(state.name for state in states),
+    )
+    before = {state.name: state for state in states}
+    after = {state.name: state for state in current}
+    for name in detached_names:
+        previous = before[name]
+        updated = after.get(name)
+        if updated is None:
+            raise SystemExit(
+                "retired marketplace selectors or cache disappeared while detaching "
+                f"the relocated source: {name}"
+            )
+        if (
+            updated.configured_plugins != previous.configured_plugins
+            or updated.cached_plugins != previous.cached_plugins
+            or updated.source_config
+        ):
+            raise SystemExit(
+                "retired marketplace state changed outside the exact source "
+                f"registration while detaching relocation: {name}"
+            )
+    return current
+
+
+def apply_retired_marketplace_migration(
+    codex: str,
+    *,
+    codex_home: Path,
+    states: tuple[RetiredMarketplaceState, ...],
+    env: dict[str, str],
+    dry_run: bool,
+) -> None:
+    if not states:
+        return
+    current = retired_marketplace_states(
+        codex_home,
+        tuple(state.name for state in states),
+    )
+    if current != states:
+        raise SystemExit(
+            "retired marketplace state changed after preflight; refusing migration"
+        )
+
+    removed_selectors: list[str] = []
+    try:
+        for state in states:
+            for plugin_name in sorted(state.configured_plugins):
+                selector = f"{plugin_name}@{state.name}"
+                run(
+                    [codex, "plugin", "remove", selector],
+                    env=env,
+                    dry_run=dry_run,
+                )
+                if not dry_run:
+                    removed_selectors.append(selector)
+            remove_marketplace_source(
+                codex,
+                codex_home=codex_home,
+                marketplace_name=state.name,
+                env=env,
+                dry_run=dry_run,
+            )
+    except (Exception, SystemExit) as migration_error:
+        rollback_errors: list[str] = []
+        for selector in reversed(removed_selectors):
+            try:
+                run([codex, "plugin", "add", selector], env=env, dry_run=False)
+            except (Exception, SystemExit) as rollback_error:
+                rollback_errors.append(f"{selector}: {rollback_error}")
+        if rollback_errors:
+            raise SystemExit(
+                f"retired marketplace migration failed: {migration_error}; "
+                "rollback failed: " + "; ".join(rollback_errors)
+            ) from migration_error
+        raise
+
+    if dry_run:
+        return
+    for state in states:
+        for plugin_name in sorted(cached_plugin_names(codex_home, state.name)):
+            remove_cached_plugin_dir(
+                codex_home=codex_home,
+                marketplace_name=state.name,
+                plugin_name=plugin_name,
+                dry_run=False,
+            )
+        cache_root = codex_home / "plugins" / "cache" / state.name
+        if cache_root.is_dir():
+            try:
+                cache_root.rmdir()
+            except OSError as exc:
+                raise SystemExit(
+                    f"retired marketplace cache root is not empty after migration: {cache_root}: {exc}"
+                ) from exc
+
+    remaining = retired_marketplace_states(
+        codex_home,
+        tuple(state.name for state in states),
+    )
+    if remaining:
+        raise SystemExit(
+            "retired marketplace state remains after migration: "
+            + ", ".join(state.name for state in remaining)
+        )
+    print("retired Codex marketplace migration complete")
 
 
 def plugin_cache_dir(codex_home: Path, marketplace_name: str, plugin_name: str) -> Path:
@@ -898,18 +1136,29 @@ def confirm_codex_prune(
 
 
 def tooling_python_from_args(args: argparse.Namespace, venv_path: Path) -> Path:
-    override = args.python or os.environ.get("MY_CODEX_TOOLING_PYTHON") or os.environ.get("MY_CODEX_PYTHON")
+    override = (
+        args.python
+        or os.environ.get(MANAGER_TOOLING_PYTHON_ENV)
+        or os.environ.get(MANAGER_PYTHON_ENV)
+    )
     if override:
         return expand_path(override)
     return venv_python(venv_path)
 
 
-def build_env(*, codex_home: Path, tooling_python: Path) -> dict[str, str]:
+def build_env(
+    *,
+    codex_home: Path,
+    tooling_python: Path,
+    manager_home: Path | None = None,
+) -> dict[str, str]:
     env = os.environ.copy()
+    resolved_manager_home = manager_home or MANAGER_HOME
     env["CODEX_HOME"] = str(codex_home)
-    env["MY_CODEX_ROOT"] = str(REPO_ROOT)
-    env["MY_CODEX_PYTHON"] = str(tooling_python)
-    env["MY_CODEX_TOOLING_PYTHON"] = str(tooling_python)
+    env["OH_MY_HARNESS_HOME"] = str(resolved_manager_home)
+    env[MANAGER_ROOT_ENV] = str(REPO_ROOT)
+    env[MANAGER_PYTHON_ENV] = str(tooling_python)
+    env[MANAGER_TOOLING_PYTHON_ENV] = str(tooling_python)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.setdefault(
         "PLUGIN_VALIDATOR",
@@ -1332,10 +1581,15 @@ def main() -> None:
         "--codex",
         help="Explicit Codex CLI executable. Defaults to CODEX_BIN, PATH, then managed install fallbacks.",
     )
-    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex and tooling home directory.")
+    parser.add_argument("--codex-home", default=str(CODEX_HOME), help="Codex harness home directory.")
+    parser.add_argument(
+        "--home",
+        default=str(MANAGER_HOME),
+        help="oh-my-harness manager home (default: OH_MY_HARNESS_HOME or ~/.oh-my-harness).",
+    )
     parser.add_argument(
         "--venv",
-        help="Shared tooling venv path (default: <resolved Codex home>/venvs/my-codex).",
+        help="Shared tooling venv path (default: <manager home>/venv).",
     )
     parser.add_argument("--python", help="Explicit tooling Python for hooks and diagnostics.")
     parser.add_argument(
@@ -1352,6 +1606,18 @@ def main() -> None:
     parser.add_argument("--skip-hooks", action="store_true", help="Do not refresh Codex Watcher hooks.")
     parser.add_argument("--skip-doctor", action="store_true", help="Do not run the Codex Watcher doctor.")
     parser.add_argument(
+        "--migrate-marketplace",
+        action="store_true",
+        help="Apply the registry-owned retired Codex marketplace migration after bounded confirmation.",
+    )
+    parser.add_argument(
+        "--migrate-from-repo",
+        help=(
+            "Codex-only former oh-my-harness checkout root whose exact managed "
+            "AGENTS.md symlink may be replaced after live confirmation."
+        ),
+    )
+    parser.add_argument(
         "--yes",
         action="store_true",
         help="Confirm missing-instructions creation and exact managed-stale prune plans.",
@@ -1359,13 +1625,21 @@ def main() -> None:
     args = parser.parse_args()
 
     codex_home = expand_path(args.codex_home)
+    try:
+        manager_home = resolve_manager_home(args.home)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     venv_path = (
         expand_path(args.venv)
         if args.venv
-        else codex_home / "venvs" / "my-codex"
+        else manager_venv_path(manager_home)
     )
     tooling_python = tooling_python_from_args(args, venv_path)
-    env = build_env(codex_home=codex_home, tooling_python=tooling_python)
+    env = build_env(
+        codex_home=codex_home,
+        tooling_python=tooling_python,
+        manager_home=manager_home,
+    )
     registry_environment = dict(os.environ)
     registry_environment["CODEX_HOME"] = str(codex_home)
     try:
@@ -1387,6 +1661,10 @@ def main() -> None:
             codex_only_options.append("--git-ref")
         if args.marketplace_source is not None:
             codex_only_options.append("--marketplace-source")
+        if args.migrate_marketplace:
+            codex_only_options.append("--migrate-marketplace")
+        if args.migrate_from_repo is not None:
+            codex_only_options.append("--migrate-from-repo")
         if codex_only_options:
             raise SystemExit(
                 "Codex marketplace options require --harness codex: "
@@ -1407,10 +1685,26 @@ def main() -> None:
 
     catalog = load_repo_skill_catalog()
     require_excluded_skill_roots_clear(catalog, plan.excluded_skill_roots)
+    managed_retired_instruction_sources: tuple[Path, ...] = ()
+    retired_repo: Path | None = None
+    if args.migrate_from_repo is not None:
+        retired_repo = expand_path(args.migrate_from_repo)
+        if not retired_repo.is_absolute():
+            raise SystemExit(
+                "--migrate-from-repo must be an absolute path: "
+                f"{args.migrate_from_repo!r}"
+            )
+        retired_source = retired_repo / "AGENTS.md"
+        if retired_source.resolve(strict=False) == REPO_ROOT.joinpath("AGENTS.md").resolve(
+            strict=False
+        ):
+            raise SystemExit("--migrate-from-repo must identify a former checkout")
+        managed_retired_instruction_sources = (retired_source,)
     prepared_instructions = prepare_instruction_sync(
         plan,
         dry_run=args.dry_run,
         assume_yes=args.yes,
+        managed_retired_sources=managed_retired_instruction_sources,
     )
     marketplace_name: str | None = None
     if plan.harness_id == "codex":
@@ -1427,8 +1721,16 @@ def main() -> None:
 
     codex: str | None = None
     prune_plan = CodexPrunePlan(configured=frozenset(), cached=frozenset())
+    retired_states: tuple[RetiredMarketplaceState, ...] = ()
     if plan.harness_id == "codex":
         assert marketplace_name is not None
+        migration = plan.harness.skills.marketplace_migration
+        if migration is None:
+            raise SystemExit("codex harness has no registry-owned marketplace migration policy")
+        retired_states = retired_marketplace_states(
+            plan.root,
+            migration.retired_marketplace_names,
+        )
         desired_plugin_names = default_plugin_names(
             "install",
             marketplace_name=marketplace_name,
@@ -1455,7 +1757,28 @@ def main() -> None:
             require_marketplace=True,
             require_add=True,
             require_list=True,
-            require_remove=bool(prune_plan.names),
+            require_remove=bool(prune_plan.names or retired_states),
+        )
+        if retired_states:
+            require_codex_subcommand(
+                codex,
+                "plugin marketplace remove",
+                ["plugin", "marketplace", "remove"],
+                env=env,
+            )
+        confirm_retired_marketplace_migration(
+            retired_states,
+            requested=args.migrate_marketplace,
+            dry_run=args.dry_run,
+            assume_yes=args.yes,
+        )
+        retired_states = detach_relocated_retired_marketplace_sources(
+            codex,
+            codex_home=plan.root,
+            states=retired_states,
+            retired_repo=retired_repo,
+            env=env,
+            dry_run=args.dry_run,
         )
         _enabled_codex_harness_plugins(
             catalog,
@@ -1463,6 +1786,7 @@ def main() -> None:
             marketplace_name=marketplace_name,
             env=env,
             ignored_unclassified=set(prune_plan.configured),
+            ignored_alternate_marketplaces={state.name for state in retired_states},
         )
         confirm_codex_prune(
             prune_plan,
@@ -1526,7 +1850,34 @@ def main() -> None:
             ignored_stale_enabled_plugins=(
                 prune_plan.configured if args.dry_run else None
             ),
+            ignored_alternate_marketplaces={state.name for state in retired_states},
         )
+        apply_retired_marketplace_migration(
+            codex,
+            codex_home=plan.root,
+            states=retired_states,
+            env=env,
+            dry_run=args.dry_run,
+        )
+        if retired_states and not args.dry_run:
+            _, plugin_sources = preflight_codex_distribution(
+                catalog,
+                codex_home=plan.root,
+                marketplace_name=marketplace_name,
+                marketplace_file=plan.marketplace_path,
+                manifest_file=plan.install_manifest_path,
+            )
+            require_harness_closure(
+                "Codex post-migration",
+                plugin_installation_issues(
+                    catalog,
+                    marketplace_name=marketplace_name,
+                    excluded_skill_roots=plan.excluded_skill_roots,
+                    codex_home=plan.root,
+                    rows=read_codex_plugin_rows(codex, env=env),
+                    plugin_sources=plugin_sources,
+                ),
+            )
     else:
         if plan.skills_root is None:
             raise SystemExit(f"harness {plan.harness_id} has no skills projection root")

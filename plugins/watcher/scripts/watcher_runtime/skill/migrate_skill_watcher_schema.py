@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log-file", help="Explicit JSONL log path. Overrides --state-dir logs/events.jsonl.")
     parser.add_argument(
         "--repo-root",
-        help="Canonical my-codex repository root. Defaults to $MY_CODEX_ROOT.",
+        help="Canonical oh-my-harness repository root. Defaults to $OH_MY_HARNESS_ROOT.",
     )
     parser.add_argument(
         "--reset-runtime-state",
