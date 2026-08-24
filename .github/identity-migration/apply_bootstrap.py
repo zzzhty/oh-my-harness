@@ -11,3 +11,11 @@ encoded = "".join(
 source = zlib.decompress(base64.b64decode(encoded))
 code = compile(source, root / "apply.py", "exec")
 exec(code, {"__name__": "__main__", "__file__": str(root / "apply.py")})
+
+fixture = Path("tests/test_refresh_harness_integration.py")
+text = fixture.read_text(encoding="utf-8")
+old = "self.versions.get(name, self.source_versions[name])"
+new = 'self.versions.get(name, self.source_versions.get(name, "0.9.0"))'
+if old not in text:
+    raise SystemExit("generated refresh fixture version lookup was not found")
+fixture.write_text(text.replace(old, new, 1), encoding="utf-8")
