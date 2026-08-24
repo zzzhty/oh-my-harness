@@ -4,7 +4,7 @@ on:
   push:
     branches: [agent/omh-lifecycle-cli]
     paths:
-      - .github/lifecycle-all.patch.gz
+      - .github/lifecycle-all.patch.gz.b64
       - .github/workflows/apply-lifecycle.yml
 
 permissions:
@@ -22,9 +22,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gzip -dc .github/lifecycle-all.patch.gz | git apply --binary
+          base64 --decode .github/lifecycle-all.patch.gz.b64 | gzip -dc | git apply --binary
           rm -f \
-            .github/lifecycle-all.patch.gz \
+            .github/lifecycle-all.patch.gz.b64 \
             .github/workflows/apply-lifecycle.yml \
             .github/workflows/dev-source-snapshot.yml \
             .github/workflows/withdraw-v1.yml
