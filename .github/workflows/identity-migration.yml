@@ -1,0 +1,110 @@
+name: Plugin distribution identity migration
+
+on:
+  push:
+    branches:
+      - agent/plugin-distribution-identity-v1
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-verify:
+    if: >-
+      !contains(github.event.head_commit.message, '[identity-generated]') &&
+      !contains(github.event.head_commit.message, '[release-v1.0.0]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply migration
+        run: python .github/identity-migration/apply_bootstrap.py
+
+      - name: Bootstrap tooling
+        run: python scripts/bootstrap_tooling_env.py --venv .venv
+
+      - name: Derive release identity
+        run: .venv/bin/python scripts/update_plugin_generations.py --release-version 1.0.0 --json
+
+      - name: Verify release identity
+        run: .venv/bin/python scripts/check_plugin_generations.py
+
+      - name: Run root tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Run Watcher tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: .venv/bin/python -m unittest discover -s plugins/watcher/tests -p 'test_*.py'
+
+      - name: Run Workflow tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: .venv/bin/python -m unittest discover -s plugins/workflow/tests -p 'test_*.py'
+
+      - name: Recheck generated identity
+        run: .venv/bin/python scripts/check_plugin_generations.py
+
+      - name: Validate diff
+        run: git diff --check
+
+      - name: Commit generated implementation
+        run: |
+          git config user.name "oh-my-harness release automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(distribution): derive v1.0.0 plugin identities [identity-generated]"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+  publish-release:
+    if: contains(github.event.head_commit.message, '[release-v1.0.0]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish v1.0.0 from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin main
+          git checkout --detach origin/main
+          test "$(cat VERSION)" = "1.0.0"
+          python scripts/check_plugin_generations.py
+          MAIN_SHA=$(git rev-parse HEAD)
+          BUNDLE_IDENTITY=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('.agents/plugins/distribution-identity.json').read_text())['bundleIdentity'])
+          PY
+          )
+          cat > /tmp/release-notes.md <<EOF
+          First formal release of oh-my-harness.
+
+          Highlights:
+          - registry-selected cross-harness distribution
+          - manager-owned install, upgrade, and recovery lifecycle
+          - Watcher, Workflow, and Matt Pocock skill packages
+          - content-derived plugin generations with complete source/cache closure
+          - release bundle identity: ${BUNDLE_IDENTITY}
+
+          See CHANGELOG.md and ADR 0009 for the complete release and identity contract.
+          EOF
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            echo "release v1.0.0 already exists" >&2
+            exit 1
+          fi
+          gh release create v1.0.0 \
+            --target "$MAIN_SHA" \
+            --title "oh-my-harness 1.0.0" \
+            --notes-file /tmp/release-notes.md
+          git push origin --delete "${GITHUB_REF_NAME}" || true
