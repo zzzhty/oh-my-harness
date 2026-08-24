@@ -169,7 +169,10 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 126)
         self.assertIn("command not executable: codex", result.stderr)
 
-    def test_windows_codex_resolution_uses_path_then_managed_fallbacks(self) -> None:
+    @mock.patch("refresh_harness.codex_executable_is_startable", return_value=True)
+    def test_windows_codex_resolution_uses_path_then_managed_fallbacks(
+        self, _startable: mock.Mock
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             user_home = root / "UserProfile"

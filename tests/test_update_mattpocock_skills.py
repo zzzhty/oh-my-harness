@@ -170,7 +170,7 @@ class MattPocockUpdaterTests(unittest.TestCase):
                     source,
                     tag="v1.2.3",
                     commit="6acc160e4e0cd062",
-                    cachebuster=False,
+                    update_identity=False,
                     run_validation=False,
                 )
 
@@ -308,7 +308,7 @@ class MattPocockUpdaterTests(unittest.TestCase):
                     source,
                     tag="v1.2.3",
                     commit="6acc160e4e0cd062",
-                    cachebuster=False,
+                    update_identity=False,
                     run_validation=False,
                 )
 
@@ -340,7 +340,7 @@ class MattPocockUpdaterTests(unittest.TestCase):
                     source,
                     tag="v1.2.3",
                     commit="6acc160e4e0cd062",
-                    cachebuster=False,
+                    update_identity=False,
                     run_validation=False,
                 )
 
@@ -383,7 +383,7 @@ class MattPocockUpdaterTests(unittest.TestCase):
                     root / "unused-upstream",
                     tag="v1.2.3",
                     commit="unused",
-                    cachebuster=False,
+                    update_identity=False,
                     run_validation=False,
                 )
 
@@ -418,35 +418,32 @@ class MattPocockUpdaterTests(unittest.TestCase):
                 updater.validate_upstream_release(source, "v1.2.3")
             self.assertIn("does not match requested tag", str(raised.exception))
 
-    def test_cachebuster_uses_configured_codex_home(self) -> None:
+    def test_sync_updates_repository_identity_after_swap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            custom_codex_home = root / "custom-codex-home"
-            helper = (
-                custom_codex_home
-                / "skills"
-                / ".system"
-                / "plugin-creator"
-                / "scripts"
-                / "update_plugin_cachebuster.py"
+            repository = root / "repo"
+            source = root / "upstream"
+            plugin = repository / "plugins" / "mattpocock-skills"
+            self.write_upstream_source(
+                source,
+                [("skills/engineering/ask-matt", True)],
             )
-            helper.parent.mkdir(parents=True)
-            helper.write_text("# test helper\n", encoding="utf-8")
-            plugin = root / "plugin"
+            self.write_existing_plugin(plugin)
 
             with (
-                mock.patch.dict(
-                    os.environ,
-                    {"CODEX_HOME": str(custom_codex_home)},
-                    clear=False,
-                ),
-                mock.patch.object(updater, "run", return_value="") as run_command,
+                mock.patch.object(updater, "repo_root", return_value=repository),
+                mock.patch.object(updater, "target_plugin_root", return_value=plugin),
+                mock.patch.object(updater, "update_repository_identity") as update_identity,
             ):
-                updater.run_cachebuster(plugin)
+                updater.sync_from_source(
+                    source,
+                    tag="v1.2.3",
+                    commit="6acc160e4e0cd062",
+                    update_identity=True,
+                    run_validation=False,
+                )
 
-            run_command.assert_called_once_with(
-                [sys.executable, str(helper), str(plugin)]
-            )
+            update_identity.assert_called_once_with(repository)
 
     def test_checked_in_v123_package_uses_native_upstream_codex_contract(self) -> None:
         plugin = updater.target_plugin_root()
