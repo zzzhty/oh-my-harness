@@ -9,6 +9,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from plugin_package_identity import (
+    plugin_cache_identity_issues,
+    repository_identity_issues,
+)
 from repo_skill_catalog import SkillCatalog, skill_frontmatter_name
 from sync_agents_skills import (
     is_projection_link,
@@ -410,6 +414,12 @@ def plugin_package_issues(
                     f"{plugin_name}/{directory_name}: catalog skill name changed after catalog load; "
                     f"expected {expected_identity!r}, found {actual_identity!r}"
                 )
+    issues.extend(
+        repository_identity_issues(
+            catalog.repo_root,
+            plugin_sources=plugin_sources,
+        )
+    )
     return issues
 
 
@@ -635,6 +645,14 @@ def plugin_installation_issues(
                 f"{plugin_name}@{marketplace_name}: cache manifest identity mismatch; "
                 f"expected {(source_name, source_version)!r}, found {(cache_name, cache_version)!r}"
             )
+
+        issues.extend(
+            f"{plugin_name}@{marketplace_name}: {issue}"
+            for issue in plugin_cache_identity_issues(
+                source_root=source_root,
+                cache_root=version_root,
+            )
+        )
 
         cached_identities, cache_issues = _cached_skill_identities(version_root)
         issues.extend(f"{plugin_name}: {issue}" for issue in cache_issues)

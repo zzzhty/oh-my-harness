@@ -43,7 +43,7 @@ frontmatter. The local updater does not generate Codex metadata, rewrite skill
 invocations, omit published skills, or patch upstream behavior.
 
 The local-only surfaces are the `.codex-plugin` wrapper, Watcher attribution
-metadata, the updater-owned upstream content lock, version/cachebuster, this
+metadata, the updater-owned upstream content lock, version/distribution identity, this
 README, and the scoped `AGENTS.md`. Never edit `skills/` or manually rebaseline
 the lock; validation fails on drift before an upstream update can replace it.
 
@@ -57,7 +57,7 @@ python3 scripts/bootstrap_tooling_env.py
 ```
 
 The updater selects an upstream release, copies its published skills unchanged,
-regenerates local wrapper metadata, updates the cachebuster, and validates the
+regenerates local wrapper metadata, regenerates the distribution identity, and validates the
 upstream-native Codex invocation contract.
 
 This plugin is the source of truth for these third-party skills in this Codex

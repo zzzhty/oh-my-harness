@@ -1,0 +1,30 @@
+{
+  "algorithm": "sha256-canonical-plugin-tree-v1",
+  "bundleIdentity": "sha256:92f8e0c64020abfedc542eddf6ecaf278f184722577cee2f9aaa9ea1affab88e",
+  "generationLength": 16,
+  "plugins": [
+    {
+      "contentSha256": "8c89faa942ad13fb0c5b2dd9b131fa804490253d185ddf07b07c288f196d01bf",
+      "generation": "8c89faa942ad13fb",
+      "name": "mattpocock-skills",
+      "version": "1.2.3+codex.8c89faa942ad13fb",
+      "versionAuthority": "upstream"
+    },
+    {
+      "contentSha256": "1a1f1af69b42ae1416ddc3c431b6af6fa2043557e71e113970d2260718146582",
+      "generation": "1a1f1af69b42ae14",
+      "name": "watcher",
+      "version": "1.0.0+codex.1a1f1af69b42ae14",
+      "versionAuthority": "release"
+    },
+    {
+      "contentSha256": "39b127649c83ee9b7d871655b603d0db33c6afa888fcf4c609f907647c40118d",
+      "generation": "39b127649c83ee9b",
+      "name": "workflow",
+      "version": "1.0.0+codex.39b127649c83ee9b",
+      "versionAuthority": "release"
+    }
+  ],
+  "releaseVersion": "1.0.0",
+  "schemaVersion": 1
+}

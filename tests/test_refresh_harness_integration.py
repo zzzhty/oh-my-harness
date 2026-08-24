@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import refresh_harness as refresh  # noqa: E402
 from check_skill_discovery import PluginListRow  # noqa: E402
 from harness_registry import load_harness_registry, resolve_harness_plan  # noqa: E402
+from plugin_package_identity import update_repository_identity  # noqa: E402
 from repo_skill_catalog import load_repo_skill_catalog  # noqa: E402
 
 
@@ -45,11 +47,12 @@ class HarnessFixture:
         self.deny_reinstall: set[str] = set()
         self.repo.mkdir(parents=True)
         self.repo.joinpath("AGENTS.md").write_text("fixture instructions\n", encoding="utf-8")
+        self.repo.joinpath("VERSION").write_text("1.0.0\n", encoding="utf-8")
         for plugin, skill in (("alpha", "one"), ("beta", "two")):
             write_skill(self.repo, plugin, skill)
             write_json(
                 self.repo / "plugins" / plugin / ".codex-plugin" / "plugin.json",
-                {"name": plugin, "version": "1.0.0", "skills": "./skills/"},
+                {"name": plugin, "version": "0.1.0+codex.bootstrap", "skills": "./skills/"},
             )
         write_json(
             self.repo / ".agents" / "plugins" / "marketplace.json",
@@ -79,6 +82,19 @@ class HarnessFixture:
                 ],
             },
         )
+        update_repository_identity(self.repo)
+        self.source_versions = {
+            plugin: json.loads(
+                (
+                    self.repo
+                    / "plugins"
+                    / plugin
+                    / ".codex-plugin"
+                    / "plugin.json"
+                ).read_text(encoding="utf-8")
+            )["version"]
+            for plugin in ("alpha", "beta")
+        }
         self.catalog = load_repo_skill_catalog(self.repo)
 
     def configure_plugins(self) -> None:
@@ -96,25 +112,24 @@ class HarnessFixture:
         return {
             ("test", name): PluginListRow(
                 "installed, enabled",
-                self.versions.get(name, "1.0.0"),
+                self.versions.get(name, self.source_versions.get(name, "0.9.0")),
             )
             for name in self.enabled
         }
 
     def _write_cache(self, plugin: str) -> None:
-        version_root = self.codex_home / "plugins" / "cache" / "test" / plugin / "1.0.0"
-        write_json(
-            version_root / ".codex-plugin" / "plugin.json",
-            {"name": plugin, "version": "1.0.0"},
-        )
-        canonical = next(source for source in self.catalog.sources if source.plugin == plugin)
-        cached_name = "wrong-identity" if self.bad_cached_identity == plugin else canonical.name
-        cached_skill = version_root / "skills" / canonical.directory_name
-        cached_skill.mkdir(parents=True, exist_ok=True)
-        cached_skill.joinpath("SKILL.md").write_text(
-            f"---\nname: {cached_name}\ndescription: cached fixture\n---\n",
-            encoding="utf-8",
-        )
+        version = self.source_versions[plugin]
+        version_root = self.codex_home / "plugins" / "cache" / "test" / plugin / version
+        if version_root.exists():
+            shutil.rmtree(version_root)
+        shutil.copytree(self.repo / "plugins" / plugin, version_root)
+        if self.bad_cached_identity == plugin:
+            canonical = next(source for source in self.catalog.sources if source.plugin == plugin)
+            cached_skill = version_root / "skills" / canonical.directory_name / "SKILL.md"
+            cached_skill.write_text(
+                "---\nname: wrong-identity\ndescription: cached fixture\n---\n",
+                encoding="utf-8",
+            )
 
     def run(self, command: list[str], *, env: dict[str, str], dry_run: bool, check: bool = True) -> int:
         del env, check
@@ -128,7 +143,7 @@ class HarnessFixture:
             if plugin in self.enabled and plugin in self.deny_reinstall:
                 raise SystemExit("failed to copy plugin file: access denied")
             self.enabled.add(plugin)
-            self.versions[plugin] = "1.0.0"
+            self.versions[plugin] = self.source_versions[plugin]
             self._write_cache(plugin)
         elif action == "remove":
             self.enabled.discard(plugin)
@@ -338,7 +353,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
         self.fixture.bad_cached_identity = "beta"
         rows_patch, run_patch = self.patches()
         with rows_patch, run_patch:
-            with self.assertRaisesRegex(SystemExit, "cached catalog skill names differ"):
+            with self.assertRaisesRegex(SystemExit, "cache content identity differs"):
                 refresh.apply_codex_harness(
                     self.fixture.catalog,
                     codex="codex",
@@ -385,6 +400,71 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
         self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
         self.assertEqual(self.fixture.events, ["add:beta"])
 
+    def test_codex_apply_rejects_same_version_cache_drift_before_mutation(self) -> None:
+        self.fixture.enabled.add("alpha")
+        self.fixture.configure_plugins()
+        self.fixture._write_cache("alpha")
+        cached_skill = next(
+            (
+                self.fixture.codex_home
+                / "plugins"
+                / "cache"
+                / "test"
+                / "alpha"
+                / self.fixture.source_versions["alpha"]
+                / "skills"
+            ).rglob("SKILL.md")
+        )
+        cached_skill.write_text(
+            cached_skill.read_text(encoding="utf-8") + "stale\\n",
+            encoding="utf-8",
+        )
+        rows_patch, run_patch = self.patches()
+
+        with rows_patch, run_patch:
+            with self.assertRaisesRegex(SystemExit, "cache content identity differs"):
+                refresh.apply_codex_harness(
+                    self.fixture.catalog,
+                    codex="codex",
+                    codex_home=self.fixture.codex_home,
+                    marketplace_name="test",
+                    excluded_skill_roots=(self.fixture.target,),
+                    marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                        "local",
+                        str(self.fixture.repo),
+                    ),
+                    env={},
+                    dry_run=False,
+                )
+
+        self.assertEqual(self.fixture.events, [])
+
+    def test_codex_apply_rejects_source_content_without_new_generation(self) -> None:
+        source_skill = next((self.fixture.repo / "plugins" / "alpha" / "skills").rglob("SKILL.md"))
+        source_skill.write_text(
+            source_skill.read_text(encoding="utf-8") + "changed\\n",
+            encoding="utf-8",
+        )
+        rows_patch, run_patch = self.patches()
+
+        with rows_patch, run_patch:
+            with self.assertRaisesRegex(SystemExit, "source content identity requires version"):
+                refresh.apply_codex_harness(
+                    self.fixture.catalog,
+                    codex="codex",
+                    codex_home=self.fixture.codex_home,
+                    marketplace_name="test",
+                    excluded_skill_roots=(self.fixture.target,),
+                    marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                        "local",
+                        str(self.fixture.repo),
+                    ),
+                    env={},
+                    dry_run=False,
+                )
+
+        self.assertEqual(self.fixture.events, [])
+
     def test_codex_apply_reinstalls_an_enabled_outdated_plugin(self) -> None:
         self.fixture.enabled.add("alpha")
         self.fixture.versions["alpha"] = "0.9.0"
@@ -407,7 +487,7 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
             )
 
         self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
-        self.assertEqual(self.fixture.versions, {"alpha": "1.0.0", "beta": "1.0.0"})
+        self.assertEqual(self.fixture.versions, self.fixture.source_versions)
         self.assertEqual(self.fixture.events, ["add:alpha", "add:beta"])
 
     def test_unrelated_user_skill_in_excluded_root_does_not_block_codex(self) -> None:

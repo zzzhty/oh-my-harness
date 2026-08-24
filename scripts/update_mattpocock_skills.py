@@ -30,6 +30,11 @@ except ModuleNotFoundError as exc:
         "this updater with `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python`."
     ) from exc
 
+from plugin_package_identity import (
+    require_repository_identity,
+    update_repository_identity,
+)
+
 
 UPSTREAM_REPO = "https://github.com/mattpocock/skills.git"
 UPSTREAM_MANIFEST = ".claude-plugin/plugin.json"
@@ -567,7 +572,7 @@ frontmatter. The local updater does not generate Codex metadata, rewrite skill
 invocations, omit published skills, or patch upstream behavior.
 
 The local-only surfaces are the `.codex-plugin` wrapper, Watcher attribution
-metadata, the updater-owned upstream content lock, version/cachebuster, this
+metadata, the updater-owned upstream content lock, version/distribution identity, this
 README, and the scoped `AGENTS.md`. Never edit `skills/` or manually rebaseline
 the lock; validation fails on drift before an upstream update can replace it.
 
@@ -581,7 +586,7 @@ python3 scripts/bootstrap_tooling_env.py
 ```
 
 The updater selects an upstream release, copies its published skills unchanged,
-regenerates local wrapper metadata, updates the cachebuster, and validates the
+regenerates local wrapper metadata, regenerates the distribution identity, and validates the
 upstream-native Codex invocation contract.
 
 This plugin is the source of truth for these third-party skills in this Codex
@@ -779,19 +784,6 @@ def copy_license(source_root: Path, plugin_root: Path) -> None:
     shutil.copy2(source, plugin_root / "LICENSE")
 
 
-def run_cachebuster(plugin_root: Path) -> None:
-    script = (
-        codex_home()
-        / "skills"
-        / ".system"
-        / "plugin-creator"
-        / "scripts"
-        / "update_plugin_cachebuster.py"
-    )
-    if not script.is_file():
-        raise SystemExit(f"cachebuster helper missing: {script}")
-    run([sys.executable, str(script), str(plugin_root)])
-
 
 def validate_plugin_wrapper(plugin_root: Path) -> None:
     manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
@@ -848,7 +840,7 @@ def sync_from_source(
     *,
     tag: str,
     commit: str,
-    cachebuster: bool,
+    update_identity: bool,
     run_validation: bool,
 ) -> list[str]:
     plugin_root = ensure_inside(
@@ -872,7 +864,7 @@ def sync_from_source(
         update_plugin_manifest(
             staging_root,
             version_from_tag(tag),
-            preserve_existing_cachebuster=not cachebuster,
+            preserve_existing_cachebuster=True,
         )
         write_readme(staging_root, tag, commit, skill_names)
         validate_native_codex_metadata(staging_root)
@@ -884,8 +876,6 @@ def sync_from_source(
             skill_names=skill_names,
         )
         validate_upstream_lock(staging_root)
-        if cachebuster:
-            run_cachebuster(staging_root)
         if run_validation:
             validate_package(staging_root, run_git_diff_check=False)
 
@@ -894,6 +884,8 @@ def sync_from_source(
         swapped = True
         if run_validation:
             git_diff_check(plugin_root)
+        if update_identity:
+            update_repository_identity(repo_root())
     except BaseException:
         if swapped and plugin_root.exists():
             shutil.rmtree(plugin_root)
@@ -929,11 +921,6 @@ def parse_args() -> argparse.Namespace:
         help="Directory used for fresh clones.",
     )
     parser.add_argument(
-        "--no-cachebuster",
-        action="store_true",
-        help="Do not update the Codex cachebuster suffix.",
-    )
-    parser.add_argument(
         "--skip-validation",
         action="store_true",
         help=(
@@ -952,11 +939,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.validate_only:
-        if args.source_dir or args.tag != "latest" or args.no_cachebuster:
+        if args.source_dir or args.tag != "latest":
             raise SystemExit(
                 "--validate-only cannot be combined with --source-dir, --tag, or --no-cachebuster"
             )
         validate_package(target_plugin_root())
+        require_repository_identity(repo_root())
         print(f"validated {TARGET_PLUGIN_NAME}")
         return
 
@@ -971,7 +959,7 @@ def main() -> None:
         source_root,
         tag=tag,
         commit=commit,
-        cachebuster=not args.no_cachebuster,
+        update_identity=True,
         run_validation=not args.skip_validation,
     )
     print(f"updated {TARGET_PLUGIN_NAME} from {tag} ({commit})")

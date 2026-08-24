@@ -38,6 +38,7 @@ from harness_registry import (
     load_harness_registry,
     resolve_harness_plan,
 )
+from plugin_package_identity import plugin_cache_identity_issues
 from manager_paths import (
     MANAGER_PYTHON_ENV,
     MANAGER_ROOT_ENV,
@@ -801,6 +802,34 @@ def apply_codex_harness(
         source_versions[plugin_name] = source_version
 
     rows_before = current_rows()
+    cache_identity_issues: list[str] = []
+    for plugin_name, source_root in plugin_sources.items():
+        row_before = rows_before.get((marketplace_name, plugin_name))
+        if (
+            row_before is None
+            or row_before.status != "installed, enabled"
+            or row_before.version != source_versions[plugin_name]
+        ):
+            continue
+        cache_root = (
+            codex_home
+            / "plugins"
+            / "cache"
+            / marketplace_name
+            / plugin_name
+            / source_versions[plugin_name]
+        )
+        cache_identity_issues.extend(
+            f"{plugin_name}@{marketplace_name}: {issue}"
+            for issue in plugin_cache_identity_issues(
+                source_root=source_root,
+                cache_root=cache_root,
+            )
+        )
+    require_harness_closure(
+        "Codex plugin cache identity preflight",
+        cache_identity_issues,
+    )
 
     def verify_codex() -> None:
         if dry_run:

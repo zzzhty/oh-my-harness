@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "version": "0.1.0+codex.20260822095313",
+  "version": "1.0.0+codex.39b127649c83ee9b",
   "description": "Reusable agent workflow skills maintained from the oh-my-harness repository.",
   "author": {
     "name": "Max"
