@@ -19,3 +19,16 @@ new = 'self.versions.get(name, self.source_versions.get(name, "0.9.0"))'
 if old not in text:
     raise SystemExit("generated refresh fixture version lookup was not found")
 fixture.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+watcher_test = Path("plugins/watcher/tests/test_skill_watcher.py")
+text = watcher_test.read_text(encoding="utf-8")
+old = '    def test_windows_codex_resolution_uses_path_then_managed_fallbacks(self) -> None:\n'
+new = (
+    '    @mock.patch("refresh_harness.codex_executable_is_startable", return_value=True)\n'
+    '    def test_windows_codex_resolution_uses_path_then_managed_fallbacks(\n'
+    '        self, _startable: mock.Mock\n'
+    '    ) -> None:\n'
+)
+if old not in text:
+    raise SystemExit("Watcher Windows Codex resolution test was not found")
+watcher_test.write_text(text.replace(old, new, 1), encoding="utf-8")
