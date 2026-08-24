@@ -1,17 +1,16 @@
 name: Apply consolidated lifecycle implementation
 
 on:
-  push:
-    branches: [agent/omh-lifecycle-cli]
-    paths:
-      - .github/lifecycle-all.patch.gz.b64
-      - .github/workflows/apply-lifecycle.yml
+  pull_request:
+    branches: [main]
+    types: [synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.head_ref == 'agent/omh-lifecycle-cli'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
