@@ -31,6 +31,37 @@ Every refresh and closure check selects one complete distribution with `--harnes
 
 `codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its exact-shape install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. The manifest has no independent schema-version field; its repository-owned reader rejects missing or unsupported fields. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
 
+## Lifecycle Manager
+
+`install.sh` and `install.ps1` are bootstrap-only. After the first installation,
+all supported lifecycle management goes through `omh`:
+
+```bash
+omh install [HARNESS...]
+omh refresh [HARNESS...]
+omh refresh [HARNESS...] --repair
+omh remove HARNESS... | --all
+omh update --check
+omh update
+omh status
+omh check
+omh doctor
+omh manager repair
+omh manager uninstall
+```
+
+`omh refresh` never fetches remote source; it reconciles the current managed
+release. `omh update` is the explicit remote transition and defaults to the
+stable release channel, while `--channel main` follows `origin/main`.
+Same-version content drift remains a hard failure during ordinary refresh and is
+re-materialized only by explicit `--repair`. `remove` deletes only resources
+whose manager ownership is proven.
+
+The immutable `state/install.json` remains the initial bootstrap receipt.
+Rolling manager state is kept in `manager.json`, `desired.json`, per-harness
+receipts, and an update operation journal. Mutating lifecycle commands share one
+manager lock.
+
 ## Release And Plugin Distribution Identity
 
 `VERSION` is the canonical `oh-my-harness` release version. First-party plugins use that value as their base version; an upstream-locked mirror keeps its upstream base version. Every complete plugin version ends in `+codex.<generation>`, where `generation` is derived from the canonical plugin package content rather than a timestamp. `.agents/plugins/distribution-identity.json` records the full per-package SHA-256 values and the release-level bundle identity.
@@ -60,12 +91,12 @@ PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${CODEX_HOME:-$HOME/.codex}/skills/.system
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_plugin_generations.py
 ```
 
-Refresh and closure use the same selector:
+The public lifecycle commands own refresh and closure; the Python helpers remain lower-level implementation surfaces:
 
 ```bash
-"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness codex
-"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_harness.py --harness codex
-"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/refresh_harness.py --harness zcode
+omh refresh codex
+omh check codex
+omh refresh zcode
 ```
 
 `scripts/sync_agents_skills.py` is the low-level directory-projection tool. It has no default target. Use the harness-aware refresh entry point for normal activation; supply the exact root when inspecting an already selected projection:
@@ -144,8 +175,8 @@ with a configured origin.
 `state/install.json` records one initialization lifecycle and its source
 snapshot. It has no independent schema-version field, and its recorded
 repository and revision are an installation receipt rather than rolling Git
-authority. Failed-install recovery accepts only the current exact field set and
-values. When an installation record exists, an installer launched from either
+authority. Failed-install recovery accepts only the current exact receipt fields
+and repository-defined lifecycle state entries. When an installation record exists, an installer launched from either
 the managed repository or another checkout automatically attempts strict
 recovery of the exact managed `repo/`; neither the invoking checkout nor the
 process working directory becomes installation authority. A checkout already
@@ -226,24 +257,32 @@ Windows PowerShell:
 ```powershell
 .\install.ps1 --harness codex --yes
 $env:PATH = "$env:USERPROFILE\.oh-my-harness\bin;$env:PATH"
-omh -Help
+omh --help
 ```
 
 The initializer does not edit shell profiles or the machine-wide `PATH`. Add the
 manager `bin/` directory through the shell configuration you own. Both command
-names dispatch to the same platform wrapper; `oh-my-harness` is canonical and
+names dispatch to the same manager-home bootstrap shim; `oh-my-harness` is canonical and
 `omh` is the short form. Neither launcher is a symlink.
 
 The managed installation layout is:
 
 ```text
 ~/.oh-my-harness/
+├── bootstrap/
+│   └── omh_bootstrap.py
 ├── repo/
 ├── venv/
 ├── bin/
 │   ├── oh-my-harness
 │   └── omh
-└── state/install.json
+└── state/
+    ├── install.json
+    ├── manager.json
+    ├── desired.json
+    ├── harnesses/
+    ├── operations/
+    └── manager.lock
 ```
 
 On Windows the two launcher files use the `.cmd` suffix. Development checkouts
@@ -256,8 +295,8 @@ directory.
 If initialization fails, `state/install.json` remains `installing`. Rerun the
 same installer request from either checkout: recovery proceeds only when the
 recorded identity, paths, revision, launcher set and launcher content still
-match exactly. It refuses ready installations, links, extra entries and changed
-state; normal updates to a ready installation use `omh`.
+match exactly. It refuses ready installations, links, unknown state entries and
+changed state; normal updates to a ready installation use `omh update`.
 
 Use the harness-aware refresh command for global instructions. It resolves the target from the registry and applies the required confirmation policy; do not force-copy over an existing instructions file.
 
@@ -332,25 +371,22 @@ py scripts\bootstrap_tooling_env.py
 
 ## Harness Refresh And Hook Debugging
 
-Refresh the selected harness with the platform wrapper:
-
-Unix:
+Use the lifecycle CLI directly after bootstrap:
 
 ```bash
-omh
-# alternatives: --harness zcode, --harness claude-code, --harness copilot-cli, ...
-# add --yes to confirm a missing instructions target or an exact Codex prune plan
+omh refresh
+omh refresh zcode
+omh refresh codex --repair
+omh check codex
 ```
 
-Windows PowerShell:
-
-```powershell
-omh
-# alternatives: -Harness zcode, -Harness claude-code, -Harness copilot-cli, ...
-# add -Yes to confirm a missing instructions target or an exact Codex prune plan
-```
-
-When no selector is supplied, the wrappers leave the choice to the registry default (currently `codex`). An explicit harness id is forwarded unchanged to refresh and check, and the bootstrap Python is used only to create or refresh the tooling venv. Harness defaults, choices, and paths are not duplicated in either wrapper. Global instructions are preflighted before skills or marketplace mutation.
+With no subcommand, `omh` remains a compatibility alias for `omh refresh`; new
+scripts should use the explicit form. `refresh` without targets reconciles the
+desired harness set, while `install` without a target selects the registry
+default (currently `codex`). The bootstrap shim only restores tooling and enters
+the unified Python CLI; `omh --help` remains available without a tooling rebuild,
+and harness defaults, choices, and paths remain registry authority. Global
+instructions are preflighted before skills or marketplace mutation.
 
 For `codex`, refresh validates the complete manifest, marketplace policy, nested source-package containment, current cache shape, and marketplace source binding before mutation. Git installation is pinned to the validated checkout commit; explicit Git failures stop, while only automatic Git selection may fall back to the exact local checkout. Codex CLI resolution uses explicit `--codex`/`-CodexPath`, `CODEX_BIN`, `PATH`, standalone installs, then platform-managed fallbacks.
 
@@ -358,10 +394,10 @@ Codex stale-plugin reconciliation is on by default because the registry declares
 
 The registry records `my-codex` only as the retired marketplace identity consumed
 by the explicit one-time migration. A normal refresh stops after printing the
-bounded legacy config/cache plan. Run `omh --migrate-marketplace --yes` (or the
-PowerShell equivalents `-MigrateMarketplace -Yes`) to install and verify the
-new marketplace, retire the old selectors and source, and remove the validated
-old cache namespace. The closure check rejects any remaining retired state.
+bounded legacy config/cache plan. Run
+`omh refresh codex --migrate-marketplace --yes` to install and verify the new
+marketplace, retire the old selectors and source, and remove the validated old
+cache namespace. The closure check rejects any remaining retired state.
 The registry `schemaVersion` is an ISO calendar date (`YYYY-MM-DD`), currently
 `2026-08-22`; advance it only when the registry schema changes.
 
@@ -531,6 +567,10 @@ scripts/check_harness.py
 scripts/harness_registry.py
 scripts/install_oh_my_harness.py
 scripts/manager_paths.py
+scripts/manager_state.py
+scripts/omh.py
+scripts/omh_bootstrap.py
+scripts/remove_harness.py
 scripts/refresh_harness.py
 scripts/sync_agents_skills.py
 scripts/sync_codex_agents.py

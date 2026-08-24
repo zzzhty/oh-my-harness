@@ -20,6 +20,12 @@ def expand_path(raw: str | Path) -> Path:
     return Path(os.path.expandvars(str(raw))).expanduser()
 
 
+def lexical_absolute(raw: str | Path) -> Path:
+    """Return an absolute, normalized path without resolving links or aliases."""
+
+    return Path(os.path.abspath(expand_path(raw)))
+
+
 def manager_home(
     raw: str | Path | None = None,
     *,
@@ -36,8 +42,8 @@ def manager_home(
             raise ValueError(
                 f"{MANAGER_HOME_ENV} must be an absolute path: {selected!r}"
             )
-        return resolved
-    return (user_home or Path.home()) / ".oh-my-harness"
+        return lexical_absolute(resolved)
+    return lexical_absolute((user_home or Path.home()) / ".oh-my-harness")
 
 
 def repo_path(home: Path) -> Path:

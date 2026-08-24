@@ -400,6 +400,31 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
         self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
         self.assertEqual(self.fixture.events, ["add:beta"])
 
+    def test_codex_repair_reinstalls_an_enabled_current_plugin(self) -> None:
+        self.fixture.enabled.add("alpha")
+        self.fixture.configure_plugins()
+        self.fixture._write_cache("alpha")
+        rows_patch, run_patch = self.patches()
+
+        with rows_patch, run_patch:
+            refresh.apply_codex_harness(
+                self.fixture.catalog,
+                codex="codex",
+                codex_home=self.fixture.codex_home,
+                marketplace_name="test",
+                excluded_skill_roots=(self.fixture.target,),
+                marketplace_source_binding=refresh.MarketplaceSourceBinding(
+                    "local",
+                    str(self.fixture.repo),
+                ),
+                env={},
+                dry_run=False,
+                repair=True,
+            )
+
+        self.assertEqual(self.fixture.enabled, {"alpha", "beta"})
+        self.assertEqual(self.fixture.events, ["add:alpha", "add:beta"])
+
     def test_codex_apply_rejects_same_version_cache_drift_before_mutation(self) -> None:
         self.fixture.enabled.add("alpha")
         self.fixture.configure_plugins()

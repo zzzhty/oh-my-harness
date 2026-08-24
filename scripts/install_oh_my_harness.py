@@ -79,11 +79,9 @@ def repository_from_checkout(source_root: Path = SOURCE_ROOT) -> str:
 
 
 def resolve_owned_leaf(path: Path) -> Path:
-    """Canonicalize ancestors while preserving the owned leaf for link checks."""
+    """Normalize the requested manager path without erasing link identity."""
 
-    if path.parent == path:
-        return path
-    return path.parent.resolve(strict=False) / path.name
+    return Path(os.path.abspath(path))
 
 
 def path_metadata(path: Path, *, label: str) -> os.stat_result | None:
@@ -142,7 +140,7 @@ def validate_install_root(
     allowed_existing: frozenset[Path] = frozenset(),
 ) -> None:
     validate_manager_home(home)
-    managed_paths = (repo_path(home), venv_path(home), bin_path(home), state_path(home))
+    managed_paths = (repo_path(home), venv_path(home), bin_path(home), state_path(home), home / "bootstrap")
     occupied = []
     for path in managed_paths:
         if not path_exists_without_following(path, label="manager-owned path"):
@@ -212,24 +210,70 @@ def launcher_paths(home: Path) -> tuple[Path, Path]:
 
 
 def launcher_help_invocation(platform_name: str) -> str:
-    return "omh -Help" if platform_name == "nt" else "omh --help"
+    return "omh --help"
+
+
+def _bootstrap_script_path(home: Path) -> Path:
+    return home / "bootstrap" / "omh_bootstrap.py"
+
+
+def write_bootstrap(*, home: Path, repo: Path, dry_run: bool) -> Path:
+    source = repo / "scripts" / "omh_bootstrap.py"
+    target = _bootstrap_script_path(home)
+    print(f"{'would write' if dry_run else 'write'} bootstrap: {target}")
+    if dry_run:
+        return target
+    if not source.is_file() or source.is_symlink():
+        raise SystemExit(f"manager bootstrap source must be an ordinary file: {source}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    require_ordinary_directory(target.parent, label="manager bootstrap root")
+    temporary = target.parent / f".{target.name}.install-{uuid.uuid4().hex}"
+    temporary.write_bytes(source.read_bytes())
+    os.replace(temporary, target)
+    return target
 
 
 def posix_launcher(*, home: Path, repo: Path) -> str:
-    wrapper = repo / "scripts" / "upgrade_oh_my_harness.sh"
+    bootstrap = _bootstrap_script_path(home)
     return (
         "#!/usr/bin/env sh\n"
         "set -eu\n"
-        f"exec {shlex.quote(str(wrapper))} --home {shlex.quote(str(home))} \"$@\"\n"
+        "if [ -n \"${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}\" ]; then\n"
+        "    bootstrap_python=$OH_MY_HARNESS_BOOTSTRAP_PYTHON\n"
+        "elif command -v python3 >/dev/null 2>&1; then\n"
+        "    bootstrap_python=$(command -v python3)\n"
+        "elif command -v python >/dev/null 2>&1; then\n"
+        "    bootstrap_python=$(command -v python)\n"
+        "else\n"
+        "    echo \"error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install python3.\" >&2\n"
+        "    exit 1\n"
+        "fi\n"
+        f"exec \"$bootstrap_python\" {shlex.quote(str(bootstrap))} --home {shlex.quote(str(home))} \"$@\"\n"
     )
 
 
 def windows_launcher(*, home: Path, repo: Path) -> str:
-    wrapper = repo / "scripts" / "upgrade_oh_my_harness.ps1"
+    bootstrap = _bootstrap_script_path(home)
     return (
         "@echo off\r\n"
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass "
-        f'-File "{wrapper}" -ManagerHome "{home}" %*\r\n'
+        "setlocal\r\n"
+        "if defined OH_MY_HARNESS_BOOTSTRAP_PYTHON (\r\n"
+        "  set \"OHM_PY=%OH_MY_HARNESS_BOOTSTRAP_PYTHON%\"\r\n"
+        "  goto :run\r\n"
+        ")\r\n"
+        "where python >nul 2>nul && (\r\n"
+        "  set \"OHM_PY=python\"\r\n"
+        "  goto :run\r\n"
+        ")\r\n"
+        "where py >nul 2>nul && (\r\n"
+        "  set \"OHM_PY=py\"\r\n"
+        "  goto :run\r\n"
+        ")\r\n"
+        "echo error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install Python. 1>&2\r\n"
+        "exit /b 1\r\n"
+        ":run\r\n"
+        f"\"%OHM_PY%\" \"{bootstrap}\" --home \"{home}\" %*\r\n"
+        "exit /b %ERRORLEVEL%\r\n"
     )
 
 
@@ -240,6 +284,7 @@ def expected_launcher_content(*, home: Path, repo: Path) -> str:
 
 
 def write_launchers(*, home: Path, repo: Path, dry_run: bool) -> tuple[Path, Path]:
+    write_bootstrap(home=home, repo=repo, dry_run=dry_run)
     paths = launcher_paths(home)
     content = expected_launcher_content(home=home, repo=repo)
     for path in paths:
@@ -466,10 +511,21 @@ def validate_incomplete_adoption(
         )
 
     state_entries = set(state_root.iterdir())
-    if state_entries != {target}:
+    allowed_state_names = {
+        "install.json",
+        "manager.json",
+        "desired.json",
+        "harnesses",
+        "operations",
+        "manager.lock",
+    }
+    unexpected_state = sorted(
+        path for path in state_entries if path.name not in allowed_state_names
+    )
+    if unexpected_state:
         raise SystemExit(
             "refusing to resume installation with unexpected state entries: "
-            + ", ".join(str(path) for path in sorted(state_entries))
+            + ", ".join(str(path) for path in unexpected_state)
         )
     expected_launchers = set(launcher_paths(home))
     launcher_root = bin_path(home)
@@ -493,7 +549,7 @@ def validate_incomplete_adoption(
     print(f"resume exact incomplete installation: {target}")
     return ValidatedRecovery(
         allowed_existing=frozenset(
-            {venv_path(home), bin_path(home), state_path(home)}
+            {venv_path(home), bin_path(home), state_path(home), home / "bootstrap"}
         ),
         revision=current_revision,
     )
@@ -547,45 +603,22 @@ def invoke_refresh(
     migrate_marketplace: bool,
     migrate_from_repo: Path | None,
 ) -> None:
-    if os.name == "nt":
-        command = [
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(repo / "scripts" / "upgrade_oh_my_harness.ps1"),
-            "-ManagerHome",
-            str(home),
-            "-Harness",
-            harness,
-        ]
-        if codex_home is not None:
-            command.extend(["-CodexHome", str(codex_home)])
-        if assume_yes:
-            command.append("-Yes")
-        if migrate_marketplace:
-            command.append("-MigrateMarketplace")
-        if migrate_from_repo is not None:
-            command.extend(["-MigrateFromRepo", str(migrate_from_repo)])
-    else:
-        command = [
-            str(repo / "scripts" / "upgrade_oh_my_harness.sh"),
-            "--home",
-            str(home),
-            "--harness",
-            harness,
-            "--bootstrap-python",
-            str(bootstrap_python()),
-        ]
-        if codex_home is not None:
-            command.extend(["--codex-home", str(codex_home)])
-        if assume_yes:
-            command.append("--yes")
-        if migrate_marketplace:
-            command.append("--migrate-marketplace")
-        if migrate_from_repo is not None:
-            command.extend(["--migrate-from-repo", str(migrate_from_repo)])
+    command = [
+        str(bootstrap_python()),
+        str(_bootstrap_script_path(home)),
+        "--home",
+        str(home),
+        "install",
+        harness,
+    ]
+    if codex_home is not None:
+        command.extend(["--codex-home", str(codex_home)])
+    if assume_yes:
+        command.append("--yes")
+    if migrate_marketplace:
+        command.append("--migrate-marketplace")
+    if migrate_from_repo is not None:
+        command.extend(["--migrate-from-repo", str(migrate_from_repo)])
     run(command)
 
 
@@ -653,7 +686,7 @@ def main() -> None:
                 "--migrate-from-repo must be an absolute path: "
                 f"{args.migrate_from_repo!r}"
             )
-        migrate_from_repo = migrate_from_repo.resolve(strict=False)
+        migrate_from_repo = Path(os.path.abspath(migrate_from_repo))
 
     source_root = SOURCE_ROOT.resolve(strict=True)
     expected_repo = repo_path(home)

@@ -21,7 +21,7 @@ from harness_registry import (
     resolve_harness_plan,
 )
 from repo_skill_catalog import REPO_ROOT
-from sync_agents_skills import is_junction
+from sync_agents_skills import is_junction, same_path
 
 
 Input = Callable[[str], str]
@@ -133,19 +133,19 @@ def _inspect(
     if snapshot.kind == "missing":
         return PreparedInstructionSync(plan, "create", snapshot, source_digest, False)
     if snapshot.kind == "symlink":
-        current_source = plan.instructions_source.resolve(strict=False)
-        retired_sources = {
-            source.resolve(strict=False) for source in managed_retired_sources
-        }
-        if (
-            snapshot.link_target != current_source
-            and snapshot.link_target not in retired_sources
-        ):
+        assert snapshot.link_target is not None
+        current_source = plan.instructions_source
+        current_match = same_path(snapshot.link_target, current_source)
+        retired_match = any(
+            same_path(snapshot.link_target, source)
+            for source in managed_retired_sources
+        )
+        if not current_match and not retired_match:
             raise SystemExit(
                 "refusing unmanaged instructions symlink: "
                 f"{target} -> {snapshot.link_target}"
             )
-        if snapshot.link_target == current_source and materialization == "symlink":
+        if current_match and materialization == "symlink":
             return PreparedInstructionSync(plan, "current", snapshot, source_digest, True)
         return PreparedInstructionSync(plan, "replace", snapshot, source_digest, False)
     if materialization == "copy" and snapshot.digest == source_digest:
@@ -189,8 +189,11 @@ def prepare_instruction_sync(
         output(f"InstructionsSourceSHA256={prepared.source_digest}")
     if (
         prepared.snapshot.kind == "symlink"
-        and prepared.snapshot.link_target
-        in {source.resolve(strict=False) for source in managed_retired_sources}
+        and prepared.snapshot.link_target is not None
+        and any(
+            same_path(prepared.snapshot.link_target, source)
+            for source in managed_retired_sources
+        )
     ):
         output(
             "InstructionsRetiredManagedSource="
@@ -315,6 +318,42 @@ def check_instruction_sync(plan: HarnessPlan) -> list[str]:
         f"global instructions differ for {plan.harness_id}: "
         f"{target} ({prepared.snapshot.kind})"
     ]
+
+
+def remove_instruction_sync(plan: HarnessPlan, *, dry_run: bool) -> None:
+    """Remove only instructions proven to match the current managed source."""
+
+    source_digest = _validated_source_digest(plan)
+    target = plan.instructions_target
+    snapshot = _snapshot(target)
+    if snapshot.kind == "missing":
+        print(f"instructions already clear for {plan.harness_id}: {target}")
+        return
+
+    owned = False
+    if snapshot.kind == "symlink":
+        owned = snapshot.link_target is not None and same_path(
+            snapshot.link_target, plan.instructions_source
+        )
+    elif snapshot.kind == "file":
+        owned = snapshot.digest == source_digest
+
+    if not owned:
+        raise SystemExit(
+            "refusing to remove changed or unmanaged instructions target: "
+            f"{target} ({snapshot.kind})"
+        )
+
+    print(f"{'would remove' if dry_run else 'remove'} managed instructions: {target}")
+    if dry_run:
+        return
+    current = _snapshot(target)
+    if current != snapshot:
+        raise SystemExit(
+            "instructions target changed after removal preflight; refusing deletion: "
+            f"{target}"
+        )
+    target.unlink()
 
 
 def main() -> int:

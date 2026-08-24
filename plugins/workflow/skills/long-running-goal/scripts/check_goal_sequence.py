@@ -9,7 +9,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote, urlsplit
 
 SHARED = Path(__file__).resolve().parents[3] / "scripts"
@@ -321,7 +321,13 @@ def _relative_markdown_target(
     target = match.group("angle") or match.group("plain") or ""
     split = urlsplit(target)
     decoded_path = unquote(split.path)
-    if split.scheme or split.netloc or not decoded_path or Path(decoded_path).is_absolute():
+    windows_path = PureWindowsPath(decoded_path)
+    portable_absolute = (
+        PurePosixPath(decoded_path).is_absolute()
+        or windows_path.is_absolute()
+        or bool(windows_path.drive)
+    )
+    if split.scheme or split.netloc or not decoded_path or portable_absolute:
         errors.append(f"{subject} must target a relative local Markdown file; found {target}")
         return None
     resolved = (sequence_path.parent / decoded_path).resolve()
