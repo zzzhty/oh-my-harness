@@ -1,0 +1,36 @@
+name: Apply consolidated lifecycle implementation
+
+on:
+  push:
+    branches: [agent/omh-lifecycle-cli]
+    paths:
+      - .github/lifecycle-all.patch.gz
+      - .github/workflows/apply-lifecycle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/omh-lifecycle-cli
+          fetch-depth: 0
+      - name: Apply implementation and remove scaffolding
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -dc .github/lifecycle-all.patch.gz | git apply --binary
+          rm -f \
+            .github/lifecycle-all.patch.gz \
+            .github/workflows/apply-lifecycle.yml \
+            .github/workflows/dev-source-snapshot.yml \
+            .github/workflows/withdraw-v1.yml
+          git config user.name "oh-my-harness automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(manager): complete omh lifecycle management"
+          git push origin HEAD:agent/omh-lifecycle-cli
