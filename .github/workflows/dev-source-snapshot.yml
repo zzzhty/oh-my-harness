@@ -1,21 +1,24 @@
-name: Dev source snapshot
+name: Main source snapshot
 
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    types: [synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
   snapshot:
+    if: github.head_ref == 'agent/omh-lifecycle-cli'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/upload-artifact@v4
         with:
-          name: source-snapshot
+          name: main-source-snapshot
           path: |
             .
             !.git/**
