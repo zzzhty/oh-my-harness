@@ -95,8 +95,10 @@ class PluginPackageIdentityTests(unittest.TestCase):
             repo, plugin = self.make_repo(Path(tmp))
             update_repository_identity(repo)
             skill = plugin / "skills" / "one" / "SKILL.md"
+            lf_payload = skill.read_bytes().replace(b"\r\n", b"\n")
+            skill.write_bytes(lf_payload)
             digest_lf = expected_plugin_identity(repo, plugin).content_sha256
-            skill.write_bytes(skill.read_bytes().replace(b"\n", b"\r\n"))
+            skill.write_bytes(lf_payload.replace(b"\n", b"\r\n"))
             digest_crlf = expected_plugin_identity(repo, plugin).content_sha256
             self.assertEqual(digest_lf, digest_crlf)
 

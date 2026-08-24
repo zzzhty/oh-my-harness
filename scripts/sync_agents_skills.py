@@ -35,6 +35,21 @@ def is_projection_link(path: Path) -> bool:
     return path.is_symlink() or is_junction(path)
 
 
+def path_comparison_key(path: str | Path) -> str:
+    """Normalize path aliases for identity comparison without changing stored paths."""
+
+    return os.path.normcase(os.path.realpath(os.fspath(path)))
+
+
+def same_path(left: str | Path, right: str | Path) -> bool:
+    """Return whether two existing or lexical paths identify the same location."""
+
+    try:
+        return os.path.samefile(left, right)
+    except (FileNotFoundError, OSError, ValueError):
+        return path_comparison_key(left) == path_comparison_key(right)
+
+
 def is_plain_directory(path: Path) -> bool:
     """Recognize an ordinary directory, never a link, reparse point, or mount."""
 
@@ -132,7 +147,7 @@ def remove_projection_link(
     """Remove one projection link only after revalidating its exact destination."""
 
     destination = managed_destination(link, catalog)
-    if destination != expected_destination:
+    if destination is None or not same_path(destination, expected_destination):
         raise SystemExit(
             "refusing to remove changed or unmanaged skill projection link: "
             f"expected {link} -> {expected_destination}, found {destination}"

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Mapping
 
+from manager_paths import lexical_absolute
 from repo_skill_catalog import REPO_ROOT, SkillCatalog
 
 
@@ -603,7 +604,7 @@ def _resolve_root(
                 )
         else:
             base = user_home
-        return (base / candidate.append).resolve(strict=False)
+        return lexical_absolute(base / candidate.append)
     raise HarnessRegistryError(f"{label} has no usable root candidate")
 
 
@@ -619,7 +620,8 @@ def _settings_value(settings: object, path: tuple[str, ...]) -> object | None:
 def _join_within(root: Path, relative: Path, *, label: str) -> Path:
     """Join lexically so an existing target symlink does not replace its managed path."""
 
-    target = Path(os.path.abspath(os.path.join(root, relative)))
+    root = lexical_absolute(root)
+    target = lexical_absolute(root / relative)
     try:
         target.relative_to(root)
     except ValueError as exc:
@@ -691,7 +693,7 @@ def resolve_harness_plan(
             f"unknown harness {selected!r}; expected one of: {', '.join(registry.choices)}"
         )
     environment = environ if environ is not None else os.environ
-    home = (user_home or Path.home()).expanduser()
+    home = lexical_absolute(user_home or Path.home())
     root = _resolve_root(
         harness.root_candidates,
         label=f"harness {harness.harness_id!r}",

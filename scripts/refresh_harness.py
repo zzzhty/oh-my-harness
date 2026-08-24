@@ -742,6 +742,7 @@ def apply_codex_harness(
     marketplace_source_binding: MarketplaceSourceBinding,
     env: dict[str, str],
     dry_run: bool,
+    repair: bool = False,
     ignored_stale_cache_plugins: set[str] | frozenset[str] | None = None,
     ignored_stale_enabled_plugins: set[str] | frozenset[str] | None = None,
     ignored_alternate_marketplaces: set[str] | frozenset[str] | None = None,
@@ -802,34 +803,40 @@ def apply_codex_harness(
         source_versions[plugin_name] = source_version
 
     rows_before = current_rows()
-    cache_identity_issues: list[str] = []
-    for plugin_name, source_root in plugin_sources.items():
-        row_before = rows_before.get((marketplace_name, plugin_name))
-        if (
-            row_before is None
-            or row_before.status != "installed, enabled"
-            or row_before.version != source_versions[plugin_name]
-        ):
-            continue
-        cache_root = (
-            codex_home
-            / "plugins"
-            / "cache"
-            / marketplace_name
-            / plugin_name
-            / source_versions[plugin_name]
-        )
-        cache_identity_issues.extend(
-            f"{plugin_name}@{marketplace_name}: {issue}"
-            for issue in plugin_cache_identity_issues(
-                source_root=source_root,
-                cache_root=cache_root,
+    if not repair:
+        cache_identity_issues: list[str] = []
+        for plugin_name, source_root in plugin_sources.items():
+            row_before = rows_before.get((marketplace_name, plugin_name))
+            if (
+                row_before is None
+                or row_before.status != "installed, enabled"
+                or row_before.version != source_versions[plugin_name]
+            ):
+                continue
+            cache_root = (
+                codex_home
+                / "plugins"
+                / "cache"
+                / marketplace_name
+                / plugin_name
+                / source_versions[plugin_name]
             )
+            cache_identity_issues.extend(
+                f"{plugin_name}@{marketplace_name}: {issue}"
+                for issue in plugin_cache_identity_issues(
+                    source_root=source_root,
+                    cache_root=cache_root,
+                )
+            )
+        require_harness_closure(
+            "Codex plugin cache identity preflight",
+            cache_identity_issues,
         )
-    require_harness_closure(
-        "Codex plugin cache identity preflight",
-        cache_identity_issues,
-    )
+    else:
+        print(
+            "Codex repair mode: same-version cache identity preflight is "
+            "replaced by forced re-materialization."
+        )
 
     def verify_codex() -> None:
         if dry_run:
@@ -874,6 +881,7 @@ def apply_codex_harness(
                 row_before is not None
                 and row_before.status == "installed, enabled"
                 and row_before.version == source_versions[plugin_name]
+                and not repair
             ):
                 print(
                     f"Plugin `{selector}` is already installed at current version "
@@ -1773,6 +1781,11 @@ def main() -> None:
         action="store_true",
         help="Confirm missing-instructions creation and exact managed-stale prune plans.",
     )
+    parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="Force same-version Codex plugin re-materialization after source validation.",
+    )
     args = parser.parse_args()
 
     codex_home = expand_path(args.codex_home)
@@ -1997,6 +2010,7 @@ def main() -> None:
             marketplace_source_binding=marketplace_source_binding,
             env=env,
             dry_run=args.dry_run,
+            repair=args.repair,
             ignored_stale_cache_plugins=(prune_plan.cached if args.dry_run else None),
             ignored_stale_enabled_plugins=(
                 prune_plan.configured if args.dry_run else None

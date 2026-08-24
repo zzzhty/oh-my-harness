@@ -21,8 +21,15 @@ import install_oh_my_harness as installer  # noqa: E402
 
 
 class InstallerTests(unittest.TestCase):
+    @staticmethod
+    def seed_bootstrap(repo: Path) -> None:
+        source = REPO_ROOT / "scripts" / "omh_bootstrap.py"
+        target = repo / "scripts" / "omh_bootstrap.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
     def test_launcher_help_uses_platform_wrapper_syntax(self) -> None:
-        self.assertEqual(installer.launcher_help_invocation("nt"), "omh -Help")
+        self.assertEqual(installer.launcher_help_invocation("nt"), "omh --help")
         self.assertEqual(installer.launcher_help_invocation("posix"), "omh --help")
 
     @unittest.skipIf(os.name == "nt", "POSIX launcher assertion")
@@ -31,6 +38,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
 
             long_command, short_command = launchers
@@ -41,7 +49,7 @@ class InstallerTests(unittest.TestCase):
                 short_command.read_text(encoding="utf-8"),
             )
             content = long_command.read_text(encoding="utf-8")
-            self.assertIn(str(repo / "scripts" / "upgrade_oh_my_harness.sh"), content)
+            self.assertIn(str(home / "bootstrap" / "omh_bootstrap.py"), content)
             self.assertIn(f"--home {home}", content)
             self.assertTrue(long_command.stat().st_mode & stat.S_IXUSR)
 
@@ -49,8 +57,8 @@ class InstallerTests(unittest.TestCase):
         home = Path(r"C:\Users\Tester\.oh-my-harness")
         repo = home / "repo"
         content = installer.windows_launcher(home=home, repo=repo)
-        self.assertIn("upgrade_oh_my_harness.ps1", content)
-        self.assertIn('-ManagerHome "', content)
+        self.assertIn(str(home / "bootstrap" / "omh_bootstrap.py"), content)
+        self.assertIn('--home "', content)
         self.assertIn("%*", content)
 
     def test_install_refuses_existing_manager_owned_paths(self) -> None:
@@ -65,6 +73,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             installer.validate_install_root(home, adopted_repo=repo)
 
             (home / "bin").mkdir()
@@ -164,6 +173,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             retired_repo = Path(tmp) / "former-checkout"
             with (
                 mock.patch.object(installer, "SOURCE_ROOT", repo),
@@ -189,7 +199,7 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(installer.launcher_paths(home)[1].is_file())
             self.assertEqual(
                 refresh.call_args.kwargs["migrate_from_repo"],
-                retired_repo.resolve(strict=False),
+                retired_repo,
             )
 
     def test_exact_installing_state_auto_resumes_from_managed_checkout(self) -> None:
@@ -197,6 +207,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             with (
                 mock.patch.object(installer, "installed_revision", return_value="abc123"),
@@ -245,6 +256,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             external_checkout = Path(tmp) / "external-checkout"
             external_checkout.mkdir()
             repository = "https://example.invalid/oh-my-harness.git"
@@ -296,6 +308,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             revision = "1" * 40
             with mock.patch.object(installer, "installed_revision", return_value=revision):
@@ -334,6 +347,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             original_revision = "1" * 40
             changed_revision = "2" * 40
@@ -409,10 +423,11 @@ class InstallerTests(unittest.TestCase):
 
             git("init", "--bare", str(remote))
             git("clone", str(remote), str(repo))
+            self.seed_bootstrap(repo)
             git("-C", str(repo), "config", "user.name", "Installer Test")
             git("-C", str(repo), "config", "user.email", "installer@example.invalid")
             repo.joinpath("seed.txt").write_text("old\n", encoding="utf-8")
-            git("-C", str(repo), "add", "seed.txt")
+            git("-C", str(repo), "add", "seed.txt", "scripts/omh_bootstrap.py")
             git("-C", str(repo), "commit", "-m", "old")
             git("-C", str(repo), "branch", "-M", "main")
             git("-C", str(repo), "push", "-u", "origin", "main")
@@ -485,6 +500,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             with mock.patch.object(installer, "installed_revision", return_value="1" * 40):
                 launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
@@ -598,6 +614,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             with (
                 mock.patch.object(installer, "SOURCE_ROOT", repo),
                 mock.patch.object(
@@ -623,6 +640,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             expected_content = "@echo off\r\nexit /b 0\r\n"
             launchers = installer.launcher_paths(home)
@@ -660,7 +678,7 @@ class InstallerTests(unittest.TestCase):
             assert recovery is not None
             self.assertEqual(
                 recovery.allowed_existing,
-                frozenset({home / "venv", home / "bin", home / "state"}),
+                frozenset({home / "venv", home / "bin", home / "state", home / "bootstrap"}),
             )
 
     def test_exact_installing_state_rejects_shape_and_launcher_drift(self) -> None:
@@ -668,6 +686,7 @@ class InstallerTests(unittest.TestCase):
             home = Path(tmp) / ".oh-my-harness"
             repo = home / "repo"
             repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
             repository = "https://example.invalid/oh-my-harness.git"
             launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
             with (
@@ -709,7 +728,7 @@ class InstallerTests(unittest.TestCase):
                 assert recovery is not None
                 self.assertEqual(
                     recovery.allowed_existing,
-                    frozenset({home / "venv", home / "bin", home / "state"}),
+                    frozenset({home / "venv", home / "bin", home / "state", home / "bootstrap"}),
                 )
                 installer.validate_install_root(
                     home,
