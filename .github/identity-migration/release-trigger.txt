@@ -1,0 +1,1 @@
+Publish the verified main commit as oh-my-harness v1.0.0.
