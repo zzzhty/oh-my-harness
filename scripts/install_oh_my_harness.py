@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from manager_paths import (
@@ -29,6 +30,13 @@ from terminal_output import write_stderr
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REF = "main"
+_REPARSE_POINT_FLAG = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+
+
+@dataclass(frozen=True)
+class ValidatedRecovery:
+    allowed_existing: frozenset[Path]
+    revision: str
 
 
 def command_text(command: list[str]) -> str:
@@ -70,28 +78,87 @@ def repository_from_checkout(source_root: Path = SOURCE_ROOT) -> str:
     return repository
 
 
+def resolve_owned_leaf(path: Path) -> Path:
+    """Canonicalize ancestors while preserving the owned leaf for link checks."""
+
+    if path.parent == path:
+        return path
+    return path.parent.resolve(strict=False) / path.name
+
+
+def path_metadata(path: Path, *, label: str) -> os.stat_result | None:
+    try:
+        return path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise SystemExit(f"{label} cannot be inspected: {path}: {exc}") from exc
+
+
+def metadata_is_reparse_point(metadata: os.stat_result) -> bool:
+    return bool(
+        _REPARSE_POINT_FLAG
+        and getattr(metadata, "st_file_attributes", 0) & _REPARSE_POINT_FLAG
+    )
+
+
+def is_ordinary_directory(path: Path, *, label: str = "path") -> bool:
+    metadata = path_metadata(path, label=label)
+    return bool(
+        metadata is not None
+        and stat.S_ISDIR(metadata.st_mode)
+        and not metadata_is_reparse_point(metadata)
+    )
+
+
+def is_ordinary_file(path: Path, *, label: str = "path") -> bool:
+    metadata = path_metadata(path, label=label)
+    return bool(
+        metadata is not None
+        and stat.S_ISREG(metadata.st_mode)
+        and not metadata_is_reparse_point(metadata)
+    )
+
+
+def path_exists_without_following(path: Path, *, label: str = "path") -> bool:
+    return path_metadata(path, label=label) is not None
+
+
+def require_ordinary_directory(path: Path, *, label: str) -> None:
+    if not is_ordinary_directory(path, label=label):
+        raise SystemExit(f"{label} must be an ordinary directory: {path}")
+
+
+def validate_manager_home(home: Path) -> None:
+    if not path_exists_without_following(home, label="manager home"):
+        return
+    require_ordinary_directory(home, label="manager home")
+
+
 def validate_install_root(
     home: Path,
     *,
     adopted_repo: Path | None = None,
     allowed_existing: frozenset[Path] = frozenset(),
 ) -> None:
-    if home.is_symlink():
-        raise SystemExit(f"manager home must not be a symlink: {home}")
-    if home.exists() and not home.is_dir():
-        raise SystemExit(f"manager home is not a directory: {home}")
+    validate_manager_home(home)
     managed_paths = (repo_path(home), venv_path(home), bin_path(home), state_path(home))
     occupied = []
     for path in managed_paths:
-        if not (path.exists() or path.is_symlink()):
+        if not path_exists_without_following(path, label="manager-owned path"):
             continue
-        if (
-            adopted_repo is not None
-            and path == repo_path(home)
-            and path.resolve(strict=True) == adopted_repo.resolve(strict=True)
-        ):
-            continue
+        if adopted_repo is not None and path == repo_path(home):
+            require_ordinary_directory(path, label="managed repository root")
+            try:
+                same_repo = path.resolve(strict=True) == adopted_repo.resolve(strict=True)
+            except OSError as exc:
+                raise SystemExit(
+                    f"managed repository root cannot be resolved: {path}: {exc}"
+                ) from exc
+            if same_repo:
+                continue
         if path in allowed_existing:
+            require_ordinary_directory(path, label="manager-owned recovery path")
             continue
         occupied.append(path)
     if occupied:
@@ -126,6 +193,7 @@ def clone_repository(
         return target
 
     home.mkdir(parents=True, exist_ok=True)
+    require_ordinary_directory(home, label="manager home")
     try:
         run(command)
         temporary.rename(target)
@@ -179,6 +247,7 @@ def write_launchers(*, home: Path, repo: Path, dry_run: bool) -> tuple[Path, Pat
         if dry_run:
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
+        require_ordinary_directory(path.parent, label="managed launcher root")
         temporary = path.parent / f".{path.name}.install-{uuid.uuid4().hex}"
         temporary.write_text(content, encoding="utf-8", newline="")
         if os.name != "nt":
@@ -203,6 +272,51 @@ def installed_revision(repo: Path) -> str:
     return result.stdout.strip()
 
 
+def validate_checkout_clean_and_remote(
+    *,
+    repo: Path,
+    repository: str,
+    context: str,
+) -> None:
+    status = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode != 0:
+        raise SystemExit(f"managed checkout status is unavailable for {context}")
+    if status.stdout.strip():
+        raise SystemExit(
+            f"managed checkout has uncommitted changes; refusing {context}"
+        )
+
+    actual_repository = repository_from_checkout(repo)
+    if actual_repository != repository:
+        raise SystemExit(
+            "managed checkout remote does not match the recorded installation repository"
+        )
+
+
+def assert_checkout_snapshot(
+    *,
+    repo: Path,
+    repository: str,
+    revision: str,
+    phase: str,
+) -> None:
+    current_revision = installed_revision(repo)
+    if current_revision != revision:
+        raise SystemExit(
+            f"managed checkout revision changed {phase}; "
+            f"expected {revision}, found {current_revision}"
+        )
+    validate_checkout_clean_and_remote(
+        repo=repo,
+        repository=repository,
+        context=f"installation recovery {phase}",
+    )
+
+
 def validate_revision_fast_forward(
     *,
     repo: Path,
@@ -222,23 +336,11 @@ def validate_revision_fast_forward(
                 f"incomplete installation {label} revision is not a full Git object id"
             )
 
-    status = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
-        capture_output=True,
-        text=True,
+    validate_checkout_clean_and_remote(
+        repo=repo,
+        repository=repository,
+        context="fast-forward resume",
     )
-    if status.returncode != 0:
-        raise SystemExit("managed checkout status is unavailable for fast-forward resume")
-    if status.stdout.strip():
-        raise SystemExit(
-            "managed checkout has uncommitted changes; refusing fast-forward resume"
-        )
-
-    actual_repository = repository_from_checkout(repo)
-    if actual_repository != repository:
-        raise SystemExit(
-            "managed checkout remote does not match the recorded installation repository"
-        )
 
     remote_ref = f"refs/remotes/origin/{ref}"
     remote = subprocess.run(
@@ -289,11 +391,14 @@ def validate_incomplete_adoption(
     ref: str,
     harness: str,
     resume_fast_forward: bool = False,
-) -> frozenset[Path]:
-    target = state_path(home) / "install.json"
-    if not target.exists() and not target.is_symlink():
-        return frozenset()
-    if target.is_symlink() or not target.is_file():
+) -> ValidatedRecovery | None:
+    state_root = state_path(home)
+    require_ordinary_directory(state_root, label="managed state root")
+    require_ordinary_directory(repo, label="managed repository root")
+    target = state_root / "install.json"
+    if not path_exists_without_following(target, label="incomplete installation state"):
+        return None
+    if not is_ordinary_file(target, label="incomplete installation state"):
         raise SystemExit(f"incomplete installation state must be a regular file: {target}")
     try:
         payload = json.loads(target.read_text(encoding="utf-8"))
@@ -310,6 +415,7 @@ def validate_incomplete_adoption(
     }
     if not isinstance(payload, dict) or set(payload) != expected_keys:
         raise SystemExit(f"incomplete installation state has an unsupported shape: {target}")
+    current_revision = installed_revision(repo)
     expected_paths = {
         "home": str(home),
         "repo": str(repo),
@@ -322,7 +428,7 @@ def validate_incomplete_adoption(
         "status": "installing",
         "repository": repository,
         "ref": ref,
-        "revision": installed_revision(repo),
+        "revision": current_revision,
         "harness": harness,
         "paths": expected_paths,
     }
@@ -339,11 +445,11 @@ def validate_incomplete_adoption(
                 repository=repository,
                 ref=ref,
                 previous_revision=previous_revision,
-                current_revision=expected["revision"],
+                current_revision=current_revision,
             )
             print(
                 "validated incomplete installation fast-forward: "
-                f"{previous_revision[:12]} -> {expected['revision'][:12]}"
+                f"{previous_revision[:12]} -> {current_revision[:12]}"
             )
         else:
             mismatched_fields = ", ".join(mismatched)
@@ -352,8 +458,14 @@ def validate_incomplete_adoption(
                 "the exact current request; mismatched fields: "
                 f"{mismatched_fields}: {target}"
             )
+    else:
+        validate_checkout_clean_and_remote(
+            repo=repo,
+            repository=repository,
+            context="incomplete installation recovery",
+        )
 
-    state_entries = set(state_path(home).iterdir())
+    state_entries = set(state_root.iterdir())
     if state_entries != {target}:
         raise SystemExit(
             "refusing to resume installation with unexpected state entries: "
@@ -361,8 +473,7 @@ def validate_incomplete_adoption(
         )
     expected_launchers = set(launcher_paths(home))
     launcher_root = bin_path(home)
-    if launcher_root.is_symlink() or not launcher_root.is_dir():
-        raise SystemExit(f"managed launcher root is not an ordinary directory: {launcher_root}")
+    require_ordinary_directory(launcher_root, label="managed launcher root")
     launcher_entries = set(launcher_root.iterdir())
     if launcher_entries != expected_launchers:
         raise SystemExit(
@@ -371,17 +482,21 @@ def validate_incomplete_adoption(
         )
     expected_content = expected_launcher_content(home=home, repo=repo)
     for launcher in expected_launchers:
-        if launcher.is_symlink() or not launcher.is_file():
+        if not is_ordinary_file(launcher, label="managed launcher"):
             raise SystemExit(f"managed launcher is not an ordinary file: {launcher}")
         if launcher.read_bytes() != expected_content.encode("utf-8"):
             raise SystemExit(f"managed launcher content changed after failed install: {launcher}")
 
     managed_venv = venv_path(home)
-    if managed_venv.exists() or managed_venv.is_symlink():
-        if managed_venv.is_symlink() or not managed_venv.is_dir():
-            raise SystemExit(f"managed venv is not an ordinary directory: {managed_venv}")
+    if path_exists_without_following(managed_venv, label="managed venv"):
+        require_ordinary_directory(managed_venv, label="managed venv")
     print(f"resume exact incomplete installation: {target}")
-    return frozenset({venv_path(home), bin_path(home), state_path(home)})
+    return ValidatedRecovery(
+        allowed_existing=frozenset(
+            {venv_path(home), bin_path(home), state_path(home)}
+        ),
+        revision=current_revision,
+    )
 
 
 def write_install_state(
@@ -393,14 +508,18 @@ def write_install_state(
     harness: str,
     launchers: tuple[Path, Path],
     status: str,
+    revision: str | None = None,
 ) -> None:
-    target = state_path(home) / "install.json"
+    state_root = state_path(home)
+    state_root.mkdir(parents=True, exist_ok=True)
+    require_ordinary_directory(state_root, label="managed state root")
+    target = state_root / "install.json"
     payload = {
         "product": PRODUCT_NAME,
         "status": status,
         "repository": repository,
         "ref": ref,
-        "revision": installed_revision(repo),
+        "revision": revision if revision is not None else installed_revision(repo),
         "harness": harness,
         "paths": {
             "home": str(home),
@@ -410,8 +529,7 @@ def write_install_state(
             "launchers": [str(path) for path in launchers],
         },
     }
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.parent / f".{target.name}.install-{uuid.uuid4().hex}"
+    temporary = state_root / f".{target.name}.install-{uuid.uuid4().hex}"
     temporary.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -516,9 +634,10 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        home = manager_home(args.home).resolve(strict=False)
+        home = resolve_owned_leaf(manager_home(args.home))
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    validate_manager_home(home)
     repository = args.repository or repository_from_checkout()
     if not repository.strip():
         raise SystemExit("repository source must not be empty")
@@ -537,24 +656,38 @@ def main() -> None:
         migrate_from_repo = migrate_from_repo.resolve(strict=False)
 
     source_root = SOURCE_ROOT.resolve(strict=True)
-    expected_repo = repo_path(home).resolve(strict=False)
-    install_state = state_path(home) / "install.json"
-    resume_incomplete_install = install_state.exists() or install_state.is_symlink()
+    expected_repo = repo_path(home)
+    state_root = state_path(home)
+    if path_exists_without_following(state_root, label="managed state root"):
+        require_ordinary_directory(state_root, label="managed state root")
+    install_state = state_root / "install.json"
+    resume_incomplete_install = path_exists_without_following(
+        install_state,
+        label="incomplete installation state",
+    )
     if args.resume_fast_forward and not resume_incomplete_install:
         raise SystemExit(
             "--resume-fast-forward requires an incomplete installation state"
         )
-    if args.adopt_current_checkout and source_root != expected_repo:
-        raise SystemExit(
-            "--adopt-current-checkout requires this checkout to be located at "
-            f"{expected_repo}; found {source_root}"
-        )
+    if args.adopt_current_checkout:
+        require_ordinary_directory(expected_repo, label="managed repository root")
+        try:
+            resolved_expected_repo = expected_repo.resolve(strict=True)
+        except OSError as exc:
+            raise SystemExit(
+                f"managed repository root cannot be resolved: {expected_repo}: {exc}"
+            ) from exc
+        if source_root != resolved_expected_repo:
+            raise SystemExit(
+                "--adopt-current-checkout requires this checkout to be located at "
+                f"{expected_repo}; found {source_root}"
+            )
     adopted_repo = (
         expected_repo
         if resume_incomplete_install
         else SOURCE_ROOT if args.adopt_current_checkout else None
     )
-    allowed_existing = (
+    recovery = (
         validate_incomplete_adoption(
             home=home,
             repo=adopted_repo,
@@ -563,9 +696,12 @@ def main() -> None:
             harness=args.harness,
             resume_fast_forward=args.resume_fast_forward,
         )
-        if adopted_repo is not None
-        else frozenset()
+        if adopted_repo is not None and resume_incomplete_install
+        else None
     )
+    if resume_incomplete_install and recovery is None:
+        raise SystemExit("incomplete installation state disappeared during validation")
+    allowed_existing = recovery.allowed_existing if recovery is not None else frozenset()
     validate_install_root(
         home,
         adopted_repo=adopted_repo,
@@ -587,6 +723,7 @@ def main() -> None:
         print("dry-run only; no installation state written")
         return
 
+    validated_revision = recovery.revision if recovery is not None else None
     write_install_state(
         home=home,
         repository=repository,
@@ -595,7 +732,15 @@ def main() -> None:
         harness=args.harness,
         launchers=launchers,
         status="installing",
+        revision=validated_revision,
     )
+    if validated_revision is not None:
+        assert_checkout_snapshot(
+            repo=repo,
+            repository=repository,
+            revision=validated_revision,
+            phase="before refresh",
+        )
     invoke_refresh(
         home=home,
         repo=repo,
@@ -605,6 +750,13 @@ def main() -> None:
         migrate_marketplace=args.migrate_marketplace,
         migrate_from_repo=migrate_from_repo,
     )
+    if validated_revision is not None:
+        assert_checkout_snapshot(
+            repo=repo,
+            repository=repository,
+            revision=validated_revision,
+            phase="after refresh",
+        )
     write_install_state(
         home=home,
         repository=repository,
@@ -613,6 +765,7 @@ def main() -> None:
         harness=args.harness,
         launchers=launchers,
         status="ready",
+        revision=validated_revision,
     )
     print(f"installation complete: {home}")
     print(

@@ -71,6 +71,70 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "existing manager-owned paths"):
                 installer.validate_install_root(home, adopted_repo=repo)
 
+    def test_ordinary_directory_rejects_windows_reparse_metadata(self) -> None:
+        metadata = mock.Mock(
+            st_mode=stat.S_IFDIR,
+            st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT,
+        )
+        with mock.patch.object(Path, "lstat", return_value=metadata):
+            self.assertFalse(installer.is_ordinary_directory(Path("managed")))
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlink setup")
+    def test_recovery_rejects_a_linked_state_root_before_reading_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / ".oh-my-harness"
+            external_state = root / "external-state"
+            home.mkdir()
+            external_state.mkdir()
+            external_state.joinpath("install.json").write_text("{}\n", encoding="utf-8")
+            (home / "state").symlink_to(external_state, target_is_directory=True)
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "install_oh_my_harness.py",
+                    "--home",
+                    str(home),
+                    "--repository",
+                    "https://example.invalid/oh-my-harness.git",
+                ],
+            ):
+                with self.assertRaisesRegex(
+                    SystemExit,
+                    "managed state root must be an ordinary directory",
+                ):
+                    installer.main()
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlink setup")
+    def test_recovery_rejects_a_linked_repository_root_before_git_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / ".oh-my-harness"
+            external_repo = root / "external-repo"
+            (home / "state").mkdir(parents=True)
+            (home / "state" / "install.json").write_text("{}\n", encoding="utf-8")
+            external_repo.mkdir()
+            (home / "repo").symlink_to(external_repo, target_is_directory=True)
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "install_oh_my_harness.py",
+                    "--home",
+                    str(home),
+                    "--repository",
+                    "https://example.invalid/oh-my-harness.git",
+                ],
+            ):
+                with self.assertRaisesRegex(
+                    SystemExit,
+                    "managed repository root must be an ordinary directory",
+                ):
+                    installer.main()
+
     def test_dry_run_does_not_create_manager_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / ".oh-my-harness"
@@ -134,7 +198,10 @@ class InstallerTests(unittest.TestCase):
             repo = home / "repo"
             repo.mkdir(parents=True)
             repository = "https://example.invalid/oh-my-harness.git"
-            with mock.patch.object(installer, "installed_revision", return_value="abc123"):
+            with (
+                mock.patch.object(installer, "installed_revision", return_value="abc123"),
+                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
+            ):
                 launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
                 installer.write_install_state(
                     home=home,
@@ -171,6 +238,7 @@ class InstallerTests(unittest.TestCase):
                 (home / "state" / "install.json").read_text(encoding="utf-8")
             )
             self.assertEqual(state["status"], "ready")
+            self.assertEqual(state["revision"], "abc123")
 
     def test_exact_installing_state_auto_resumes_when_invoked_from_external_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -180,7 +248,10 @@ class InstallerTests(unittest.TestCase):
             external_checkout = Path(tmp) / "external-checkout"
             external_checkout.mkdir()
             repository = "https://example.invalid/oh-my-harness.git"
-            with mock.patch.object(installer, "installed_revision", return_value="abc123"):
+            with (
+                mock.patch.object(installer, "installed_revision", return_value="abc123"),
+                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
+            ):
                 launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
                 installer.write_install_state(
                     home=home,
@@ -218,6 +289,106 @@ class InstallerTests(unittest.TestCase):
                 (home / "state" / "install.json").read_text(encoding="utf-8")
             )
             self.assertEqual(state["status"], "ready")
+            self.assertEqual(state["revision"], "abc123")
+
+    def test_exact_resume_rejects_a_dirty_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".oh-my-harness"
+            repo = home / "repo"
+            repo.mkdir(parents=True)
+            repository = "https://example.invalid/oh-my-harness.git"
+            revision = "1" * 40
+            with mock.patch.object(installer, "installed_revision", return_value=revision):
+                launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
+                installer.write_install_state(
+                    home=home,
+                    repository=repository,
+                    ref="main",
+                    repo=repo,
+                    harness="codex",
+                    launchers=launchers,
+                    status="installing",
+                )
+
+            dirty = subprocess.CompletedProcess(
+                ["git", "status", "--porcelain"],
+                0,
+                stdout=" M scripts/install_oh_my_harness.py\n",
+                stderr="",
+            )
+            with (
+                mock.patch.object(installer, "installed_revision", return_value=revision),
+                mock.patch.object(installer.subprocess, "run", return_value=dirty),
+            ):
+                with self.assertRaisesRegex(SystemExit, "uncommitted changes"):
+                    installer.validate_incomplete_adoption(
+                        home=home,
+                        repo=repo,
+                        repository=repository,
+                        ref="main",
+                        harness="codex",
+                    )
+
+    def test_recovery_keeps_the_validated_revision_when_head_moves_during_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".oh-my-harness"
+            repo = home / "repo"
+            repo.mkdir(parents=True)
+            repository = "https://example.invalid/oh-my-harness.git"
+            original_revision = "1" * 40
+            changed_revision = "2" * 40
+            with mock.patch.object(
+                installer,
+                "installed_revision",
+                return_value=original_revision,
+            ):
+                launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
+                installer.write_install_state(
+                    home=home,
+                    repository=repository,
+                    ref="main",
+                    repo=repo,
+                    harness="codex",
+                    launchers=launchers,
+                    status="installing",
+                )
+
+            with (
+                mock.patch.object(installer, "SOURCE_ROOT", repo),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "install_oh_my_harness.py",
+                        "--home",
+                        str(home),
+                        "--repository",
+                        repository,
+                        "--harness",
+                        "codex",
+                    ],
+                ),
+                mock.patch.object(
+                    installer,
+                    "installed_revision",
+                    side_effect=[
+                        original_revision,
+                        original_revision,
+                        changed_revision,
+                    ],
+                ),
+                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
+                mock.patch.object(installer, "invoke_refresh") as refresh,
+            ):
+                with self.assertRaisesRegex(SystemExit, "revision changed after refresh"):
+                    installer.main()
+
+            refresh.assert_called_once()
+            state = json.loads(
+                (home / "state" / "install.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(state["status"], "installing")
+            self.assertEqual(state["revision"], original_revision)
 
     @unittest.skipUnless(shutil.which("git"), "Git fast-forward resume test")
     def test_explicit_fast_forward_resume_accepts_a_clean_pushed_descendant(self) -> None:
@@ -466,6 +637,7 @@ class InstallerTests(unittest.TestCase):
                     "expected_launcher_content",
                     return_value=expected_content,
                 ),
+                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
             ):
                 installer.write_install_state(
                     home=home,
@@ -476,7 +648,7 @@ class InstallerTests(unittest.TestCase):
                     launchers=launchers,
                     status="installing",
                 )
-                allowed = installer.validate_incomplete_adoption(
+                recovery = installer.validate_incomplete_adoption(
                     home=home,
                     repo=repo,
                     repository=repository,
@@ -484,8 +656,10 @@ class InstallerTests(unittest.TestCase):
                     harness="codex",
                 )
 
+            self.assertIsNotNone(recovery)
+            assert recovery is not None
             self.assertEqual(
-                allowed,
+                recovery.allowed_existing,
                 frozenset({home / "venv", home / "bin", home / "state"}),
             )
 
@@ -496,7 +670,10 @@ class InstallerTests(unittest.TestCase):
             repo.mkdir(parents=True)
             repository = "https://example.invalid/oh-my-harness.git"
             launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
-            with mock.patch.object(installer, "installed_revision", return_value="abc123"):
+            with (
+                mock.patch.object(installer, "installed_revision", return_value="abc123"),
+                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
+            ):
                 installer.write_install_state(
                     home=home,
                     repository=repository,
@@ -520,7 +697,7 @@ class InstallerTests(unittest.TestCase):
                         "paths",
                     },
                 )
-                allowed = installer.validate_incomplete_adoption(
+                recovery = installer.validate_incomplete_adoption(
                     home=home,
                     repo=repo,
                     repository=repository,
@@ -528,14 +705,16 @@ class InstallerTests(unittest.TestCase):
                     harness="codex",
                 )
 
+                self.assertIsNotNone(recovery)
+                assert recovery is not None
                 self.assertEqual(
-                    allowed,
+                    recovery.allowed_existing,
                     frozenset({home / "venv", home / "bin", home / "state"}),
                 )
                 installer.validate_install_root(
                     home,
                     adopted_repo=repo,
-                    allowed_existing=allowed,
+                    allowed_existing=recovery.allowed_existing,
                 )
 
                 invalid_payloads = {
