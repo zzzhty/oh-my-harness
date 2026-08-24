@@ -22,7 +22,14 @@ jobs:
         run: |
           set -euo pipefail
           old_head=$(git rev-parse HEAD)
-          cat .github/lifecycle-payload/part-* > "$RUNNER_TEMP/lifecycle.b64"
+          cat \
+            .github/lifecycle-payload/part-00 \
+            .github/lifecycle-payload/part-01 \
+            .github/lifecycle-payload/part-02 \
+            .github/lifecycle-payload/part-03 \
+            .github/lifecycle-payload/part-04 \
+            .github/lifecycle-payload/part-05 \
+            > "$RUNNER_TEMP/lifecycle.b64"
           git fetch origin main
           git reset --hard origin/main
           base64 --decode "$RUNNER_TEMP/lifecycle.b64" | gzip -dc | git apply --binary
