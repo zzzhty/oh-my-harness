@@ -1,0 +1,30 @@
+name: Withdraw premature v1.0.0 release
+
+on:
+  push:
+    branches:
+      - agent/omh-lifecycle-cli
+    paths:
+      - .github/workflows/withdraw-v1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  withdraw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete v1.0.0 release and tag if present
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_id="$(gh api "repos/${GH_REPO}/releases/tags/v1.0.0" --jq .id 2>/dev/null || true)"
+          if [ -n "$release_id" ]; then
+            gh api --method DELETE "repos/${GH_REPO}/releases/${release_id}"
+          fi
+          if gh api "repos/${GH_REPO}/git/ref/tags/v1.0.0" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/${GH_REPO}/git/refs/tags/v1.0.0"
+          fi
+          echo "v1.0.0 release/tag absent"
