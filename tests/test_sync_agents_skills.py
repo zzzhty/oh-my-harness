@@ -189,6 +189,38 @@ class SyncLayerTests(unittest.TestCase):
         self.assertFalse(sync_agents_skills.is_empty_plain_directory(reparse))
         reparse.iterdir.assert_not_called()
 
+    def test_plain_directory_does_not_require_pathlib_mount_support(self) -> None:
+        ordinary = self.sandbox.target_root
+        ordinary.mkdir(parents=True)
+
+        with (
+            mock.patch.object(
+                Path,
+                "is_mount",
+                side_effect=NotImplementedError("unsupported on Windows Python 3.11"),
+            ),
+            mock.patch.object(
+                sync_agents_skills.os.path,
+                "ismount",
+                return_value=False,
+            ) as ismount,
+        ):
+            self.assertTrue(sync_agents_skills.is_plain_directory(ordinary))
+
+        ismount.assert_called_once_with(ordinary)
+
+    def test_windows_311_junction_uses_reparse_tag_fallback(self) -> None:
+        junction = mock.Mock()
+        junction.is_junction = None
+        junction.lstat.return_value = mock.Mock(st_reparse_tag=0xA0000003)
+
+        with mock.patch.object(sync_agents_skills.os, "name", "nt"):
+            self.assertTrue(sync_agents_skills.is_junction(junction))
+
+        junction.lstat.return_value = mock.Mock(st_reparse_tag=0xA000001A)
+        with mock.patch.object(sync_agents_skills.os, "name", "nt"):
+            self.assertFalse(sync_agents_skills.is_junction(junction))
+
     def test_interrupted_directory_removal_requires_exact_empty_canonical_target(self) -> None:
         target_root = self.sandbox.target_root
         canonical = target_root / "foo"

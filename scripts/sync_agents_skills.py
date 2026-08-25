@@ -10,6 +10,12 @@ import subprocess
 from pathlib import Path
 
 from repo_skill_catalog import REPO_ROOT, SkillCatalog, load_repo_skill_catalog
+
+_WINDOWS_MOUNT_POINT_REPARSE_TAG = getattr(
+    stat,
+    "IO_REPARSE_TAG_MOUNT_POINT",
+    0xA0000003,
+)
 _WINDOWS_JUNCTION_COMMAND = (
     "$ErrorActionPreference = 'Stop'; "
     "New-Item -ItemType Junction "
@@ -26,7 +32,18 @@ def is_junction(path: Path) -> bool:
     """Return whether path is a Windows directory junction."""
 
     check = getattr(path, "is_junction", None)
-    return bool(check is not None and check())
+    if check is not None:
+        return bool(check())
+    if os.name != "nt":
+        return False
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return (
+        getattr(metadata, "st_reparse_tag", None)
+        == _WINDOWS_MOUNT_POINT_REPARSE_TAG
+    )
 
 
 def is_projection_link(path: Path) -> bool:
@@ -64,7 +81,7 @@ def is_plain_directory(path: Path) -> bool:
     if reparse_flag and file_attributes & reparse_flag:
         return False
     try:
-        if path.is_mount():
+        if os.path.ismount(path):
             return False
     except OSError:
         return False
