@@ -131,6 +131,7 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         self.assertIn("keep the candidate explicitly unverified", text)
         self.assertNotIn("independent evaluation is required when compression changes", text)
 
+    @unittest.skipIf(os.name == "nt", "POSIX Bash housekeeping example")
     def test_housekeeping_inventory_example_is_executable_bounded_and_read_only(self) -> None:
         text = HOUSEKEEPING.read_text(encoding="utf-8")
         match = re.search(r"```bash\n(?P<script>.*?)\n```", text, flags=re.DOTALL)
@@ -240,6 +241,7 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             self.assertNotIn(outside_marker, result.stdout)
             self.assertNotIn(outside_marker, without_rg.stdout)
 
+    @unittest.skipIf(os.name == "nt", "POSIX Bash housekeeping example")
     def test_housekeeping_inventory_rejects_a_non_git_target(self) -> None:
         text = HOUSEKEEPING.read_text(encoding="utf-8")
         match = re.search(r"```bash\n(?P<script>.*?)\n```", text, flags=re.DOTALL)

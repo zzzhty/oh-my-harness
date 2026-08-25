@@ -22,7 +22,7 @@ Archives remain historical unless active navigation or their current summary is 
 ## Workflow
 
 1. Read current truth: root instructions, relevant README/plugin docs, `.gitignore`, manifests, hook configuration, TODO indexes, and validation guidance.
-2. Inventory the target and ignored state:
+2. Inventory the target and ignored state. The executable block below is for POSIX Bash; on Windows, use native PowerShell commands with the same absolute-path, Git-worktree, read-only, exclusion, symlink-boundary, and exit-status gates instead of passing native Windows paths through Bash:
 
 ```bash
 set -euo pipefail
