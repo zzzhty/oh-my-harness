@@ -12,13 +12,13 @@ Keep current guidance, names, references, ownership, navigation, and validation 
 1. Identify current truth before proposing or making changes: root instructions, current overview and architecture docs, active plans, runtime guides, scripts, package commands, CI, configs, tests, or Watcher reports.
 2. Re-read the newest request and use it to freeze mode and scope. Older goals and implementation threads are background unless the request explicitly continues them.
 3. Keep current guidance separate from history. Preserve real compatibility identifiers and historical terms only where their role is explicit.
-4. Update every path people or tools follow, including hidden configuration, resolved repository skill roots, wrappers, package commands, indexes, READMEs, and runbooks.
-5. Treat broken links, stale paths, inconsistent names, failed audit commands, and failed validation as first-class failures. Fix root causes before claiming alignment.
-6. Scheduled Watcher doc audits must keep target repositories read-only and write only under `$CODEX_HOME/watcher/doc/` or an explicit output path.
+4. In implementation mode, update every active path people or tools follow, including hidden configuration, resolved repository skill roots, wrappers, package commands, indexes, READMEs, and runbooks.
+5. In report-only and scheduled modes, inventory drift, collect evidence, propose bounded fixes, and write only to a Watcher-owned report under `$CODEX_HOME/watcher/doc/` or an explicit output path; target repositories remain read-only.
+6. Treat broken links, stale paths, inconsistent names, failed audit commands, and failed validation as first-class failures in every mode. Only implementation mode repairs root causes; report-only and scheduled modes record the exact breakpoint and recommendation.
 
 ## Mode
 
-For review, audit, analysis, comparison, assessment, report-only or scheduled scans, or explicit no-edit language, run only non-mutating commands. Report evidence, findings, proposed edits, gaps, and questions without moving, renaming, deleting, archiving, or rewriting targets.
+For review, audit, analysis, comparison, assessment, report-only or scheduled scans, or explicit no-edit language, run only non-mutating commands against target repositories. The only permitted writes are Watcher-owned report or runtime state allowed by the selected mode and branch. Report evidence, findings, proposed edits, gaps, and questions without moving, renaming, deleting, archiving, or rewriting targets.
 
 Use implementation mode when the user asks to align, update, reorganize, prune, rename, fix, or otherwise make changes. Apply the smallest sufficient edits in the owning files and validate them.
 

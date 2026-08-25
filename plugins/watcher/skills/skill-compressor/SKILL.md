@@ -5,13 +5,13 @@ description: Reduce the instruction footprint of agent skills and their referenc
 
 # Skill Compressor
 
-Use this skill for behavior-preserving instruction reduction. Use `prompt-strategy-loop` when the requested change intentionally redesigns routing, permissions, safety, failure, or validation behavior. Use `skill-maintainer` when Watcher usage evidence should produce a proposal rather than direct compression. Deterministic scripts remain out of scope unless the user explicitly includes them.
+Use this skill for behavior-preserving instruction reduction. Use `workflow:prompt-strategy-loop` when the requested change intentionally redesigns routing, permissions, safety, failure, or validation behavior. Use `skill-maintainer` when Watcher usage evidence should produce a proposal rather than direct compression. Deterministic scripts remain out of scope unless the user explicitly includes them.
 
 ## Core Rule
 
 Compare the candidate with a recoverable baseline and a scoped inventory of affected meanings. A smaller file is not equivalent when trigger coverage, permissions, stop or failure behavior, validators, or unique edge cases drift.
 
-Apply the proportional review rule owned by `prompt-strategy-loop`: independent evaluation is required when compression changes invocation or routing, permissions, safety/privacy, destructive or external actions, recurring automation, persisted or external contracts, or removes a stop or validation gate. If required review is unavailable, mark the candidate unverified.
+When the inventory identifies an intentional meaning change, stop this behavior-preserving workflow and route the candidate through `workflow:prompt-strategy-loop`. Its Core Rule is the single owner of proportional review decisions. If that skill is unavailable or its required evaluation cannot run, keep the candidate explicitly unverified.
 
 Invoking this skill authorizes only the read-only semantic comparison needed for compression; mutation and unrelated delegation still follow the active request and environment.
 
@@ -27,7 +27,7 @@ Invoking this skill authorizes only the read-only semantic comparison needed for
    - remove duplicated meaning, stale history, motivation, obvious advice, and repeated examples unless one disambiguates behavior;
    - prefer positive target behavior while retaining true destructive, privacy, external-write, and source/cache guardrails.
 5. Validate only the affected surface: skill/frontmatter validation, relative links, owning plugin or domain checks when their contract changed, and `git diff --check -- <changed-paths>`.
-6. Run required semantic review against the baseline and oracle, fix blocking drift, and repeat only affected checks.
+6. Compare the candidate with the baseline and oracle, fix unintended drift, and repeat only affected checks.
 7. Refresh installed state only when activation is authorized.
 
 ## Completion

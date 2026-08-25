@@ -1,13 +1,13 @@
 ---
 name: long-running-goal
-description: Create, upgrade, execute, resume, evolve, or close a continuation-ready staged goal or strict serial Long-Running Goal Sequence with explicit milestones, gates, evidence, execution authority, runtime hard stops, and close lifecycle.
+description: Create, upgrade, execute, resume, evolve, or close a continuation-ready staged goal or strict serial Long-Running Goal Sequence only when the user explicitly requests that lifecycle action or confirms conversion; task size or duration alone is not a trigger.
 ---
 
 # Long Running Goal
 
 ## Trigger And Ready Contract
 
-Use this skill for durable multi-milestone work that must continue without chat history. Do not use it for a short one-off implementation plan.
+Use this skill only when the user explicitly requests a long-running goal by name, explicitly requests one of its lifecycle actions, or confirms a proposed conversion into one. A large, long, staged, recurring, multi-milestone, or continuation-sensitive task is not itself a trigger. Use system planning for ordinary complex work; you may suggest `long-running-goal` as an option, then wait for the user's confirmation before creating or converting its contract.
 
 A `Ready` goal records current truth, ordered work, the next milestone, gates, validation and checkpoint evidence, frozen local and external authority, runtime hard stops, close handling, and a reusable continuation prompt. Keep the goal `Draft` while required design, approval, permission, input, or placeholder work remains unresolved.
 

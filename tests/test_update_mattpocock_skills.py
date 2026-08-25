@@ -120,6 +120,29 @@ class MattPocockUpdaterTests(unittest.TestCase):
         )
         self.assertTrue(updater.target_plugin_root().is_dir())
 
+    def test_scoped_agents_contract_resolves_references_and_preserves_dirty_work(
+        self,
+    ) -> None:
+        instructions = (
+            updater.target_plugin_root() / "AGENTS.md"
+        ).read_text(encoding="utf-8")
+
+        required_contracts = (
+            "relative Markdown links and referenced resource or script paths",
+            "plugins/mattpocock-skills/skills/<selected-skill>/",
+            "Verify the resolved file exists there before reading it",
+            "git status --short -- plugins/mattpocock-skills",
+            "git diff -- plugins/mattpocock-skills",
+            "git diff --cached -- plugins/mattpocock-skills",
+            "Preserve every pre-existing uncommitted change",
+            "upstream-lock drift as a path-by-path review gate",
+            "explicit approval",
+            "overwriting or rolling back unreviewed work",
+        )
+        for contract in required_contracts:
+            with self.subTest(contract=contract):
+                self.assertIn(contract, instructions)
+
     def test_skill_tree_digest_is_stable_across_windows_checkout_semantics(self) -> None:
         posix_entries = {
             PurePosixPath("example/SKILL.md"): ("file", b"# Example\n"),

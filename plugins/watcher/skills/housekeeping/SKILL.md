@@ -25,10 +25,31 @@ Archives remain historical unless active navigation or their current summary is 
 2. Inventory the target and ignored state:
 
 ```bash
-git status --short
-git status --ignored --short
-find <target> ... -name __pycache__ -o -name .pytest_cache ...
-rg --hidden -n "<old-term>|<old-path>|<old-command>" <target> . --glob '!**/.git/**' --glob '!**/node_modules/**'
+set -euo pipefail
+: "${HOUSEKEEPING_TARGET:?set HOUSEKEEPING_TARGET to an absolute bounded path}"
+housekeeping_target=$HOUSEKEEPING_TARGET
+stale_pattern=${HOUSEKEEPING_STALE_PATTERN:-old-term|old-path|old-command}
+[[ "$housekeeping_target" == /* && -d "$housekeeping_target" ]] || {
+  printf 'invalid housekeeping target: %s\n' "$housekeeping_target" >&2
+  exit 2
+}
+git -C "$housekeeping_target" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  printf 'housekeeping target is not a Git worktree: %s\n' "$housekeeping_target" >&2
+  exit 2
+}
+git -C "$housekeeping_target" status --short
+git -C "$housekeeping_target" status --ignored --short
+find "$housekeeping_target" \
+  \( -type d \( -name .git -o -name node_modules -o -name .venv \) -prune \) -o \
+  \( -type d \( -name __pycache__ -o -name .pytest_cache \) -print \)
+rg --hidden -n \
+  --glob '!**/.git/**' \
+  --glob '!**/node_modules/**' \
+  --glob '!**/.venv/**' \
+  "$stale_pattern" "$housekeeping_target" || {
+    rg_status=$?
+    [[ $rg_status -eq 1 ]] || exit "$rg_status"
+  }
 ```
 
 3. Record the classification and reason for each candidate class.

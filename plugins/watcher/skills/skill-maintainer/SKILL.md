@@ -30,3 +30,9 @@ Use this skill to maintain or improve an agent skill from Watcher skill-domain l
 - `references/log-schema.md`: event fields and log quality.
 - `references/patch-policy.md`: proposal scope and evidence policy.
 - `references/validation-policy.md`: candidate acceptance checks.
+
+## Completion
+
+Report the target skill, evidence window and event counts, snapshot and proposal paths, the exact bounded edit or explicit no-change decision, validation commands and results, the human-review boundary, blockers and assumptions, and confirmation that the source `SKILL.md` remained unchanged.
+
+Completion requires a reviewable proposal or evidence-backed no-change result. Keep the source skill unchanged throughout this proposal workflow; any separately authorized implementation is outside this completion claim.

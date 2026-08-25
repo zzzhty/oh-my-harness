@@ -4,8 +4,8 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 
 ## Skills
 
-- `long-running-goal`: continuation-ready staged goals and strict serial Long-Running Goal Sequences with explicit lifecycle, branch routing, execution authority, runtime hard stops, evidence, and close.
-- `orchestrate-subagents`: user-requested subagent orchestration with bounded delegation, evidence consolidation, failure handling, and parent-owned integration.
+- `long-running-goal`: explicitly requested continuation-ready staged goals and strict serial Long-Running Goal Sequences with explicit lifecycle, branch routing, execution authority, runtime hard stops, evidence, and close.
+- `orchestrate-subagents`: user-requested subagent orchestration using bounded `task_name` assignments, prompt-declared permissions, evidence consolidation, failure handling, and parent-owned integration.
 - `prompt-strategy-loop`: evidence-backed prompt and agent-strategy iteration with risk-proportional evaluation and bounded writeback.
 - `sop`: standard operating procedures for repeatable manual, agent-executed, or automated workflows with explicit trigger, inputs, execution harness, permissions, ordered steps, outputs, validation evidence, allowed/forbidden actions, stop conditions, escalation, failure handling, and durable writeback.
 - `summary-in-html`: standalone HTML developer summaries and entry-first source-code walkthroughs for a project, directory, module, feature area, documentation chapter, or user-specified scope, with optional image assets when explicitly requested.

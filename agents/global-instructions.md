@@ -9,12 +9,6 @@
 - Turn repeated successful workflows into skills, scripts, plugin docs, or checklists so future runs need less re-teaching without hiding review boundaries.
 - For global subagent workflow guidance, Codex sessions use the installed note at `$CODEX_HOME/agents/operating-principles.md`; if `$CODEX_HOME` is unset, use `~/.codex/agents/operating-principles.md`. Other harnesses use only their own native support surface.
 
-## Internal identifier evolution
-
-- Use one stable semantic name, not a generation label, only for a current implementation or instruction identifier that is repository-owned, repo-local, non-public, not used outside repository source as an identity in persisted data/state or a persisted contract, and atomically replaceable across all consumers in one change. Replace superseded names across all consumers without compatibility aliases, dual reads/writes, fallbacks, duplicate paths, parallel current entities/authorities, or history-only versioning; keep revision history in Git and applicable checkpoint/validation ledgers.
-- Preserve package/release, standard/protocol/API or another external contract, migration/rollout/feature-flag, milestone/phase, user/business, immutable, persisted, archival, and historical identities. Changing a public, persisted, externally consumed, or cross-repository identity requires an inventory of consumers, existing data, and compatibility impact plus explicit scoped migration, validation, and rollback authorization; this policy grants no rename authority.
-- Classify each match before scoped edits and validate every affected consumer. Preserve archives and historical evidence; repository-wide regex or bulk renames and silent rebaselines are hard stops. When a canonical algorithm or fingerprint field, payload, or semantic changes, record the replacement, regenerate the expected value from the changed source, and validate the single current value against its oracle.
-
 ## Failure-handling policy
 
 - Surface failures directly: report the root cause, failing command/path, and exact breakpoint when known.
@@ -32,7 +26,7 @@
 ## Delegation policy
 
 - Use subagents only when the user explicitly asks for subagents or the active environment/plan authorizes them. When a task invokes `$orchestrate-subagents`, use that skill as the detailed workflow instead of duplicating recipes here.
-- Broad read-only review requests, such as PR, branch, diff, architecture, skill, prompt, docs, contract, security, or regression review, authorize read-only subagent review. This authorization does not invoke `$orchestrate-subagents` by itself. Spawn only read-only explorer/default reviewers; do not use workers or edit files. Consolidate evidence-backed findings and mark partial coverage or subagent failures explicitly.
+- Broad read-only review requests, such as PR, branch, diff, architecture, skill, prompt, docs, contract, security, or regression review, authorize read-only subagent review. This authorization does not invoke `$orchestrate-subagents` by itself. Declare read-only permission in every assignment prompt and do not grant a write scope. Consolidate evidence-backed findings and mark partial coverage or subagent failures explicitly.
 - Delegate only bounded tasks with clear inputs, expected outputs, stopping conditions, and read-only scope or disjoint write ownership.
 - Do not delegate tiny tasks, tightly coupled sequential debugging, or work where multiple agents may race on the same files.
 - Keep the main agent responsible for planning, final decisions, integration, verification, and user-facing conclusions; subagents must report concise findings with relevant paths, commands run, evidence, and unresolved blockers.

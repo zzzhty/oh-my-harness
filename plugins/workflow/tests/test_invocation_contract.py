@@ -42,6 +42,9 @@ class InvocationContractTests(unittest.TestCase):
         self.assertIn("Long-Running Goal Sequence", description)
         self.assertIn("Long-Running Goal Sequence", metadata)
         self.assertIn("continuation-ready staged goal", metadata)
+        self.assertIn("user explicitly requests", description)
+        self.assertIn("confirms conversion", description)
+        self.assertIn("task size or duration alone is not a trigger", description)
         self.assertNotIn("automatic handoffs", metadata)
 
     def test_orchestrate_trigger_is_scoped_to_user_requested_subagents(self) -> None:
@@ -58,6 +61,37 @@ class InvocationContractTests(unittest.TestCase):
         self.assertNotIn("migration", description)
         self.assertNotIn("allow_implicit_invocation: false", metadata)
         self.assertIn("user-requested Codex subagents", metadata)
+        self.assertIn("task_name assignments", metadata)
+        self.assertIn("prompt-declared permissions", metadata)
+
+    def test_summary_document_types_have_distinct_authoring_routes(self) -> None:
+        skill = (SUMMARY_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        common = skill.split("## Common Evidence Inventory", 1)[1].split(
+            "## Document-Type Routing", 1
+        )[0]
+        routing = skill.split("## Document-Type Routing", 1)[1].split(
+            "## Shared Artifact Steps", 1
+        )[0]
+        summary_route = next(
+            line for line in routing.splitlines() if "For every `summary`" in line
+        )
+        walkthrough_route = next(
+            line for line in routing.splitlines() if "For `source_walkthrough`" in line
+        )
+
+        self.assertIn("collect_summary_inputs.py", common)
+        self.assertIn("source-of-truth status", common)
+        self.assertNotIn("chapter_contract.md", common)
+        self.assertNotIn("source_walkthrough_contract.md", common)
+        self.assertNotIn("complete caller", common)
+
+        self.assertIn("references/chapter_contract.md", summary_route)
+        self.assertIn("every `summary`", summary_route)
+        self.assertNotIn("source_walkthrough_contract.md", summary_route)
+
+        self.assertIn("references/source_walkthrough_contract.md", walkthrough_route)
+        self.assertIn("complete caller, handoff, and return route", walkthrough_route)
+        self.assertNotIn("chapter_contract.md", walkthrough_route)
 
     def test_prompt_strategy_uses_authorized_evaluators_without_cross_invocation(self) -> None:
         prompt_strategy = (
@@ -69,16 +103,17 @@ class InvocationContractTests(unittest.TestCase):
         self.assertNotIn("current environment exposes subagent tools", prompt_strategy)
 
     def test_broad_review_authority_and_orchestration_invocation_are_separate(self) -> None:
-        root_guidance = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        global_guidance = (
+            REPO_ROOT / "agents" / "global-instructions.md"
+        ).read_text(encoding="utf-8")
         support_note = (REPO_ROOT / "agents" / "operating-principles.md").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("Broad read-only review requests", root_guidance)
-        self.assertIn("does not invoke `$orchestrate-subagents`", root_guidance)
-        self.assertIn("Root `AGENTS.md` owns global authority", support_note)
+        self.assertIn("Broad read-only review requests", global_guidance)
+        self.assertIn("does not invoke `$orchestrate-subagents`", global_guidance)
+        self.assertIn("`agents/global-instructions.md` owns global authority", support_note)
         self.assertIn("does not invoke `$orchestrate-subagents` by itself", support_note)
-        self.assertIn("references/subagent-recipes.md", support_note)
 
 
 if __name__ == "__main__":

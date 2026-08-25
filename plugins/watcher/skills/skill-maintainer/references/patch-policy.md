@@ -10,4 +10,4 @@ Acceptable proposal types:
 
 Do not propose full rewrites, low-risk one-off rules, user secrets/private data, long task-specific detail, or runtime behavior that automatically changes source skills without review.
 
-Every proposal should include evidence window and event counts, successes/failures/user corrections, proposed diff or exact edit, risk notes, and validation plan.
+Every proposal must include evidence window and event counts, successes/failures/user corrections, proposed diff or exact edit, risk notes, and validation plan.

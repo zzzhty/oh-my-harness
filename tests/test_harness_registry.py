@@ -76,7 +76,7 @@ class HarnessRegistryTests(unittest.TestCase):
         )
         self.assertEqual(
             self.registry.instructions_migration.stage,
-            "source-switched",
+            "semantic-split",
         )
         self.assertEqual(
             self.registry.instructions_migration.peer_source,
@@ -84,7 +84,7 @@ class HarnessRegistryTests(unittest.TestCase):
         )
         self.assertEqual(
             self.registry.instructions_migration.required_predecessor_revision,
-            "adfb4c83497c2067b600546d9a579a7013b7ed14",
+            "c1dfff914bd5c078138f9323b15e32de27527074",
         )
 
     def test_registry_schema_version_is_an_iso_date_shared_by_both_authorities(self) -> None:
@@ -177,21 +177,48 @@ class HarnessRegistryTests(unittest.TestCase):
         migration["peer"] = "AGENTS.md"
         migration.pop("requiredPredecessorRevision")
         with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.joinpath("agents").mkdir(parents=True)
+            repo.joinpath("AGENTS.md").write_text("same\n", encoding="utf-8")
+            repo.joinpath("agents/global-instructions.md").write_text(
+                "same\n", encoding="utf-8"
+            )
             path = Path(tmp) / "registry.json"
             write_registry(path, original)
             with self.assertRaisesRegex(
                 HarnessRegistryError,
                 "requiredPredecessorRevision is required",
             ):
-                load_harness_registry(path)
+                load_harness_registry(path, repo_root=repo)
 
             migration["requiredPredecessorRevision"] = "a" * 40
             write_registry(path, original)
-            registry = load_harness_registry(path)
+            registry = load_harness_registry(path, repo_root=repo)
             self.assertEqual(
                 registry.instructions_migration.required_predecessor_revision,
                 "a" * 40,
             )
+
+    def test_semantic_split_allows_the_global_and_project_sources_to_diverge(self) -> None:
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.joinpath("agents").mkdir(parents=True)
+            repo.joinpath("AGENTS.md").write_text(
+                "project routing\n", encoding="utf-8"
+            )
+            repo.joinpath("agents/global-instructions.md").write_text(
+                "global policy\n", encoding="utf-8"
+            )
+            registry_path = Path(tmp) / "registry.json"
+            write_registry(registry_path, original)
+
+            registry = load_harness_registry(registry_path, repo_root=repo)
+
+        self.assertEqual(
+            registry.instructions_source,
+            repo.resolve(strict=False) / "agents/global-instructions.md",
+        )
 
     def test_instruction_stage_requires_its_canonical_path_orientation(self) -> None:
         original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))

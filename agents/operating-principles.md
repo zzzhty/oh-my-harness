@@ -1,6 +1,6 @@
 # Agent Operating Principles — Repository Map
 
-This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md`. Root `AGENTS.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. This file maps those rules to `oh-my-harness` paths and reusable workflow surfaces; it does not expand their authority.
+This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md`. `agents/global-instructions.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. Root `AGENTS.md` owns only `oh-my-harness` repository routing and deltas. This file maps those owners to reusable workflow surfaces; it does not expand their authority.
 
 ## Managed Source And Target
 
@@ -15,8 +15,9 @@ Edit the repository source, not the installed target. `scripts/sync_codex_agents
 
 | Concern | Repository owner |
 | --- | --- |
-| Global agent behavior, mutation boundaries, failure handling, test policy, and delegation authority | `AGENTS.md` |
-| Repository-specific support paths and role-label mapping | this file |
+| Global agent behavior, mutation boundaries, failure handling, test policy, and delegation authority | `agents/global-instructions.md` |
+| Repository-local routing and conditional guidance | root `AGENTS.md` |
+| Installed Codex support paths and assignment mapping | this file |
 | Reusable workflow behavior | `plugins/*/skills/*/SKILL.md` and the skill's direct references |
 | Plugin/runtime architecture and commands | the owning plugin `README.md`, scripts, and validators |
 | Active multi-turn work | `docs/todo/README.md` and the named active plan or goal |
@@ -30,36 +31,33 @@ Choose the narrowest owner that future agents can inspect. Do not duplicate a gl
 Keep capability, authority, and workflow invocation separate:
 
 - The harness exposes subagent capability.
-- Root `AGENTS.md` or an active plan authorizes delegation and write scope.
+- `agents/global-instructions.md` or an active plan authorizes delegation and write scope.
 - `$orchestrate-subagents` defines the detailed workflow only after the user explicitly requests that skill, subagents, parallel agents, or multi-agent delegation.
-- Broad read-only review authorization comes from root `AGENTS.md`; it does not invoke `$orchestrate-subagents` by itself.
+- Broad read-only review authorization comes from `agents/global-instructions.md`; it does not invoke `$orchestrate-subagents` by itself.
 
 For an invoked orchestration workflow, read:
 
 ```text
 plugins/workflow/skills/orchestrate-subagents/SKILL.md
-plugins/workflow/skills/orchestrate-subagents/references/subagent-recipes.md
 ```
 
-The skill owns slicing, assignment contracts, disjoint worker ownership, waiting, partial coverage, and consolidation. Root `AGENTS.md` remains the authority for whether delegation or mutation is allowed and for how failures affect integration.
+The skill owns branch routing, slicing, assignment contracts, disjoint write ownership, waiting, partial coverage, and consolidation. `agents/global-instructions.md` remains the authority for whether delegation or mutation is allowed and for how failures affect integration.
 
-## Built-In Roles And Labels
+## Assignments And Permissions
 
-Use built-in roles with task-local labels unless a separately approved plan proves that a custom agent is necessary.
+Use one unique `task_name` per assignment. The assignment prompt carries the task, context, permission, expected output, stop condition, and boundaries.
 
-| Role | Default use | Example labels |
-| --- | --- | --- |
-| `explorer` | Read-only mapping and evidence collection | `code-mapper`, `schema-mapper`, `doc-inventory-mapper` |
-| `default` | Review, triage, planning, validation, or evaluation | `implementation-reviewer`, `test-verifier`, `doc-drift-reviewer` |
-| `worker` | Authorized implementation in an exact disjoint write scope | `slice-a-implementer`, `api-adapter` |
+- A read-only assignment names the bounded inspection surface and explicitly forbids edits and commits.
+- An implementation assignment names every disjoint writable path and keeps shared files, generated artifacts, integration, and cross-slice validation parent-owned.
+- `task_name` identifies the assignment; it does not grant a role, capability, mutation authority, or a persistent agent identity.
 
-Labels describe the assignment; they are not custom-agent identities. Shared files, cross-slice integration, final validation, and user-facing conclusions remain parent-owned under the root policy and the invoked skill.
+The parent accounts for every selected assignment and independently reviews its evidence before integration.
 
 ## Custom-Agent Boundary
 
 This repository does not maintain or install custom-agent preset TOML. Add one only through a separate active plan that records:
 
-- the repeated workflow that built-in roles plus labels cannot express;
+- the repeated workflow that `task_name` assignments plus prompt-declared permissions cannot express;
 - model, sandbox, fallback, and availability behavior;
 - ownership and parent-integration boundaries;
 - sync validation and rollback;

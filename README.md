@@ -4,7 +4,7 @@ Registry-managed distribution of personal development skills and global instruct
 
 This repository is the development mainline for the plugins and personal Codex configuration listed below. Edit the source copies here, then reinstall or refresh the Codex plugin cache when a change should be available to new Codex sessions.
 
-`AGENTS.md` is also maintained here and distributed to the global instructions path owned by the selected harness.
+`agents/global-instructions.md` is the registry-selected global instructions source. Root `AGENTS.md` contains only repository-local routing and is not distributed to harness-global targets.
 
 ## Plugins
 
@@ -156,9 +156,9 @@ subagents to review this branch against main.` The full workflow lives in
 `plugins/workflow/skills/orchestrate-subagents/SKILL.md`. Keep root docs
 limited to install, validation, and entry-point guidance.
 
-The orchestration workflow uses Codex's built-in subagent roles, such as
-`explorer`, `default`, and `worker`, with task-local assignment labels like
-`code-mapper` and `test-verifier`. The managed support file lives in
+The orchestration workflow identifies each bounded assignment with a unique
+`task_name`; its assignment prompt declares read-only permission or an exact
+disjoint write scope. The managed support file lives in
 `agents/operating-principles.md`; repo-facing notes live in
 `docs/codex-agent-support.md`. Local custom-agent preset TOML is not maintained
 in this repository.
@@ -399,15 +399,16 @@ bounded legacy config/cache plan. Run
 marketplace, retire the old selectors and source, and remove the validated old
 cache namespace. The closure check rejects any remaining retired state.
 The registry `schemaVersion` is an ISO calendar date (`YYYY-MM-DD`), currently
-`2026-08-22`; advance it only when the registry schema changes.
+`2026-08-25`; advance it only when the registry schema changes.
 
 `--migrate-from-repo <absolute-path>` is independent of marketplace discovery:
-it authorizes only recognition of an exact former repo-owned Codex instructions
-symlink and, when relocation has already made that exact retired local
-marketplace source unavailable, detaches only the broken source registration so
-Codex discovery can continue. Retired selectors and cache remain until the new
-marketplace passes closure. This does not make the former path a fallback
-checkout or compatibility alias; dry-run stops at this detachment breakpoint.
+it authorizes only recognition of the former checkout's exact registry-declared
+current and peer instruction sources and, when relocation has made that retired
+local marketplace source unavailable, detaches only the broken source
+registration so Codex discovery can continue. Retired selectors and cache
+remain until the new marketplace passes closure. This does not make the former
+path a fallback checkout or compatibility alias; dry-run stops at this
+detachment breakpoint.
 
 `--yes` never authorizes replacement of a different existing instructions file. That action always requires a live confirmation after the target type and content digest are shown.
 

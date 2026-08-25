@@ -9,9 +9,9 @@
       "current": "agents/global-instructions.md",
       "migration": {
         "id": "split-global-project-instructions",
-        "stage": "source-switched",
+        "stage": "semantic-split",
         "peer": "AGENTS.md",
-        "requiredPredecessorRevision": "adfb4c83497c2067b600546d9a579a7013b7ed14"
+        "requiredPredecessorRevision": "c1dfff914bd5c078138f9323b15e32de27527074"
       }
     }
   },
