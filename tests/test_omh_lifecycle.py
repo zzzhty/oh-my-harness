@@ -132,6 +132,24 @@ class OmhCliTests(unittest.TestCase):
         self.assertEqual(args.targets, ["codex"])
         self.assertTrue(args.repair)
 
+    def test_internal_refresh_forwards_only_the_active_operation_id(self) -> None:
+        args = argparse.Namespace(
+            codex_home=None,
+            codex=None,
+            yes=True,
+            dry_run=False,
+            repair=False,
+            migrate_marketplace=False,
+            migrate_from_repo=None,
+            operation_id="op-1",
+        )
+        command = omh._common_refresh_args(
+            args,
+            home=Path("/manager"),
+            harness="zcode",
+        )
+        self.assertEqual(command[-2:], ["--operation-id", "op-1"])
+
     def test_latest_stable_tag_uses_semver_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
@@ -393,8 +411,14 @@ class UpdateTransactionTests(unittest.TestCase):
         for repo in (writer,):
             subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
             subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+        (writer / ".agents/harnesses").mkdir(parents=True)
+        (writer / ".agents/harnesses/registry.json").write_text(
+            json.dumps({"sources": {"instructions": "AGENTS.md"}}) + "\n",
+            encoding="utf-8",
+        )
+        (writer / "AGENTS.md").write_text("instructions\n", encoding="utf-8")
         (writer / "marker.txt").write_text("old\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(writer), "add", "marker.txt"], check=True)
+        subprocess.run(["git", "-C", str(writer), "add", "."], check=True)
         subprocess.run(["git", "-C", str(writer), "commit", "-qm", "old"], check=True)
         subprocess.run(["git", "-C", str(writer), "branch", "-M", "main"], check=True)
         subprocess.run(["git", "-C", str(writer), "push", "-qu", "origin", "main"], check=True)
@@ -538,6 +562,13 @@ class UpdateTransactionTests(unittest.TestCase):
             self.assertEqual(manager["revision"], new)
             self.assertEqual(manager["bundleIdentity"], "sha256:new")
             self.assertFalse(manager_state.current_operation_file(home).exists())
+            history = list(manager_state.operation_history_dir(home).glob("*.json"))
+            self.assertEqual(len(history), 1)
+            operation = json.loads(history[0].read_text(encoding="utf-8"))
+            self.assertEqual(
+                operation["before"]["instructionsSource"]["sha256"],
+                operation["target"]["instructionsSource"]["sha256"],
+            )
 
     def test_failed_new_cli_rolls_checkout_and_state_back(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -579,6 +610,215 @@ class UpdateTransactionTests(unittest.TestCase):
             self.assertFalse(manager_state.current_operation_file(home).exists())
 
 
+class InstructionMigrationTransitionTests(unittest.TestCase):
+    @staticmethod
+    def migration_source(stage: str, *, predecessor: str | None = None) -> dict:
+        current, peer = omh.INSTRUCTIONS_MIGRATION_ORIENTATION[stage]
+        migration = {
+            "id": omh.INSTRUCTIONS_MIGRATION_ID,
+            "stage": stage,
+            "peer": peer,
+            "peerSha256": "1" * 64,
+        }
+        if predecessor is not None:
+            migration["requiredPredecessorRevision"] = predecessor
+        return {
+            "path": current,
+            "sha256": "1" * 64,
+            "migration": migration,
+        }
+
+    def test_required_predecessor_blocks_a_direct_jump(self) -> None:
+        predecessor = "a" * 40
+        before_source = {"path": "AGENTS.md", "sha256": "1" * 64}
+        target_source = self.migration_source(
+            "source-switched", predecessor=predecessor
+        )
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                return_value=self.migration_source("bridge-ready"),
+            ),
+            mock.patch.object(
+                omh,
+                "_git",
+                side_effect=(
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 1, "", "not ancestor"),
+                ),
+            ),
+            self.assertRaisesRegex(SystemExit, f"omh update --to {predecessor}"),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=before_source,
+                target_source=target_source,
+            )
+
+    def test_predecessor_must_be_the_same_migration_and_exact_previous_stage(self) -> None:
+        predecessor = "a" * 40
+        target_source = self.migration_source(
+            "semantic-split", predecessor=predecessor
+        )
+        wrong_stage = self.migration_source("bridge-ready")
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                return_value=wrong_stage,
+            ),
+            mock.patch.object(omh, "_git") as git,
+            self.assertRaisesRegex(SystemExit, "not the exact previous stage"),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=self.migration_source("source-switched"),
+                target_source=target_source,
+            )
+        git.assert_not_called()
+
+        wrong_id = self.migration_source("source-switched")
+        wrong_id["migration"]["id"] = "other-migration"
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                return_value=wrong_id,
+            ),
+            self.assertRaisesRegex(SystemExit, "different migration id"),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=self.migration_source("source-switched"),
+                target_source=target_source,
+            )
+
+    def test_predecessor_must_exist_and_be_an_ancestor_of_the_target(self) -> None:
+        predecessor = "a" * 40
+        target_source = self.migration_source(
+            "source-switched", predecessor=predecessor
+        )
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                side_effect=SystemExit("has no regular file"),
+            ),
+            self.assertRaisesRegex(SystemExit, "has no regular file"),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=self.migration_source("bridge-ready"),
+                target_source=target_source,
+            )
+
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                return_value=self.migration_source("bridge-ready"),
+            ),
+            mock.patch.object(
+                omh,
+                "_git",
+                return_value=subprocess.CompletedProcess([], 1, "", "not ancestor"),
+            ),
+            self.assertRaisesRegex(SystemExit, "not an ancestor of the target"),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=self.migration_source("bridge-ready"),
+                target_source=target_source,
+            )
+
+    def test_git_ancestry_failure_is_not_reported_as_a_missing_checkpoint(self) -> None:
+        predecessor = "a" * 40
+        with (
+            mock.patch.object(
+                omh,
+                "_instruction_source_at_revision",
+                return_value=self.migration_source("bridge-ready"),
+            ),
+            mock.patch.object(
+                omh,
+                "_git",
+                return_value=subprocess.CompletedProcess([], 128, "", "git failed"),
+            ),
+            self.assertRaisesRegex(
+                SystemExit,
+                "cannot validate instruction source migration target ancestry.*git failed",
+            ),
+        ):
+            omh._validate_instruction_transition(
+                Path("/repo"),
+                before_revision="b" * 40,
+                target_revision="c" * 40,
+                before_source=self.migration_source("bridge-ready"),
+                target_source=self.migration_source(
+                    "source-switched", predecessor=predecessor
+                ),
+            )
+
+    def test_resume_guard_precedes_manager_and_harness_mutation(self) -> None:
+        operation = {
+            "operationId": "op-1",
+            "command": "update",
+            "phase": "tooling-ready",
+            "before": {"revision": "a" * 40},
+            "target": {"revision": "b" * 40},
+        }
+        with (
+            mock.patch.object(omh, "load_current_operation", return_value=operation),
+            mock.patch.object(
+                omh,
+                "_journal_instruction_transition",
+                side_effect=SystemExit("bridge checkpoint first"),
+            ),
+            mock.patch.object(omh, "write_manager") as write_manager,
+            mock.patch.object(omh, "_refresh_one") as refresh,
+            self.assertRaisesRegex(SystemExit, "bridge checkpoint first"),
+        ):
+            omh.command_resume_update(
+                argparse.Namespace(home="/manager", operation_id="op-1")
+            )
+        write_manager.assert_not_called()
+        refresh.assert_not_called()
+
+    def test_missing_revision_blob_is_reported_without_subprocess_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(
+                ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(repo), "config", "user.name", "Test"],
+                check=True,
+            )
+            repo.joinpath("marker").write_text("x\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repo), "add", "marker"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+            revision = subprocess.check_output(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+
+            with self.assertRaisesRegex(SystemExit, "has no regular file"):
+                omh._git_blob(repo, revision, "missing")
+
+
 class RemoveStateTransactionTests(unittest.TestCase):
     def test_remove_failure_preserves_desired_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -609,6 +849,29 @@ class RemoveStateTransactionTests(unittest.TestCase):
             write_desired.assert_not_called()
 
 
+class ManagerRepairInstructionTests(unittest.TestCase):
+    def test_manager_repair_does_not_claim_operation_journal_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            desired = {"harnesses": ["zcode"]}
+            with (
+                mock.patch.object(omh, "ManagerLock"),
+                mock.patch.object(omh, "_state_context", return_value=({}, desired)),
+                mock.patch.object(omh, "_bootstrap_tooling"),
+                mock.patch("install_oh_my_harness.write_launchers"),
+                mock.patch.object(omh, "_refresh_one") as refresh,
+                mock.patch.object(omh, "_write_harness_state"),
+            ):
+                self.assertEqual(
+                    omh.command_manager_repair(argparse.Namespace(home=str(home))),
+                    0,
+                )
+
+            refresh_args = refresh.call_args.args[0]
+            self.assertIsNone(refresh_args.operation_id)
+            self.assertTrue(refresh.call_args.kwargs["check_after"])
+
+
 class InstructionRemovalTests(unittest.TestCase):
     def test_remove_current_managed_copy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -619,8 +882,13 @@ class InstructionRemovalTests(unittest.TestCase):
             target.write_text("managed\n", encoding="utf-8")
             plan = SimpleNamespace(
                 instructions_source=source,
+                instructions_migration=SimpleNamespace(peer_source=root / "peer.md"),
                 instructions_target=target,
+                instructions_materialization="copy",
                 harness_id="zcode",
+            )
+            plan.instructions_migration.peer_source.write_text(
+                "peer\n", encoding="utf-8"
             )
             remove_instruction_sync(plan, dry_run=False)
             self.assertFalse(target.exists())
@@ -634,8 +902,13 @@ class InstructionRemovalTests(unittest.TestCase):
             target.write_text("user changed\n", encoding="utf-8")
             plan = SimpleNamespace(
                 instructions_source=source,
+                instructions_migration=SimpleNamespace(peer_source=root / "peer.md"),
                 instructions_target=target,
+                instructions_materialization="copy",
                 harness_id="zcode",
+            )
+            plan.instructions_migration.peer_source.write_text(
+                "peer\n", encoding="utf-8"
             )
             with self.assertRaisesRegex(SystemExit, "changed or unmanaged"):
                 remove_instruction_sync(plan, dry_run=False)

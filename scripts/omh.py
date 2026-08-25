@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -14,9 +15,14 @@ import tempfile
 import textwrap
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Iterable, Sequence
 
+from harness_registry import (
+    INSTRUCTIONS_MIGRATION_ORIENTATION,
+    INSTRUCTIONS_MIGRATION_ID,
+    INSTRUCTIONS_MIGRATION_STAGES,
+)
 from manager_paths import (
     PRODUCT_NAME,
     bin_path,
@@ -58,6 +64,11 @@ KNOWN_COMMANDS = {
     "_resume-rollback",
 }
 SEMVER_TAG = re.compile(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)$")
+INSTRUCTION_REGISTRY_PATH = ".agents/harnesses/registry.json"
+INSTRUCTION_MIGRATION_STAGE_ORDER = {
+    stage: index for index, stage in enumerate(INSTRUCTIONS_MIGRATION_STAGES)
+}
+GIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _base_python() -> Path:
@@ -89,6 +100,316 @@ def _git(repo: Path, *args: str, capture: bool = True, check: bool = True) -> su
 def _git_text(repo: Path, *args: str) -> str:
     result = _git(repo, *args)
     return result.stdout.strip()
+
+
+def _git_blob(repo: Path, revision: str, relative_path: str) -> bytes:
+    object_name = f"{revision}:{relative_path}"
+    try:
+        tree = subprocess.run(
+            ["git", "-C", str(repo), "ls-tree", revision, "--", relative_path],
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise SystemExit(f"cannot inspect update revision {revision[:12]}: {exc}") from exc
+    if tree.returncode != 0:
+        detail = tree.stderr.decode("utf-8", errors="replace").strip()
+        raise SystemExit(
+            f"cannot inspect update revision {revision[:12]} at {relative_path}: {detail}"
+        )
+    try:
+        mode = tree.stdout.decode("utf-8", errors="strict").strip()
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"update revision {revision[:12]} has a non-UTF-8 tree entry at {relative_path}"
+        ) from exc
+    if not mode or mode.split(maxsplit=1)[0] not in {"100644", "100755"}:
+        raise SystemExit(
+            f"update revision {revision[:12]} has no regular file at {relative_path}"
+        )
+    try:
+        blob = subprocess.run(
+            ["git", "-C", str(repo), "cat-file", "blob", object_name],
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise SystemExit(
+            f"cannot read update revision {revision[:12]} at {relative_path}: {exc}"
+        ) from exc
+    if blob.returncode != 0:
+        detail = blob.stderr.decode("utf-8", errors="replace").strip()
+        raise SystemExit(
+            f"cannot read update revision {revision[:12]} at {relative_path}: {detail}"
+        )
+    return blob.stdout
+
+
+def _instruction_relative_path(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"{label} must be a non-empty relative path")
+    raw = value.strip()
+    posix = PurePosixPath(raw)
+    windows = PureWindowsPath(raw)
+    parts = raw.split("/")
+    if (
+        "\\" in raw
+        or posix.is_absolute()
+        or windows.is_absolute()
+        or bool(windows.drive)
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise SystemExit(f"{label} must be a normalized repository-relative path")
+    return raw
+
+
+def _instruction_source_at_revision(repo: Path, revision: str) -> dict[str, object]:
+    try:
+        registry_text = _git_blob(
+            repo,
+            revision,
+            INSTRUCTION_REGISTRY_PATH,
+        ).decode("utf-8", errors="strict")
+        payload = json.loads(registry_text)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise SystemExit(
+            f"update revision {revision[:12]} has an invalid harness registry: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(
+            f"update revision {revision[:12]} harness registry must be an object"
+        )
+    sources = payload.get("sources")
+    if not isinstance(sources, dict):
+        raise SystemExit(
+            f"update revision {revision[:12]} harness registry has no sources object"
+        )
+    instructions = sources.get("instructions")
+    migration_record: dict[str, object] | None = None
+    if isinstance(instructions, str):
+        current = _instruction_relative_path(
+            instructions,
+            label="legacy registry instructions source",
+        )
+    elif isinstance(instructions, dict):
+        if set(instructions) != {"current", "migration"}:
+            raise SystemExit(
+                f"update revision {revision[:12]} has unsupported instruction source fields"
+            )
+        current = _instruction_relative_path(
+            instructions.get("current"),
+            label="registry instructions current source",
+        )
+        migration = instructions.get("migration")
+        if not isinstance(migration, dict):
+            raise SystemExit("registry instruction migration must be an object")
+        allowed = {"id", "stage", "peer", "requiredPredecessorRevision"}
+        if set(migration) - allowed or not {"id", "stage", "peer"} <= set(migration):
+            raise SystemExit("registry instruction migration fields are invalid")
+        migration_id = migration.get("id")
+        stage = migration.get("stage")
+        if migration_id != INSTRUCTIONS_MIGRATION_ID:
+            raise SystemExit(
+                f"registry instruction migration id must be {INSTRUCTIONS_MIGRATION_ID!r}"
+            )
+        if stage not in INSTRUCTION_MIGRATION_STAGE_ORDER:
+            raise SystemExit(f"registry instruction migration stage is invalid: {stage!r}")
+        peer = _instruction_relative_path(
+            migration.get("peer"),
+            label="registry instruction migration peer",
+        )
+        if peer == current:
+            raise SystemExit("registry instruction current source and peer must differ")
+        expected_current, expected_peer = INSTRUCTIONS_MIGRATION_ORIENTATION[stage]
+        if current != expected_current or peer != expected_peer:
+            raise SystemExit(
+                "registry instruction paths do not match the "
+                f"{stage} migration orientation: current={expected_current!r}, "
+                f"peer={expected_peer!r}"
+            )
+        predecessor = migration.get("requiredPredecessorRevision")
+        if predecessor is not None and (
+            not isinstance(predecessor, str) or not GIT_REVISION.fullmatch(predecessor)
+        ):
+            raise SystemExit(
+                "registry instruction required predecessor must be a lowercase 40-character Git SHA"
+            )
+        if stage == "bridge-ready" and predecessor is not None:
+            raise SystemExit("bridge-ready instruction migration cannot require a predecessor")
+        if stage != "bridge-ready" and predecessor is None:
+            raise SystemExit(f"{stage} instruction migration requires a predecessor")
+        peer_blob = _git_blob(repo, revision, peer)
+        current_blob = _git_blob(repo, revision, current)
+        if stage in {"bridge-ready", "source-switched"} and current_blob != peer_blob:
+            raise SystemExit(
+                f"instruction sources are not byte-identical during {stage}"
+            )
+        migration_record = {
+            "id": migration_id,
+            "stage": stage,
+            "peer": peer,
+            "peerSha256": hashlib.sha256(peer_blob).hexdigest(),
+        }
+        if predecessor is not None:
+            migration_record["requiredPredecessorRevision"] = predecessor
+    else:
+        raise SystemExit(
+            f"update revision {revision[:12]} has an invalid instructions source"
+        )
+    source_blob = _git_blob(repo, revision, current)
+    record: dict[str, object] = {
+        "path": current,
+        "sha256": hashlib.sha256(source_blob).hexdigest(),
+    }
+    if migration_record is not None:
+        record["migration"] = migration_record
+    return record
+
+
+def _validate_instruction_transition(
+    repo: Path,
+    *,
+    before_revision: str,
+    target_revision: str,
+    before_source: dict[str, object],
+    target_source: dict[str, object],
+) -> None:
+    before_migration = before_source.get("migration")
+    target_migration = target_source.get("migration")
+    if isinstance(target_migration, dict):
+        predecessor = target_migration.get("requiredPredecessorRevision")
+        if isinstance(predecessor, str):
+            predecessor_source = _instruction_source_at_revision(repo, predecessor)
+            predecessor_migration = predecessor_source.get("migration")
+            if not isinstance(predecessor_migration, dict):
+                raise SystemExit(
+                    "instruction source migration predecessor has no migration contract"
+                )
+            if predecessor_migration.get("id") != target_migration.get("id"):
+                raise SystemExit(
+                    "instruction source migration predecessor has a different migration id"
+                )
+            target_stage = target_migration.get("stage")
+            predecessor_stage = predecessor_migration.get("stage")
+            assert isinstance(target_stage, str)
+            expected_index = INSTRUCTION_MIGRATION_STAGE_ORDER[target_stage] - 1
+            if expected_index < 0 or predecessor_stage != INSTRUCTIONS_MIGRATION_STAGES[expected_index]:
+                raise SystemExit(
+                    "instruction source migration predecessor is not the exact previous stage"
+                )
+            target_ancestry = _git(
+                repo,
+                "merge-base",
+                "--is-ancestor",
+                predecessor,
+                target_revision,
+                check=False,
+            )
+            if target_ancestry.returncode == 1:
+                raise SystemExit(
+                    "instruction source migration predecessor is not an ancestor "
+                    "of the target revision"
+                )
+            if target_ancestry.returncode != 0:
+                detail = (target_ancestry.stderr or target_ancestry.stdout).strip()
+                raise SystemExit(
+                    "cannot validate instruction source migration target ancestry: "
+                    f"git exited {target_ancestry.returncode}: {detail or 'no detail'}"
+                )
+            current_ancestry = _git(
+                repo,
+                "merge-base",
+                "--is-ancestor",
+                predecessor,
+                before_revision,
+                check=False,
+            )
+            if current_ancestry.returncode == 1:
+                raise SystemExit(
+                    "instruction source migration requires the bridge checkpoint first; "
+                    f"run `omh update --to {predecessor}`"
+                )
+            if current_ancestry.returncode != 0:
+                detail = (current_ancestry.stderr or current_ancestry.stdout).strip()
+                raise SystemExit(
+                    "cannot validate instruction source migration current ancestry: "
+                    f"git exited {current_ancestry.returncode}: {detail or 'no detail'}"
+                )
+    if isinstance(before_migration, dict) and isinstance(target_migration, dict):
+        if before_migration.get("id") != target_migration.get("id"):
+            raise SystemExit("instruction source migration id changed across update")
+        before_stage = before_migration.get("stage")
+        target_stage = target_migration.get("stage")
+        assert isinstance(before_stage, str) and isinstance(target_stage, str)
+        if abs(
+            INSTRUCTION_MIGRATION_STAGE_ORDER[target_stage]
+            - INSTRUCTION_MIGRATION_STAGE_ORDER[before_stage]
+        ) > 1:
+            raise SystemExit(
+                "instruction source migration checkpoints must be traversed in order"
+            )
+    elif isinstance(before_migration, dict):
+        before_stage = before_migration.get("stage")
+        if (
+            isinstance(before_stage, str)
+            and INSTRUCTION_MIGRATION_STAGE_ORDER[before_stage]
+            >= INSTRUCTION_MIGRATION_STAGE_ORDER["source-switched"]
+        ):
+            raise SystemExit(
+                "cannot leave an active instruction source migration after source cutover"
+            )
+
+
+def _instruction_transition(
+    repo: Path,
+    before_revision: str,
+    target_revision: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    before_source = _instruction_source_at_revision(repo, before_revision)
+    target_source = _instruction_source_at_revision(repo, target_revision)
+    _validate_instruction_transition(
+        repo,
+        before_revision=before_revision,
+        target_revision=target_revision,
+        before_source=before_source,
+        target_source=target_source,
+    )
+    return before_source, target_source
+
+
+def _journal_instruction_transition(
+    home: Path,
+    operation: dict,
+) -> dict:
+    before = operation.get("before")
+    target = operation.get("target")
+    if not isinstance(before, dict) or not isinstance(target, dict):
+        raise SystemExit("update operation journal has invalid transition state")
+    before_revision = before.get("revision")
+    target_revision = target.get("revision")
+    if not isinstance(before_revision, str) or not isinstance(target_revision, str):
+        raise SystemExit("update operation journal has invalid transition revisions")
+    before_source, target_source = _instruction_transition(
+        REPO_ROOT,
+        before_revision,
+        target_revision,
+    )
+    for label, side, source in (
+        ("before", before, before_source),
+        ("target", target, target_source),
+    ):
+        recorded = side.get("instructionsSource")
+        if recorded is not None and recorded != source:
+            raise SystemExit(
+                f"journaled {label} instruction source changed after update preflight"
+            )
+        side["instructionsSource"] = source
+    return update_operation(
+        home,
+        phase=str(operation.get("phase", "prepared")),
+        before=before,
+        target=target,
+    )
 
 
 def _repository(repo: Path) -> str:
@@ -266,6 +587,8 @@ def _common_refresh_args(args: argparse.Namespace, *, home: Path, harness: str) 
         command.append("--migrate-marketplace")
     if getattr(args, "migrate_from_repo", None):
         command.extend(["--migrate-from-repo", args.migrate_from_repo])
+    if getattr(args, "operation_id", None):
+        command.extend(["--operation-id", args.operation_id])
     return command
 
 
@@ -623,10 +946,12 @@ def command_update(args: argparse.Namespace) -> int:
                     "update target is not a fast-forward descendant of the current revision; "
                     "use --allow-downgrade only after reviewing the requested transition"
                 )
+        before_source, target_source = _instruction_transition(repo, old, target)
         if args.check:
             return 0
 
         before = dict(manager)
+        before["instructionsSource"] = before_source
         target_payload = {
             "repository": recorded_repository,
             "revision": target,
@@ -634,6 +959,7 @@ def command_update(args: argparse.Namespace) -> int:
             "bundleIdentity": bundle,
             "channel": channel,
             "requestedRef": requested_ref,
+            "instructionsSource": target_source,
         }
         operation = begin_operation(
             home,
@@ -706,6 +1032,7 @@ def command_resume_update(args: argparse.Namespace) -> int:
         raise SystemExit("update operation journal does not match the resume request")
     if operation.get("command") != "update":
         raise SystemExit("current operation is not an update")
+    operation = _journal_instruction_transition(home, operation)
     target = operation["target"]
     if _revision(REPO_ROOT) != target["revision"]:
         raise SystemExit("managed checkout does not match the journaled update target")
@@ -747,6 +1074,7 @@ def command_resume_update(args: argparse.Namespace) -> int:
         no_check=False,
         migrate_marketplace=False,
         migrate_from_repo=None,
+        operation_id=args.operation_id,
     )
     targets = desired_harnesses(desired)
     for harness in targets:
@@ -762,6 +1090,7 @@ def command_resume_rollback(args: argparse.Namespace) -> int:
     operation = load_current_operation(home)
     if operation is None or operation.get("operationId") != args.operation_id:
         raise SystemExit("update operation journal does not match the rollback request")
+    operation = _journal_instruction_transition(home, operation)
     before = operation["before"]
     if _revision(REPO_ROOT) != before["revision"]:
         raise SystemExit("managed checkout does not match the journaled rollback revision")
@@ -793,6 +1122,7 @@ def command_resume_rollback(args: argparse.Namespace) -> int:
         no_check=False,
         migrate_marketplace=False,
         migrate_from_repo=None,
+        operation_id=args.operation_id,
     )
     for harness in desired_harnesses(desired):
         _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
@@ -857,6 +1187,7 @@ def command_manager_repair(args: argparse.Namespace) -> int:
             no_check=False,
             migrate_marketplace=False,
             migrate_from_repo=None,
+            operation_id=None,
         )
         for harness in desired_harnesses(desired):
             _refresh_one(refresh_args, home=home, harness=harness, check_after=True)

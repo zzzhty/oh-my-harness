@@ -15,9 +15,23 @@ from repo_skill_catalog import REPO_ROOT, SkillCatalog
 
 
 REGISTRY_FILE = REPO_ROOT / ".agents" / "harnesses" / "registry.json"
-REGISTRY_SCHEMA_VERSION = "2026-08-22"
+REGISTRY_SCHEMA_VERSION = "2026-08-25"
 HARNESS_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 ENVIRONMENT_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+INSTRUCTIONS_MIGRATION_ID = "split-global-project-instructions"
+INSTRUCTIONS_MIGRATION_STAGES = (
+    "bridge-ready",
+    "source-switched",
+    "semantic-split",
+)
+ROOT_INSTRUCTIONS_SOURCE = "AGENTS.md"
+GLOBAL_INSTRUCTIONS_SOURCE = "agents/global-instructions.md"
+INSTRUCTIONS_MIGRATION_ORIENTATION = {
+    "bridge-ready": (ROOT_INSTRUCTIONS_SOURCE, GLOBAL_INSTRUCTIONS_SOURCE),
+    "source-switched": (GLOBAL_INSTRUCTIONS_SOURCE, ROOT_INSTRUCTIONS_SOURCE),
+    "semantic-split": (GLOBAL_INSTRUCTIONS_SOURCE, ROOT_INSTRUCTIONS_SOURCE),
+}
 
 SKILLS_DRIVERS = frozenset({"codex-marketplace", "directory-projection"})
 INSTRUCTIONS_DRIVERS = frozenset({"managed-file", "settings-derived-file"})
@@ -93,6 +107,14 @@ class InstructionsSpec:
 
 
 @dataclass(frozen=True)
+class InstructionsMigrationSpec:
+    migration_id: str
+    stage: str
+    peer_source: Path
+    required_predecessor_revision: str | None = None
+
+
+@dataclass(frozen=True)
 class HarnessSpec:
     harness_id: str
     display_name: str
@@ -107,6 +129,7 @@ class HarnessRegistry:
     path: Path
     default_harness: str
     instructions_source: Path
+    instructions_migration: InstructionsMigrationSpec
     excluded_skill_roots: Mapping[str, ExcludedSkillRootSpec]
     harnesses: Mapping[str, HarnessSpec]
 
@@ -124,6 +147,7 @@ class HarnessPlan:
     skills_root: Path | None
     skills_materialization: str | None
     instructions_source: Path
+    instructions_migration: InstructionsMigrationSpec
     instructions_target: Path
     instructions_materialization: str
     instruction_shadow_paths: tuple[Path, ...]
@@ -189,6 +213,71 @@ def _relative_path(value: object, *, label: str, allow_empty: bool = False) -> P
     if any(part in {"", "."} for part in raw_parts):
         raise HarnessRegistryError(f"{label} must be normalized: {raw!r}")
     return Path(*posix_path.parts)
+
+
+def _instruction_sources(
+    value: object,
+    *,
+    label: str,
+) -> tuple[Path, InstructionsMigrationSpec]:
+    payload = _object(value, label=label)
+    _keys(payload, label=label, required={"current", "migration"})
+    current = _relative_path(payload["current"], label=f"{label}.current")
+    migration_label = f"{label}.migration"
+    migration = _object(payload["migration"], label=migration_label)
+    _keys(
+        migration,
+        label=migration_label,
+        required={"id", "stage", "peer"},
+        optional={"requiredPredecessorRevision"},
+    )
+    migration_id = _string(migration["id"], label=f"{migration_label}.id")
+    if migration_id != INSTRUCTIONS_MIGRATION_ID:
+        raise HarnessRegistryError(
+            f"{migration_label}.id must be {INSTRUCTIONS_MIGRATION_ID!r}"
+        )
+    stage = _string(migration["stage"], label=f"{migration_label}.stage")
+    if stage not in INSTRUCTIONS_MIGRATION_STAGES:
+        raise HarnessRegistryError(
+            f"{migration_label}.stage is unsupported: {stage!r}"
+        )
+    peer = _relative_path(migration["peer"], label=f"{migration_label}.peer")
+    if current == peer:
+        raise HarnessRegistryError(
+            f"{label}.current and {migration_label}.peer must be different paths"
+        )
+    expected_current, expected_peer = INSTRUCTIONS_MIGRATION_ORIENTATION[stage]
+    if current.as_posix() != expected_current or peer.as_posix() != expected_peer:
+        raise HarnessRegistryError(
+            f"{label} paths do not match the {stage} migration orientation: "
+            f"current={expected_current!r}, peer={expected_peer!r}"
+        )
+    raw_predecessor = migration.get("requiredPredecessorRevision")
+    if raw_predecessor is None:
+        predecessor = None
+    else:
+        predecessor = _string(
+            raw_predecessor,
+            label=f"{migration_label}.requiredPredecessorRevision",
+        )
+        if not REVISION_PATTERN.fullmatch(predecessor):
+            raise HarnessRegistryError(
+                f"{migration_label}.requiredPredecessorRevision must be a lowercase 40-character Git SHA"
+            )
+    if stage == "bridge-ready" and predecessor is not None:
+        raise HarnessRegistryError(
+            f"{migration_label}.requiredPredecessorRevision is not valid for bridge-ready"
+        )
+    if stage != "bridge-ready" and predecessor is None:
+        raise HarnessRegistryError(
+            f"{migration_label}.requiredPredecessorRevision is required for {stage}"
+        )
+    return current, InstructionsMigrationSpec(
+        migration_id=migration_id,
+        stage=stage,
+        peer_source=peer,
+        required_predecessor_revision=predecessor,
+    )
 
 
 def _root_candidate(value: object, *, label: str) -> RootCandidate:
@@ -543,7 +632,7 @@ def load_harness_registry(
     default_harness = _string(defaults["harness"], label="registry.defaults.harness")
     sources = _object(root["sources"], label="registry.sources")
     _keys(sources, label="registry.sources", required={"instructions"})
-    instructions_source = _relative_path(
+    instructions_source, instructions_migration = _instruction_sources(
         sources["instructions"], label="registry.sources.instructions"
     )
     excluded_payload = _object(
@@ -569,14 +658,51 @@ def load_harness_registry(
     if "codex" not in harnesses or harnesses["codex"].skills.driver != "codex-marketplace":
         raise HarnessRegistryError("registry must define the codex marketplace harness")
     resolved_repo_root = repo_root.resolve(strict=False)
+    resolved_instructions_source = _repo_owned_path(
+        resolved_repo_root,
+        instructions_source,
+        label="registry instructions source",
+    )
+    resolved_peer_source = _repo_owned_path(
+        resolved_repo_root,
+        instructions_migration.peer_source,
+        label="registry instructions migration peer",
+    )
+    for label, source in (
+        ("registry instructions source", resolved_instructions_source),
+        ("registry instructions migration peer", resolved_peer_source),
+    ):
+        if source.is_symlink() or not source.is_file():
+            raise HarnessRegistryError(f"{label} must be a regular file: {source}")
+    if instructions_migration.stage in {"bridge-ready", "source-switched"}:
+        try:
+            sources_match = (
+                resolved_instructions_source.read_bytes()
+                == resolved_peer_source.read_bytes()
+            )
+        except OSError as exc:
+            raise HarnessRegistryError(
+                f"instruction migration sources are unreadable: {exc}"
+            ) from exc
+        if not sources_match:
+            raise HarnessRegistryError(
+                "instruction migration sources must be byte-identical during "
+                f"{instructions_migration.stage}: {resolved_instructions_source}, "
+                f"{resolved_peer_source}"
+            )
+    resolved_migration = InstructionsMigrationSpec(
+        migration_id=instructions_migration.migration_id,
+        stage=instructions_migration.stage,
+        peer_source=resolved_peer_source,
+        required_predecessor_revision=(
+            instructions_migration.required_predecessor_revision
+        ),
+    )
     return HarnessRegistry(
         path=path.resolve(strict=False),
         default_harness=default_harness,
-        instructions_source=_repo_owned_path(
-            resolved_repo_root,
-            instructions_source,
-            label="registry instructions source",
-        ),
+        instructions_source=resolved_instructions_source,
+        instructions_migration=resolved_migration,
         excluded_skill_roots=excluded_skill_roots,
         harnesses=harnesses,
     )
@@ -787,6 +913,7 @@ def resolve_harness_plan(
         skills_root=skills_root,
         skills_materialization=skills_materialization,
         instructions_source=registry.instructions_source,
+        instructions_migration=registry.instructions_migration,
         instructions_target=instructions_target,
         instructions_materialization=instructions_materialization,
         instruction_shadow_paths=shadow_paths,

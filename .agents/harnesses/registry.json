@@ -1,11 +1,18 @@
 {
   "$schema": "./registry.schema.json",
-  "schemaVersion": "2026-08-22",
+  "schemaVersion": "2026-08-25",
   "defaults": {
     "harness": "codex"
   },
   "sources": {
-    "instructions": "AGENTS.md"
+    "instructions": {
+      "current": "AGENTS.md",
+      "migration": {
+        "id": "split-global-project-instructions",
+        "stage": "bridge-ready",
+        "peer": "agents/global-instructions.md"
+      }
+    }
   },
   "excludedSkillRoots": {
     "agents-skills": {

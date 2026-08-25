@@ -589,7 +589,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                 ]
             )
 
-    def test_codex_repo_relocation_passes_only_the_exact_former_agents_source(self) -> None:
+    def test_codex_repo_relocation_passes_only_declared_former_instruction_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             former_repo = root / "former-repo"
@@ -613,9 +613,44 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     )
 
         self.assertEqual(
-            prepare.call_args.kwargs["managed_retired_sources"],
-            (former_repo / "AGENTS.md",),
+            prepare.call_args.kwargs["explicit_former_sources"],
+            (
+                former_repo / "AGENTS.md",
+                former_repo / "agents/global-instructions.md",
+            ),
         )
+
+    def test_operation_instruction_digests_require_matching_active_journal(self) -> None:
+        home = Path("/manager")
+        operation = {
+            "operationId": "op-1",
+            "command": "update",
+            "before": {
+                "revision": "a" * 40,
+                "instructionsSource": {"sha256": "1" * 64},
+            },
+            "target": {
+                "revision": "b" * 40,
+                "instructionsSource": {"sha256": "2" * 64},
+            },
+        }
+        with (
+            mock.patch.object(refresh, "load_current_operation", return_value=operation),
+            mock.patch.object(refresh, "git_head_revision", return_value="b" * 40),
+        ):
+            self.assertEqual(
+                refresh.operation_instruction_digests(home, "op-1"),
+                ("1" * 64, "2" * 64),
+            )
+            with self.assertRaisesRegex(SystemExit, "does not match refresh"):
+                refresh.operation_instruction_digests(home, "other")
+
+        with (
+            mock.patch.object(refresh, "load_current_operation", return_value=operation),
+            mock.patch.object(refresh, "git_head_revision", return_value="c" * 40),
+            self.assertRaisesRegex(SystemExit, "does not match either journaled"),
+        ):
+            refresh.operation_instruction_digests(home, "op-1")
 
     def test_excluded_root_failure_precedes_instruction_preflight_and_bootstrap(self) -> None:
         with (

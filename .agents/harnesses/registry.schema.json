@@ -7,7 +7,7 @@
   "required": ["$schema", "schemaVersion", "defaults", "sources", "excludedSkillRoots", "harnesses"],
   "properties": {
     "$schema": {"type": "string", "const": "./registry.schema.json"},
-    "schemaVersion": {"type": "string", "const": "2026-08-22"},
+    "schemaVersion": {"type": "string", "const": "2026-08-25"},
     "defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -21,7 +21,7 @@
       "additionalProperties": false,
       "required": ["instructions"],
       "properties": {
-        "instructions": {"$ref": "#/$defs/relativePath"}
+        "instructions": {"$ref": "#/$defs/instructionSource"}
       }
     },
     "excludedSkillRoots": {
@@ -46,6 +46,61 @@
     "relativeAppend": {
       "type": "string",
       "not": {"pattern": "(^/|\\\\|^[A-Za-z]:|(^|/)\\.\\.?(/|$)|//|/$)"}
+    },
+    "instructionSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current", "migration"],
+      "properties": {
+        "current": {"$ref": "#/$defs/relativePath"},
+        "migration": {"$ref": "#/$defs/instructionSourceMigration"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "migration": {
+                "properties": {"stage": {"const": "bridge-ready"}},
+                "required": ["stage"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current": {"const": "AGENTS.md"},
+              "migration": {
+                "properties": {"peer": {"const": "agents/global-instructions.md"}}
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "current": {"const": "agents/global-instructions.md"},
+              "migration": {
+                "properties": {"peer": {"const": "AGENTS.md"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "instructionSourceMigration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "stage", "peer"],
+      "properties": {
+        "id": {"const": "split-global-project-instructions"},
+        "stage": {"enum": ["bridge-ready", "source-switched", "semantic-split"]},
+        "peer": {"$ref": "#/$defs/relativePath"},
+        "requiredPredecessorRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"stage": {"const": "bridge-ready"}}},
+          "then": {"not": {"required": ["requiredPredecessorRevision"]}},
+          "else": {"required": ["requiredPredecessorRevision"]}
+        }
+      ]
     },
     "rootCandidate": {
       "type": "object",

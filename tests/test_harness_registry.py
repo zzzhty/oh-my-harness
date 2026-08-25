@@ -66,6 +66,22 @@ class HarnessRegistryTests(unittest.TestCase):
             set(self.registry.excluded_skill_roots),
             {"agents-skills"},
         )
+        self.assertEqual(self.registry.instructions_source, REPO_ROOT / "AGENTS.md")
+        self.assertEqual(
+            self.registry.instructions_migration.migration_id,
+            "split-global-project-instructions",
+        )
+        self.assertEqual(
+            self.registry.instructions_migration.stage,
+            "bridge-ready",
+        )
+        self.assertEqual(
+            self.registry.instructions_migration.peer_source,
+            REPO_ROOT / "agents/global-instructions.md",
+        )
+        self.assertIsNone(
+            self.registry.instructions_migration.required_predecessor_revision
+        )
 
     def test_registry_schema_version_is_an_iso_date_shared_by_both_authorities(self) -> None:
         registry_payload = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
@@ -118,6 +134,68 @@ class HarnessRegistryTests(unittest.TestCase):
             self.assertEqual(claude.root, claude_root)
             self.assertEqual(copilot.root, copilot_root)
             self.assertEqual(gemini.root, gemini_home / ".gemini")
+
+    def test_bridge_ready_requires_two_regular_byte_identical_sources(self) -> None:
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.joinpath("agents").mkdir(parents=True)
+            repo.joinpath("AGENTS.md").write_text("current\n", encoding="utf-8")
+            peer = repo / "agents/global-instructions.md"
+            peer.write_text("different\n", encoding="utf-8")
+            registry_path = Path(tmp) / "registry.json"
+            write_registry(registry_path, original)
+
+            with self.assertRaisesRegex(
+                HarnessRegistryError,
+                "must be byte-identical during bridge-ready",
+            ):
+                load_harness_registry(registry_path, repo_root=repo)
+
+            peer.write_text("current\n", encoding="utf-8")
+            registry = load_harness_registry(registry_path, repo_root=repo)
+            self.assertEqual(
+                registry.instructions_source,
+                repo.resolve(strict=False) / "AGENTS.md",
+            )
+
+    def test_later_instruction_stages_require_a_predecessor(self) -> None:
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        instructions = original["sources"]["instructions"]
+        migration = instructions["migration"]
+        migration["stage"] = "source-switched"
+        instructions["current"] = "agents/global-instructions.md"
+        migration["peer"] = "AGENTS.md"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "registry.json"
+            write_registry(path, original)
+            with self.assertRaisesRegex(
+                HarnessRegistryError,
+                "requiredPredecessorRevision is required",
+            ):
+                load_harness_registry(path)
+
+            migration["requiredPredecessorRevision"] = "a" * 40
+            write_registry(path, original)
+            registry = load_harness_registry(path)
+            self.assertEqual(
+                registry.instructions_migration.required_predecessor_revision,
+                "a" * 40,
+            )
+
+    def test_instruction_stage_requires_its_canonical_path_orientation(self) -> None:
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        instructions = original["sources"]["instructions"]
+        instructions["current"] = "agents/global-instructions.md"
+        instructions["migration"]["peer"] = "AGENTS.md"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "registry.json"
+            write_registry(path, original)
+            with self.assertRaisesRegex(
+                HarnessRegistryError,
+                "do not match the bridge-ready migration orientation",
+            ):
+                load_harness_registry(path)
 
     def test_fixed_and_excluded_roots_follow_user_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,7 +301,7 @@ class HarnessRegistryTests(unittest.TestCase):
             (
                 "schema-version",
                 lambda data: data.update({"schemaVersion": "v2"}),
-                "schemaVersion must be '2026-08-22'",
+                "schemaVersion must be '2026-08-25'",
             ),
             (
                 "driver",
@@ -295,9 +373,9 @@ class HarnessRegistryTests(unittest.TestCase):
             duplicate = root / "duplicate.json"
             duplicate.write_text(
                 REGISTRY_FILE.read_text(encoding="utf-8").replace(
-                    '"schemaVersion": "2026-08-22",',
-                    '"schemaVersion": "2026-08-22",\n'
-                    '  "schemaVersion": "2026-08-22",',
+                    '"schemaVersion": "2026-08-25",',
+                    '"schemaVersion": "2026-08-25",\n'
+                    '  "schemaVersion": "2026-08-25",',
                     1,
                 ),
                 encoding="utf-8",
@@ -315,6 +393,10 @@ class HarnessRegistryTests(unittest.TestCase):
             repo.mkdir()
             outside.mkdir()
             repo.joinpath("AGENTS.md").write_text("instructions\n", encoding="utf-8")
+            repo.joinpath("agents").mkdir()
+            repo.joinpath("agents/global-instructions.md").write_text(
+                "instructions\n", encoding="utf-8"
+            )
             repo.joinpath(".agents").symlink_to(outside, target_is_directory=True)
             registry_path = root / "registry.json"
             write_registry(registry_path, original)

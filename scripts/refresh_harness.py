@@ -47,6 +47,7 @@ from manager_paths import (
     venv_path as manager_venv_path,
     venv_python,
 )
+from manager_state import load_current_operation
 from repo_skill_catalog import SkillCatalog, load_repo_skill_catalog
 from sync_agents_skills import sync_layer
 from sync_harness_instructions import apply_instruction_sync, prepare_instruction_sync
@@ -92,6 +93,49 @@ class RetiredMarketplaceState:
             or self.cached_plugins
             or self.source_config
         )
+
+
+def operation_instruction_digests(
+    home: Path,
+    operation_id: str | None,
+) -> tuple[str, ...]:
+    """Resolve copy ownership only from the active, revision-matched update journal."""
+
+    if operation_id is None:
+        return ()
+    operation = load_current_operation(home)
+    if operation is None or operation.get("operationId") != operation_id:
+        raise SystemExit("instruction migration operation journal does not match refresh")
+    if operation.get("command") != "update":
+        raise SystemExit("instruction migration provenance requires an update operation")
+    current_revision = git_head_revision(REPO_ROOT)
+    revisions: set[str] = set()
+    digests: set[str] = set()
+    for side_name in ("before", "target"):
+        side = operation.get(side_name)
+        if not isinstance(side, dict):
+            raise SystemExit(
+                f"update operation journal has no valid {side_name} instruction provenance"
+            )
+        revision = side.get("revision")
+        if isinstance(revision, str):
+            revisions.add(revision)
+        source = side.get("instructionsSource")
+        if not isinstance(source, dict):
+            raise SystemExit(
+                f"update operation journal has no {side_name} instruction source"
+            )
+        digest = source.get("sha256")
+        if not isinstance(digest, str):
+            raise SystemExit(
+                f"update operation journal has no {side_name} instruction digest"
+            )
+        digests.add(digest)
+    if current_revision not in revisions:
+        raise SystemExit(
+            "managed checkout does not match either journaled instruction revision"
+        )
+    return tuple(sorted(digests))
 
 
 def expand_path(raw: str | Path) -> Path:
@@ -1773,9 +1817,10 @@ def main() -> None:
         "--migrate-from-repo",
         help=(
             "Codex-only former oh-my-harness checkout root whose exact managed "
-            "AGENTS.md symlink may be replaced after live confirmation."
+            "registry instruction source symlink may be replaced after live confirmation."
         ),
     )
+    parser.add_argument("--operation-id", help=argparse.SUPPRESS)
     parser.add_argument(
         "--yes",
         action="store_true",
@@ -1849,7 +1894,7 @@ def main() -> None:
 
     catalog = load_repo_skill_catalog()
     require_excluded_skill_roots_clear(catalog, plan.excluded_skill_roots)
-    managed_retired_instruction_sources: tuple[Path, ...] = ()
+    explicit_former_instruction_sources: tuple[Path, ...] = ()
     retired_repo: Path | None = None
     if args.migrate_from_repo is not None:
         retired_repo = expand_path(args.migrate_from_repo)
@@ -1858,17 +1903,31 @@ def main() -> None:
                 "--migrate-from-repo must be an absolute path: "
                 f"{args.migrate_from_repo!r}"
             )
-        retired_source = retired_repo / "AGENTS.md"
-        if retired_source.resolve(strict=False) == REPO_ROOT.joinpath("AGENTS.md").resolve(
-            strict=False
-        ):
+        if retired_repo.resolve(strict=False) == REPO_ROOT.resolve(strict=False):
             raise SystemExit("--migrate-from-repo must identify a former checkout")
-        managed_retired_instruction_sources = (retired_source,)
+        try:
+            current_relative = plan.instructions_source.relative_to(REPO_ROOT)
+            peer_relative = plan.instructions_migration.peer_source.relative_to(
+                REPO_ROOT
+            )
+        except ValueError as exc:  # pragma: no cover - registry resolution owns this
+            raise SystemExit(
+                "registry instruction migration sources are outside the repository"
+            ) from exc
+        explicit_former_instruction_sources = (
+            retired_repo / current_relative,
+            retired_repo / peer_relative,
+        )
+    managed_instruction_digests = operation_instruction_digests(
+        manager_home,
+        args.operation_id,
+    )
     prepared_instructions = prepare_instruction_sync(
         plan,
         dry_run=args.dry_run,
         assume_yes=args.yes,
-        managed_retired_sources=managed_retired_instruction_sources,
+        explicit_former_sources=explicit_former_instruction_sources,
+        operation_managed_digests=managed_instruction_digests,
     )
     marketplace_name: str | None = None
     if plan.harness_id == "codex":

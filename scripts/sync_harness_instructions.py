@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import stat
 import tempfile
@@ -26,6 +27,8 @@ from sync_agents_skills import is_junction, same_path
 
 Input = Callable[[str], str]
 Output = Callable[[str], None]
+DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+AUTO_MIGRATION_PROVENANCE = frozenset({"registry-peer", "operation-journal"})
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ class PreparedInstructionSync:
     action: str
     snapshot: TargetSnapshot
     source_digest: str | None
+    provenance: str
     approved: bool
 
 
@@ -93,10 +97,16 @@ def _snapshot(path: Path) -> TargetSnapshot:
     return TargetSnapshot(kind="file", digest=digest)
 
 
-def _validate_source(plan: HarnessPlan) -> None:
-    source = plan.instructions_source
+def _validate_regular_source(source: Path, *, label: str) -> None:
     if source.is_symlink() or not source.is_file():
-        raise SystemExit(f"canonical instructions source must be a regular file: {source}")
+        raise SystemExit(f"{label} must be a regular file: {source}")
+
+
+def _validate_source(plan: HarnessPlan) -> None:
+    _validate_regular_source(
+        plan.instructions_source,
+        label="canonical instructions source",
+    )
 
 
 def _validated_source_digest(plan: HarnessPlan) -> str:
@@ -109,10 +119,107 @@ def _validated_source_digest(plan: HarnessPlan) -> str:
         ) from exc
 
 
+def _validated_peer_digest(plan: HarnessPlan) -> tuple[Path, str]:
+    peer = plan.instructions_migration.peer_source
+    _validate_regular_source(peer, label="registry instruction migration peer")
+    try:
+        return peer, _digest(peer)
+    except OSError as exc:
+        raise SystemExit(
+            f"cannot read registry instruction migration peer: {peer}: {exc}"
+        ) from exc
+
+
+def _validated_operation_digests(values: tuple[str, ...]) -> frozenset[str]:
+    invalid = sorted({value for value in values if not DIGEST_PATTERN.fullmatch(value)})
+    if invalid:
+        raise SystemExit(
+            "operation journal contains invalid instruction digest(s): "
+            + ", ".join(invalid)
+        )
+    return frozenset(values)
+
+
+def _former_source_digests(sources: tuple[Path, ...]) -> frozenset[str]:
+    digests: set[str] = set()
+    for source in sources:
+        if source.is_symlink() or not source.is_file():
+            continue
+        try:
+            digests.add(_digest(source))
+        except OSError as exc:
+            raise SystemExit(
+                f"cannot read explicit former-repo instructions source: {source}: {exc}"
+            ) from exc
+    return frozenset(digests)
+
+
+def _classify_target(
+    plan: HarnessPlan,
+    snapshot: TargetSnapshot,
+    *,
+    explicit_former_sources: tuple[Path, ...] = (),
+    operation_managed_digests: tuple[str, ...] = (),
+) -> tuple[str, str]:
+    """Return the action and the single evidence source that owns the target."""
+
+    source_digest = _validated_source_digest(plan)
+    peer_source, peer_digest = _validated_peer_digest(plan)
+    operation_digests = _validated_operation_digests(operation_managed_digests)
+    former_digests = _former_source_digests(explicit_former_sources)
+    materialization = plan.instructions_materialization
+    assert materialization in {"copy", "symlink"}
+
+    if snapshot.kind in {"junction", "reparse-point", "directory", "non-file"}:
+        raise SystemExit(
+            "refusing unsupported instructions target type "
+            f"{snapshot.kind}: {plan.instructions_target}"
+        )
+    if snapshot.kind == "missing":
+        return "create", "unmanaged"
+    if snapshot.kind == "symlink":
+        assert snapshot.link_target is not None
+        if same_path(snapshot.link_target, plan.instructions_source):
+            provenance = "current"
+        elif peer_source is not None and same_path(snapshot.link_target, peer_source):
+            provenance = "registry-peer"
+        elif any(
+            same_path(snapshot.link_target, source)
+            for source in explicit_former_sources
+        ):
+            provenance = "explicit-former-repo"
+        else:
+            provenance = "unmanaged"
+        if provenance == "unmanaged":
+            raise SystemExit(
+                "refusing unmanaged instructions symlink: "
+                f"{plan.instructions_target} -> {snapshot.link_target}"
+            )
+        if provenance == "current" and materialization == "symlink":
+            return "current", provenance
+        return "replace", provenance
+
+    assert snapshot.kind == "file"
+    if snapshot.digest == source_digest:
+        provenance = "current"
+    elif peer_digest is not None and snapshot.digest == peer_digest:
+        provenance = "registry-peer"
+    elif snapshot.digest in operation_digests:
+        provenance = "operation-journal"
+    elif snapshot.digest in former_digests:
+        provenance = "explicit-former-repo"
+    else:
+        provenance = "unmanaged"
+    if provenance == "current" and materialization == "copy":
+        return "current", provenance
+    return "replace", provenance
+
+
 def _inspect(
     plan: HarnessPlan,
     *,
-    managed_retired_sources: tuple[Path, ...] = (),
+    explicit_former_sources: tuple[Path, ...] = (),
+    operation_managed_digests: tuple[str, ...] = (),
 ) -> PreparedInstructionSync:
     source_digest = _validated_source_digest(plan)
     for shadow in plan.instruction_shadow_paths:
@@ -122,35 +229,21 @@ def _inspect(
             )
 
     target = plan.instructions_target
-    materialization = plan.instructions_materialization
-    assert materialization in {"copy", "symlink"}
     snapshot = _snapshot(target)
-
-    if snapshot.kind in {"junction", "reparse-point", "directory", "non-file"}:
-        raise SystemExit(
-            f"refusing unsupported instructions target type {snapshot.kind}: {target}"
-        )
-    if snapshot.kind == "missing":
-        return PreparedInstructionSync(plan, "create", snapshot, source_digest, False)
-    if snapshot.kind == "symlink":
-        assert snapshot.link_target is not None
-        current_source = plan.instructions_source
-        current_match = same_path(snapshot.link_target, current_source)
-        retired_match = any(
-            same_path(snapshot.link_target, source)
-            for source in managed_retired_sources
-        )
-        if not current_match and not retired_match:
-            raise SystemExit(
-                "refusing unmanaged instructions symlink: "
-                f"{target} -> {snapshot.link_target}"
-            )
-        if current_match and materialization == "symlink":
-            return PreparedInstructionSync(plan, "current", snapshot, source_digest, True)
-        return PreparedInstructionSync(plan, "replace", snapshot, source_digest, False)
-    if materialization == "copy" and snapshot.digest == source_digest:
-        return PreparedInstructionSync(plan, "current", snapshot, source_digest, True)
-    return PreparedInstructionSync(plan, "replace", snapshot, source_digest, False)
+    action, provenance = _classify_target(
+        plan,
+        snapshot,
+        explicit_former_sources=explicit_former_sources,
+        operation_managed_digests=operation_managed_digests,
+    )
+    return PreparedInstructionSync(
+        plan,
+        action,
+        snapshot,
+        source_digest,
+        provenance,
+        action == "current",
+    )
 
 
 def _confirm(prompt: str, *, input_fn: Input) -> bool:
@@ -166,13 +259,15 @@ def prepare_instruction_sync(
     *,
     dry_run: bool,
     assume_yes: bool,
-    managed_retired_sources: tuple[Path, ...] = (),
+    explicit_former_sources: tuple[Path, ...] = (),
+    operation_managed_digests: tuple[str, ...] = (),
     input_fn: Input = input,
     output: Output = print,
 ) -> PreparedInstructionSync:
     prepared = _inspect(
         plan,
-        managed_retired_sources=managed_retired_sources,
+        explicit_former_sources=explicit_former_sources,
+        operation_managed_digests=operation_managed_digests,
     )
     target = plan.instructions_target
     if prepared.action == "current":
@@ -184,20 +279,14 @@ def prepare_instruction_sync(
     output(f"InstructionsTarget={target}")
     output(f"InstructionsTargetType={prepared.snapshot.kind}")
     output(f"InstructionsMaterialization={plan.instructions_materialization}")
+    output(f"InstructionsProvenance={prepared.provenance}")
     if prepared.snapshot.digest is not None:
         output(f"InstructionsTargetSHA256={prepared.snapshot.digest}")
         output(f"InstructionsSourceSHA256={prepared.source_digest}")
-    if (
-        prepared.snapshot.kind == "symlink"
-        and prepared.snapshot.link_target is not None
-        and any(
-            same_path(prepared.snapshot.link_target, source)
-            for source in managed_retired_sources
-        )
-    ):
+    if prepared.provenance == "explicit-former-repo":
         output(
-            "InstructionsRetiredManagedSource="
-            f"{prepared.snapshot.link_target}"
+            "InstructionsExplicitFormerRepoSource="
+            f"{prepared.snapshot.link_target or 'content-digest'}"
         )
     if dry_run:
         output(f"would {prepared.action} harness instructions: {target}")
@@ -206,10 +295,17 @@ def prepare_instruction_sync(
             prepared.action,
             prepared.snapshot,
             prepared.source_digest,
+            prepared.provenance,
             True,
         )
 
-    if prepared.action == "create":
+    if prepared.provenance in AUTO_MIGRATION_PROVENANCE:
+        approved = True
+        output(
+            "Existing instructions replacement authorized by exact managed "
+            f"provenance: {prepared.provenance}"
+        )
+    elif prepared.action == "create":
         approved = assume_yes or _confirm(
             f"Create {plan.harness_id} global instructions",
             input_fn=input_fn,
@@ -232,6 +328,7 @@ def prepare_instruction_sync(
         prepared.action,
         prepared.snapshot,
         prepared.source_digest,
+        prepared.provenance,
         True,
     )
 
@@ -314,6 +411,11 @@ def check_instruction_sync(plan: HarnessPlan) -> list[str]:
     target = plan.instructions_target
     if prepared.action == "create":
         return [f"global instructions are missing for {plan.harness_id}: {target}"]
+    if prepared.provenance == "registry-peer":
+        return [
+            f"managed instructions migration is pending for {plan.harness_id}: "
+            f"{target} ({prepared.snapshot.kind})"
+        ]
     return [
         f"global instructions differ for {plan.harness_id}: "
         f"{target} ({prepared.snapshot.kind})"
@@ -321,24 +423,22 @@ def check_instruction_sync(plan: HarnessPlan) -> list[str]:
 
 
 def remove_instruction_sync(plan: HarnessPlan, *, dry_run: bool) -> None:
-    """Remove only instructions proven to match the current managed source."""
+    """Remove only instructions proven to match current or registry-peer state."""
 
-    source_digest = _validated_source_digest(plan)
     target = plan.instructions_target
     snapshot = _snapshot(target)
     if snapshot.kind == "missing":
         print(f"instructions already clear for {plan.harness_id}: {target}")
         return
 
-    owned = False
-    if snapshot.kind == "symlink":
-        owned = snapshot.link_target is not None and same_path(
-            snapshot.link_target, plan.instructions_source
-        )
-    elif snapshot.kind == "file":
-        owned = snapshot.digest == source_digest
-
-    if not owned:
+    try:
+        _action, provenance = _classify_target(plan, snapshot)
+    except SystemExit as exc:
+        raise SystemExit(
+            "refusing to remove changed or unmanaged instructions target: "
+            f"{target} ({snapshot.kind}): {exc}"
+        ) from exc
+    if provenance not in {"current", "registry-peer"}:
         raise SystemExit(
             "refusing to remove changed or unmanaged instructions target: "
             f"{target} ({snapshot.kind})"
