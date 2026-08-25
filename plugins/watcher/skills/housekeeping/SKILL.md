@@ -42,14 +42,21 @@ git -C "$housekeeping_target" status --ignored --short
 find "$housekeeping_target" \
   \( -type d \( -name .git -o -name node_modules -o -name .venv \) -prune \) -o \
   \( -type d \( -name __pycache__ -o -name .pytest_cache \) -print \)
-rg --hidden -n \
-  --glob '!**/.git/**' \
-  --glob '!**/node_modules/**' \
-  --glob '!**/.venv/**' \
-  "$stale_pattern" "$housekeeping_target" || {
-    rg_status=$?
-    [[ $rg_status -eq 1 ]] || exit "$rg_status"
-  }
+search_status=0
+if command -v rg >/dev/null 2>&1; then
+  rg --hidden -n \
+    --glob '!**/.git/**' \
+    --glob '!**/node_modules/**' \
+    --glob '!**/.venv/**' \
+    "$stale_pattern" "$housekeeping_target" || search_status=$?
+else
+  grep -rInE \
+    --exclude-dir=.git \
+    --exclude-dir=node_modules \
+    --exclude-dir=.venv \
+    -- "$stale_pattern" "$housekeeping_target" || search_status=$?
+fi
+[[ $search_status -eq 0 || $search_status -eq 1 ]] || exit "$search_status"
 ```
 
 3. Record the classification and reason for each candidate class.

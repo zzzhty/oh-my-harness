@@ -141,8 +141,12 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         self.assertIn('git -C "$housekeeping_target" status', script)
         self.assertIn('find "$housekeeping_target"', script)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            tempfile.TemporaryDirectory() as outside_dir,
+        ):
             target = Path(temp_dir).resolve()
+            outside = Path(outside_dir).resolve()
             subprocess.run(
                 ["git", "init", "-q", str(target)],
                 check=True,
@@ -161,6 +165,16 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             ):
                 (target / relative).mkdir(parents=True)
             (target / "guidance.md").write_text("old-term\n", encoding="utf-8")
+            outside_marker = "old-term-outside-target"
+            (outside / "outside.md").write_text(
+                outside_marker + "\n",
+                encoding="utf-8",
+            )
+            outside_link = target / "outside-link"
+            try:
+                outside_link.symlink_to(outside, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                outside_link = None
 
             def target_state() -> list[tuple[str, bool, bytes | None]]:
                 return sorted(
@@ -194,16 +208,37 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
+            without_rg = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    "command() {\n"
+                    "  if [[ ${1-} == -v && ${2-} == rg ]]; then return 1; fi\n"
+                    "  builtin command \"$@\"\n"
+                    "}\n"
+                    "rg() { return 127; }\n"
+                    + script,
+                ],
+                cwd=target,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
             after = target_state()
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(no_match.returncode, 0, no_match.stderr)
+        self.assertEqual(without_rg.returncode, 0, without_rg.stderr)
         self.assertEqual(after, before)
         self.assertIn(str(target / "src" / "__pycache__"), result.stdout)
         self.assertIn(str(target / ".pytest_cache"), result.stdout)
         self.assertNotIn(str(target / "node_modules" / "pkg" / "__pycache__"), result.stdout)
         self.assertNotIn(str(target / ".venv" / "lib" / "__pycache__"), result.stdout)
         self.assertIn("guidance.md:1:old-term", result.stdout)
+        self.assertIn("guidance.md:1:old-term", without_rg.stdout)
+        if outside_link is not None:
+            self.assertNotIn(outside_marker, result.stdout)
+            self.assertNotIn(outside_marker, without_rg.stdout)
 
     def test_housekeeping_inventory_rejects_a_non_git_target(self) -> None:
         text = HOUSEKEEPING.read_text(encoding="utf-8")

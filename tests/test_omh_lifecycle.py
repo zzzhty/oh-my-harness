@@ -778,20 +778,22 @@ class InstructionMigrationTransitionTests(unittest.TestCase):
             "before": {"revision": "a" * 40},
             "target": {"revision": "b" * 40},
         }
-        with (
-            mock.patch.object(omh, "load_current_operation", return_value=operation),
-            mock.patch.object(
-                omh,
-                "_journal_instruction_transition",
-                side_effect=SystemExit("bridge checkpoint first"),
-            ),
-            mock.patch.object(omh, "write_manager") as write_manager,
-            mock.patch.object(omh, "_refresh_one") as refresh,
-            self.assertRaisesRegex(SystemExit, "bridge checkpoint first"),
-        ):
-            omh.command_resume_update(
-                argparse.Namespace(home="/manager", operation_id="op-1")
-            )
+        with tempfile.TemporaryDirectory() as tmp:
+            manager_home = str(Path(tmp) / "manager")
+            with (
+                mock.patch.object(omh, "load_current_operation", return_value=operation),
+                mock.patch.object(
+                    omh,
+                    "_journal_instruction_transition",
+                    side_effect=SystemExit("bridge checkpoint first"),
+                ),
+                mock.patch.object(omh, "write_manager") as write_manager,
+                mock.patch.object(omh, "_refresh_one") as refresh,
+                self.assertRaisesRegex(SystemExit, "bridge checkpoint first"),
+            ):
+                omh.command_resume_update(
+                    argparse.Namespace(home=manager_home, operation_id="op-1")
+                )
         write_manager.assert_not_called()
         refresh.assert_not_called()
 
