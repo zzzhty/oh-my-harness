@@ -109,6 +109,58 @@ class OmhCliTests(unittest.TestCase):
             ["--home", "/tmp/omh", "--help"],
         )
 
+    def test_top_level_help_hides_internal_resume_commands(self) -> None:
+        help_text = omh.build_parser().format_help()
+
+        self.assertIn("update", help_text)
+        self.assertIn("recover", help_text)
+        self.assertNotIn("_resume-update", help_text)
+        self.assertNotIn("_resume-rollback", help_text)
+        self.assertNotIn(argparse.SUPPRESS, help_text)
+
+    def test_internal_resume_commands_remain_dispatchable(self) -> None:
+        with (
+            mock.patch.object(
+                omh,
+                "command_resume_update",
+                return_value=0,
+            ) as resume_update,
+            mock.patch.object(
+                omh,
+                "command_resume_rollback",
+                return_value=0,
+            ) as resume_rollback,
+        ):
+            update_result = omh.main(
+                [
+                    "--home",
+                    "/manager",
+                    "_resume-update",
+                    "--operation-id",
+                    "op-1",
+                ]
+            )
+            rollback_result = omh.main(
+                [
+                    "--home=/manager",
+                    "_resume-rollback",
+                    "--operation-id",
+                    "op-1",
+                    "--detail",
+                    "test failure",
+                ]
+            )
+
+        self.assertEqual(update_result, 0)
+        update_args = resume_update.call_args.args[0]
+        self.assertEqual(update_args.home, "/manager")
+        self.assertEqual(update_args.operation_id, "op-1")
+        self.assertEqual(rollback_result, 0)
+        rollback_args = resume_rollback.call_args.args[0]
+        self.assertEqual(rollback_args.home, "/manager")
+        self.assertEqual(rollback_args.operation_id, "op-1")
+        self.assertEqual(rollback_args.detail, "test failure")
+
     def test_remove_without_target_does_not_expand_to_all_desired(self) -> None:
         args = argparse.Namespace(targets=[], harness=None, all=False)
         with mock.patch.object(omh, "_load_registry", return_value=self.registry()):

@@ -49,7 +49,7 @@ from manager_state import (
 from plugin_package_identity import require_repository_identity
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-KNOWN_COMMANDS = {
+PUBLIC_COMMANDS = {
     "install",
     "refresh",
     "remove",
@@ -60,9 +60,12 @@ KNOWN_COMMANDS = {
     "doctor",
     "recover",
     "version",
+}
+INTERNAL_COMMANDS = {
     "_resume-update",
     "_resume-rollback",
 }
+KNOWN_COMMANDS = PUBLIC_COMMANDS | INTERNAL_COMMANDS
 SEMVER_TAG = re.compile(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)$")
 INSTRUCTION_REGISTRY_PATH = ".agents/harnesses/registry.json"
 INSTRUCTION_MIGRATION_STAGE_ORDER = {
@@ -1325,6 +1328,20 @@ def _normalize_argv(argv: list[str]) -> list[str]:
     return [*prefix, *rest]
 
 
+def _selected_command(argv: Sequence[str]) -> str | None:
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "--home" and index + 1 < len(argv):
+            index += 2
+            continue
+        if token.startswith("--home="):
+            index += 1
+            continue
+        return token
+    return None
+
+
 def _add_harness_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("targets", nargs="*")
     parser.add_argument("--all", action="store_true")
@@ -1398,11 +1415,22 @@ def build_parser() -> argparse.ArgumentParser:
     recover = sub.add_parser("recover", help="Roll back an interrupted manager update.")
     recover.set_defaults(func=command_recover)
 
-    resume = sub.add_parser("_resume-update", help=argparse.SUPPRESS)
+    return parser
+
+
+def build_internal_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="omh",
+        description="Continue an internal manager update transaction.",
+    )
+    parser.add_argument("--home")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    resume = sub.add_parser("_resume-update")
     resume.add_argument("--operation-id", required=True)
     resume.set_defaults(func=command_resume_update)
 
-    rollback = sub.add_parser("_resume-rollback", help=argparse.SUPPRESS)
+    rollback = sub.add_parser("_resume-rollback")
     rollback.add_argument("--operation-id", required=True)
     rollback.add_argument("--detail")
     rollback.set_defaults(func=command_resume_rollback)
@@ -1412,7 +1440,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     normalized = _normalize_argv(list(sys.argv[1:] if argv is None else argv))
-    parser = build_parser()
+    command = _selected_command(normalized)
+    parser = build_internal_parser() if command in INTERNAL_COMMANDS else build_parser()
     args = parser.parse_args(normalized)
     return int(args.func(args) or 0)
 
