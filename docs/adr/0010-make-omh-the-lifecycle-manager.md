@@ -71,5 +71,11 @@ before lifecycle execution, and can reconstruct a missing managed checkout for
 `upgrade_oh_my_harness.sh/.ps1` wrappers remain legacy
 compatibility surfaces but are no longer the public launcher authority.
 
+Installation and lifecycle execution require Python 3.11 or newer. The external
+installer and stable bootstrap shim enforce this before manager-home, checkout,
+or tooling-environment mutation, while the top-level help path remains available
+under an older standard-library Python. The minimum supported version is part of
+the lifecycle CI matrix rather than an untested launcher assumption.
+
 No-subcommand `omh` remains a compatibility alias for `omh refresh`. New scripts
 and documentation must use explicit subcommands.

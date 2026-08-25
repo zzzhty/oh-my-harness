@@ -31,6 +31,21 @@ from terminal_output import write_stderr
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REF = "main"
 _REPARSE_POINT_FLAG = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+MINIMUM_PYTHON_VERSION = (3, 11)
+
+
+def _require_supported_python() -> None:
+    current = sys.version_info[:3]
+    if current[:2] >= MINIMUM_PYTHON_VERSION:
+        return
+    required = ".".join(str(component) for component in MINIMUM_PYTHON_VERSION)
+    found = ".".join(str(component) for component in current)
+    executable = Path(sys.executable).expanduser().resolve(strict=False)
+    raise SystemExit(
+        f"Python {required} or newer is required; found Python {found} at {executable}. "
+        "Use a supported interpreter directly, or set OH_MY_HARNESS_BOOTSTRAP_PYTHON "
+        "for the installer and omh launchers."
+    )
 
 
 @dataclass(frozen=True)
@@ -666,6 +681,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    _require_supported_python()
     try:
         home = resolve_owned_leaf(manager_home(args.home))
     except ValueError as exc:

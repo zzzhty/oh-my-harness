@@ -20,15 +20,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Iterable, Protocol
-
-try:
-    import yaml
-except ModuleNotFoundError as exc:
-    raise SystemExit(
-        "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
-        "this updater with `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python`."
-    ) from exc
+from typing import Any, Iterable, Protocol
 
 from plugin_package_identity import (
     require_repository_identity,
@@ -43,6 +35,17 @@ UPSTREAM_LOCK_NAME = "upstream-lock.json"
 UPSTREAM_LOCK_SCHEMA_VERSION = 1
 CODEX_ONLY_VERSION_SUFFIX = re.compile(r"\+codex\..*$")
 SEMVER_TAG = re.compile(r"^v(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$")
+
+
+def _require_yaml() -> Any:
+    try:
+        import yaml
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
+            "this updater with `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python`."
+        ) from exc
+    return yaml
 
 
 class Digest(Protocol):
@@ -611,6 +614,7 @@ def skill_watcher_aliases(skill_name: str) -> list[dict[str, str]]:
 
 
 def load_yaml_object(path: Path, *, label: str) -> dict[str, object]:
+    yaml = _require_yaml()
     try:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
@@ -621,6 +625,7 @@ def load_yaml_object(path: Path, *, label: str) -> dict[str, object]:
 
 
 def frontmatter_mapping(text: str, *, label: str) -> dict[str, object]:
+    yaml = _require_yaml()
     if not text.startswith("---"):
         raise SystemExit(f"SKILL.md must start with YAML frontmatter: {label}")
     match = re.match(r"^---\r?\n(?P<frontmatter>.*?)\r?\n---(?:\r?\n|$)", text, re.DOTALL)

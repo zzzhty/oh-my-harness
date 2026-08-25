@@ -17,6 +17,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANAGER_HOME = manager_home()
 DEFAULT_VENV = venv_path(DEFAULT_MANAGER_HOME)
 DEFAULT_REQUIREMENTS = REPO_ROOT / "requirements.txt"
+MINIMUM_PYTHON_VERSION = (3, 11)
+
+
+def require_supported_python() -> None:
+    current = sys.version_info[:3]
+    if current[:2] >= MINIMUM_PYTHON_VERSION:
+        return
+    required = ".".join(str(component) for component in MINIMUM_PYTHON_VERSION)
+    found = ".".join(str(component) for component in current)
+    executable = Path(sys.executable).expanduser().resolve(strict=False)
+    raise SystemExit(
+        f"Python {required} or newer is required; found Python {found} at {executable}. "
+        "Use a supported interpreter directly, or set OH_MY_HARNESS_BOOTSTRAP_PYTHON "
+        "for the installer and omh launchers."
+    )
 
 
 def run(command: list[str], *, dry_run: bool = False) -> None:
@@ -125,6 +140,7 @@ def rollback_rebuild(venv_path: Path, backup_path: Path | None) -> None:
 
 
 def bootstrap_tooling_env(venv_path: Path, requirements: Path, *, dry_run: bool) -> None:
+    require_supported_python()
     base_python = canonical_base_python()
     print(f"Bootstrap base Python: {base_python}")
 

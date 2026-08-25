@@ -17,6 +17,33 @@ import refresh_harness as refresh  # noqa: E402
 
 
 class ToolingBootstrapTests(unittest.TestCase):
+    def test_unsupported_python_is_rejected_before_venv_inspection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            venv_path = root / "tooling"
+            requirements = root / "requirements.txt"
+            requirements.write_text("", encoding="utf-8")
+
+            with (
+                mock.patch.object(bootstrap.sys, "version_info", (3, 10, 13)),
+                mock.patch.object(bootstrap, "canonical_base_python") as canonical_base,
+                mock.patch.object(
+                    bootstrap,
+                    "venv_health",
+                    return_value=(False, "venv Python missing"),
+                ) as venv_health,
+                mock.patch.object(bootstrap, "create_venv") as create_venv,
+                mock.patch.object(bootstrap, "refresh_dependencies") as refresh_dependencies,
+                self.assertRaisesRegex(SystemExit, "Python 3.11 or newer is required"),
+            ):
+                bootstrap.bootstrap_tooling_env(venv_path, requirements, dry_run=True)
+
+            canonical_base.assert_not_called()
+            venv_health.assert_not_called()
+            create_venv.assert_not_called()
+            refresh_dependencies.assert_not_called()
+            self.assertFalse(venv_path.exists())
+
     def test_symlinked_base_python_rebuilds_a_broken_venv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

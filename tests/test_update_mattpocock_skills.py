@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,16 @@ import update_mattpocock_skills as updater  # noqa: E402
 
 
 class MattPocockUpdaterTests(unittest.TestCase):
+    def test_help_does_not_require_site_packages(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-S", str(ROOT_SCRIPTS / "update_mattpocock_skills.py"), "--help"],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage: update_mattpocock_skills.py", result.stdout)
+
     def write_upstream_skill(
         self,
         source: Path,

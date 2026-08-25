@@ -6,14 +6,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-
-try:
-    import yaml
-except ModuleNotFoundError as exc:  # pragma: no cover - exercised by the bootstrap contract
-    raise SystemExit(
-        "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
-        "this script with the oh-my-harness tooling Python."
-    ) from exc
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +15,17 @@ _FRONTMATTER = re.compile(
     re.DOTALL,
 )
 _CALLABLE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+
+
+def _require_yaml() -> Any:
+    try:
+        import yaml
+    except ModuleNotFoundError as exc:  # pragma: no cover - exercised by the bootstrap contract
+        raise SystemExit(
+            "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
+            "this script with the oh-my-harness tooling Python."
+        ) from exc
+    return yaml
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,7 @@ def _resolved_within(path: Path, root: Path, *, label: str) -> Path:
 def skill_frontmatter_name(skill_file: Path) -> str:
     """Return the validated bare catalog skill name from one SKILL.md file."""
 
+    yaml = _require_yaml()
     try:
         text = skill_file.read_text(encoding="utf-8")
     except OSError as exc:

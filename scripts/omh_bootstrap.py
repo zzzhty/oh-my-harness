@@ -12,6 +12,23 @@ import uuid
 from pathlib import Path
 
 
+MINIMUM_PYTHON_VERSION = (3, 11)
+
+
+def _require_supported_python() -> None:
+    current = sys.version_info[:3]
+    if current[:2] >= MINIMUM_PYTHON_VERSION:
+        return
+    required = ".".join(str(component) for component in MINIMUM_PYTHON_VERSION)
+    found = ".".join(str(component) for component in current)
+    executable = Path(sys.executable).expanduser().resolve(strict=False)
+    raise SystemExit(
+        f"Python {required} or newer is required; found Python {found} at {executable}. "
+        "Use a supported interpreter directly, or set OH_MY_HARNESS_BOOTSTRAP_PYTHON "
+        "for the installer and omh launchers."
+    )
+
+
 def _load_json(path: Path) -> dict[str, object] | None:
     if not path.is_file() or path.is_symlink():
         return None
@@ -98,6 +115,10 @@ def main(argv: list[str] | None = None) -> int:
     cli = repo / "scripts" / "omh.py"
     bootstrap = repo / "scripts" / "bootstrap_tooling_env.py"
 
+    help_request = _is_help_request(command_arguments)
+    if not help_request:
+        _require_supported_python()
+
     manager_repair = _is_manager_repair(command_arguments)
     if manager_repair:
         _repair_checkout(home)
@@ -109,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             "the external installer if manager state is missing"
         )
 
-    if _is_help_request(command_arguments):
+    if help_request:
         completed = subprocess.run(
             [sys.executable, str(cli), "--home", str(home), "--help"]
         )

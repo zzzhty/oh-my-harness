@@ -918,6 +918,16 @@ class InstructionRemovalTests(unittest.TestCase):
 
 
 class BootstrapHelpTests(unittest.TestCase):
+    def test_real_help_does_not_require_site_packages(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-S", str(REPO_ROOT / "scripts" / "omh.py"), "--help"],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage: omh", result.stdout)
+
     def test_help_bypasses_tooling_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
@@ -925,7 +935,10 @@ class BootstrapHelpTests(unittest.TestCase):
             scripts.mkdir(parents=True)
             (scripts / "omh.py").write_text("pass\n", encoding="utf-8")
             (scripts / "bootstrap_tooling_env.py").write_text("pass\n", encoding="utf-8")
-            with mock.patch.object(omh_bootstrap.subprocess, "run") as run:
+            with (
+                mock.patch.object(omh_bootstrap.sys, "version_info", (3, 10, 13)),
+                mock.patch.object(omh_bootstrap.subprocess, "run") as run,
+            ):
                 run.return_value = subprocess.CompletedProcess([], 0)
                 self.assertEqual(
                     omh_bootstrap.main(["--home", str(home), "--help"]),
@@ -940,6 +953,20 @@ class BootstrapHelpTests(unittest.TestCase):
                     "--help",
                 ]
             )
+
+    def test_unsupported_python_rejects_repair_before_checkout_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            with (
+                mock.patch.object(omh_bootstrap.sys, "version_info", (3, 10, 13)),
+                mock.patch.object(omh_bootstrap, "_repair_checkout") as repair_checkout,
+                mock.patch.object(omh_bootstrap.subprocess, "run") as run,
+                self.assertRaisesRegex(SystemExit, "Python 3.11 or newer is required"),
+            ):
+                omh_bootstrap.main(["--home", str(home), "manager", "repair"])
+
+            repair_checkout.assert_not_called()
+            run.assert_not_called()
 
 
 class BootstrapRepairTests(unittest.TestCase):

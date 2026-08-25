@@ -304,6 +304,14 @@ Use the harness-aware refresh command for global instructions. It resolves the t
 
 Shared oh-my-harness Python tooling uses a runtime venv outside plugin source trees:
 
+Python 3.11 or newer is required for installation and lifecycle commands. The
+top-level `omh --help` path remains standard-library-only and can still render
+before this version check. Installers and generated launchers honor
+`OH_MY_HARNESS_BOOTSTRAP_PYTHON` when the default `python3` or `python` is too
+old; invoke `scripts/bootstrap_tooling_env.py` with a supported interpreter
+directly when using that script outside the launcher flow. Unsupported Python
+versions fail before manager-home, checkout, or tooling-venv mutation.
+
 Unix:
 
 ```bash

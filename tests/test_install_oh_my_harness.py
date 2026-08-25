@@ -32,6 +32,31 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(installer.launcher_help_invocation("nt"), "omh --help")
         self.assertEqual(installer.launcher_help_invocation("posix"), "omh --help")
 
+    def test_unsupported_python_is_rejected_before_manager_home_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".oh-my-harness"
+            with (
+                mock.patch.object(installer.sys, "version_info", (3, 10, 13)),
+                mock.patch.object(
+                    installer.sys,
+                    "argv",
+                    [
+                        "install_oh_my_harness.py",
+                        "--home",
+                        str(home),
+                        "--repository",
+                        "https://example.invalid/oh-my-harness.git",
+                        "--dry-run",
+                    ],
+                ),
+                mock.patch.object(installer, "run") as run,
+                self.assertRaisesRegex(SystemExit, "Python 3.11 or newer is required"),
+            ):
+                installer.main()
+
+            run.assert_not_called()
+            self.assertFalse(home.exists())
+
     @unittest.skipIf(os.name == "nt", "POSIX launcher assertion")
     def test_long_and_short_launchers_are_identical_ordinary_executables(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
