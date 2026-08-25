@@ -615,8 +615,8 @@ class RefreshHarnessCliTests(unittest.TestCase):
         self.assertEqual(
             prepare.call_args.kwargs["explicit_former_sources"],
             (
-                former_repo / "AGENTS.md",
                 former_repo / "agents/global-instructions.md",
+                former_repo / "AGENTS.md",
             ),
         )
 

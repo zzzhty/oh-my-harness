@@ -66,21 +66,25 @@ class HarnessRegistryTests(unittest.TestCase):
             set(self.registry.excluded_skill_roots),
             {"agents-skills"},
         )
-        self.assertEqual(self.registry.instructions_source, REPO_ROOT / "AGENTS.md")
+        self.assertEqual(
+            self.registry.instructions_source,
+            REPO_ROOT / "agents/global-instructions.md",
+        )
         self.assertEqual(
             self.registry.instructions_migration.migration_id,
             "split-global-project-instructions",
         )
         self.assertEqual(
             self.registry.instructions_migration.stage,
-            "bridge-ready",
+            "source-switched",
         )
         self.assertEqual(
             self.registry.instructions_migration.peer_source,
-            REPO_ROOT / "agents/global-instructions.md",
+            REPO_ROOT / "AGENTS.md",
         )
-        self.assertIsNone(
-            self.registry.instructions_migration.required_predecessor_revision
+        self.assertEqual(
+            self.registry.instructions_migration.required_predecessor_revision,
+            "adfb4c83497c2067b600546d9a579a7013b7ed14",
         )
 
     def test_registry_schema_version_is_an_iso_date_shared_by_both_authorities(self) -> None:
@@ -137,6 +141,11 @@ class HarnessRegistryTests(unittest.TestCase):
 
     def test_bridge_ready_requires_two_regular_byte_identical_sources(self) -> None:
         original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        instructions = original["sources"]["instructions"]
+        instructions["current"] = "AGENTS.md"
+        instructions["migration"]["stage"] = "bridge-ready"
+        instructions["migration"]["peer"] = "agents/global-instructions.md"
+        instructions["migration"].pop("requiredPredecessorRevision")
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.joinpath("agents").mkdir(parents=True)
@@ -166,6 +175,7 @@ class HarnessRegistryTests(unittest.TestCase):
         migration["stage"] = "source-switched"
         instructions["current"] = "agents/global-instructions.md"
         migration["peer"] = "AGENTS.md"
+        migration.pop("requiredPredecessorRevision")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "registry.json"
             write_registry(path, original)
@@ -186,8 +196,8 @@ class HarnessRegistryTests(unittest.TestCase):
     def test_instruction_stage_requires_its_canonical_path_orientation(self) -> None:
         original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
         instructions = original["sources"]["instructions"]
-        instructions["current"] = "agents/global-instructions.md"
-        instructions["migration"]["peer"] = "AGENTS.md"
+        instructions["migration"]["stage"] = "bridge-ready"
+        instructions["migration"].pop("requiredPredecessorRevision")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "registry.json"
             write_registry(path, original)

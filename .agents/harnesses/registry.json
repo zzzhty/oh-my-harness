@@ -6,11 +6,12 @@
   },
   "sources": {
     "instructions": {
-      "current": "AGENTS.md",
+      "current": "agents/global-instructions.md",
       "migration": {
         "id": "split-global-project-instructions",
-        "stage": "bridge-ready",
-        "peer": "agents/global-instructions.md"
+        "stage": "source-switched",
+        "peer": "AGENTS.md",
+        "requiredPredecessorRevision": "adfb4c83497c2067b600546d9a579a7013b7ed14"
       }
     }
   },
