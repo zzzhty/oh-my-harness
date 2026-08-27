@@ -126,6 +126,14 @@ class SkillWatcherTests(unittest.TestCase):
         def __init__(self) -> None:
             self.writes: list[str] = []
 
+        def write(self, text: str) -> int:
+            text.encode("ascii")
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
     def test_skill_doctor_prefers_complete_system_validator(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             codex_home = Path(tmp) / ".codex"
@@ -165,14 +173,6 @@ class SkillWatcherTests(unittest.TestCase):
             validator = validator_path(REPO_ROOT)
 
         self.assertEqual(validator, Path("/custom/validate_plugin.py"))
-
-        def write(self, text: str) -> int:
-            text.encode("ascii")
-            self.writes.append(text)
-            return len(text)
-
-        def flush(self) -> None:
-            return None
 
     @WINDOWS_PWSH_ENCODING_TEST
     def test_check_runner_tolerates_non_utf8_subprocess_output(self) -> None:
@@ -1334,13 +1334,15 @@ class SkillWatcherTests(unittest.TestCase):
             self.assertEqual(runtime_safe_slug("!!!", fallback="x"), "x")
 
     def test_proposal_frontmatter_and_status_transitions(self) -> None:
+        skill_dir = Path("/tmp/Skill Dir")
+        candidate_path = skill_dir / "SKILL.md"
         proposal = build_proposal(
             proposal_id="proposal-1",
             skill_name="demo",
-            skill_dir=Path("/tmp/Skill Dir"),
+            skill_dir=skill_dir,
             skill_contents="line\n",
             report="# Report\n",
-            snapshot_path=Path("/tmp/Skill Dir/SKILL.md"),
+            snapshot_path=candidate_path,
             timestamp="20260528T000000Z",
         )
 
@@ -1362,7 +1364,7 @@ class SkillWatcherTests(unittest.TestCase):
         )
         unix_argv = shlex.split(unix_command)
         candidate_index = unix_argv.index("--candidate-skill")
-        self.assertEqual(unix_argv[candidate_index + 1], "/tmp/Skill Dir/SKILL.md")
+        self.assertEqual(unix_argv[candidate_index + 1], str(candidate_path))
 
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp) / "state"
