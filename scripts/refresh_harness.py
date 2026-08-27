@@ -1342,15 +1342,15 @@ def resolve_plugin_validator(
     *,
     codex_home: Path,
     environ: dict[str, str] | None = None,
-) -> Path:
+) -> str:
     active_environ = os.environ if environ is None else environ
     override = active_environ.get("PLUGIN_VALIDATOR")
     if override:
-        return Path(override).expanduser()
+        return override
     system_validator = codex_home / SYSTEM_PLUGIN_VALIDATOR_RELATIVE
     if system_plugin_validator_is_complete(system_validator):
-        return system_validator
-    return REPOSITORY_PLUGIN_VALIDATOR
+        return str(system_validator)
+    return str(REPOSITORY_PLUGIN_VALIDATOR)
 
 
 def build_env(
@@ -1367,11 +1367,9 @@ def build_env(
     env[MANAGER_PYTHON_ENV] = str(tooling_python)
     env[MANAGER_TOOLING_PYTHON_ENV] = str(tooling_python)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env["PLUGIN_VALIDATOR"] = str(
-        resolve_plugin_validator(
-            codex_home=codex_home,
-            environ=env,
-        )
+    env["PLUGIN_VALIDATOR"] = resolve_plugin_validator(
+        codex_home=codex_home,
+        environ=env,
     )
     return env
 

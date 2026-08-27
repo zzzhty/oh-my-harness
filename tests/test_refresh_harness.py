@@ -110,10 +110,19 @@ class RefreshHarnessCliTests(unittest.TestCase):
         )
 
     def test_build_env_preserves_explicit_plugin_validator(self) -> None:
-        with mock.patch.dict(
-            os.environ,
-            {"PLUGIN_VALIDATOR": "/custom/validate_plugin.py"},
-            clear=True,
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"PLUGIN_VALIDATOR": "/custom/validate_plugin.py"},
+                clear=True,
+            ),
+            mock.patch.object(
+                refresh,
+                "Path",
+                side_effect=AssertionError(
+                    "explicit PLUGIN_VALIDATOR must remain an opaque string"
+                ),
+            ),
         ):
             env = refresh.build_env(
                 codex_home=Path("/codex-home"),
