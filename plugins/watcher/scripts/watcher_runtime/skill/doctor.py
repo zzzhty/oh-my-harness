@@ -82,11 +82,23 @@ def find_managed_hook_issues(
     return matched_events, issues
 
 
-def validator_path() -> Path:
+def validator_path(repo_root: Path, *, codex_home: Path = CODEX_HOME) -> Path:
     override = os.environ.get("PLUGIN_VALIDATOR") or os.environ.get("CODEX_PLUGIN_VALIDATOR")
     if override:
         return expand_path(override)
-    return CODEX_HOME / "skills" / ".system" / "plugin-creator" / "scripts" / "validate_plugin.py"
+    system_validator = (
+        codex_home
+        / "skills"
+        / ".system"
+        / "plugin-creator"
+        / "scripts"
+        / "validate_plugin.py"
+    )
+    if system_validator.is_file() and (
+        system_validator.parent / "identifier_validation.py"
+    ).is_file():
+        return system_validator
+    return repo_root / "scripts" / "validate_plugin.py"
 
 
 class Doctor:
@@ -277,16 +289,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--validator",
-        default=str(validator_path()),
-        help="Plugin validator script.",
+        help=(
+            "Plugin validator script. Defaults to $PLUGIN_VALIDATOR, "
+            "$CODEX_PLUGIN_VALIDATOR, a complete Codex system validator, "
+            "or <repo-root>/scripts/validate_plugin.py."
+        ),
     )
     args = parser.parse_args(argv)
+    source = resolve_repository_source(args.repo_root)
     doctor = Doctor(
-        source=resolve_repository_source(args.repo_root),
+        source=source,
         python_path=expand_path(args.python_path),
         state_dir=expand_path(args.state_dir),
         hook_target=expand_path(args.hook_target),
-        validator=expand_path(args.validator),
+        validator=(
+            expand_path(args.validator)
+            if args.validator is not None
+            else validator_path(source.root)
+        ),
     )
     doctor.run()
     return 1 if doctor.failures else 0

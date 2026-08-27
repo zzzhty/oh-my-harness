@@ -351,12 +351,12 @@ class CheckRunner:
         validator: Path,
     ) -> None:
         plugin_names = [selector.split("@", 1)[0] for selector in plugins]
-        bundled_plugin_names = [
+        validator_plugin_names = [
             plugin_name
             for plugin_name in plugin_names
             if plugin_name != "mattpocock-skills"
         ]
-        if bundled_plugin_names and not validator.is_file():
+        if validator_plugin_names and not validator.is_file():
             self.fail(f"plugin validator missing: {validator}")
             return
         for plugin_name in plugin_names:

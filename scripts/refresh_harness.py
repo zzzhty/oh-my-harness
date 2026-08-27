@@ -57,6 +57,11 @@ from terminal_output import emphasize, write_stderr
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE_FILE = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
 INSTALL_MANIFEST_FILE = REPO_ROOT / ".agents" / "plugins" / "install-manifest.json"
+REPOSITORY_PLUGIN_VALIDATOR = REPO_ROOT / "scripts" / "validate_plugin.py"
+SYSTEM_PLUGIN_VALIDATOR_RELATIVE = (
+    Path("skills") / ".system" / "plugin-creator" / "scripts" / "validate_plugin.py"
+)
+SYSTEM_PLUGIN_VALIDATOR_REQUIRED_SIBLINGS = ("identifier_validation.py",)
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
 MANAGER_HOME = resolve_manager_home()
 MACOS_APPLICATION_DIRS = (Path("/Applications"), Path.home() / "Applications")
@@ -1326,6 +1331,28 @@ def tooling_python_from_args(args: argparse.Namespace, venv_path: Path) -> Path:
     return venv_python(venv_path)
 
 
+def system_plugin_validator_is_complete(validator: Path) -> bool:
+    return validator.is_file() and all(
+        (validator.parent / sibling).is_file()
+        for sibling in SYSTEM_PLUGIN_VALIDATOR_REQUIRED_SIBLINGS
+    )
+
+
+def resolve_plugin_validator(
+    *,
+    codex_home: Path,
+    environ: dict[str, str] | None = None,
+) -> Path:
+    active_environ = os.environ if environ is None else environ
+    override = active_environ.get("PLUGIN_VALIDATOR")
+    if override:
+        return Path(override).expanduser()
+    system_validator = codex_home / SYSTEM_PLUGIN_VALIDATOR_RELATIVE
+    if system_plugin_validator_is_complete(system_validator):
+        return system_validator
+    return REPOSITORY_PLUGIN_VALIDATOR
+
+
 def build_env(
     *,
     codex_home: Path,
@@ -1340,9 +1367,11 @@ def build_env(
     env[MANAGER_PYTHON_ENV] = str(tooling_python)
     env[MANAGER_TOOLING_PYTHON_ENV] = str(tooling_python)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env.setdefault(
-        "PLUGIN_VALIDATOR",
-        str(codex_home / "skills" / ".system" / "plugin-creator" / "scripts" / "validate_plugin.py"),
+    env["PLUGIN_VALIDATOR"] = str(
+        resolve_plugin_validator(
+            codex_home=codex_home,
+            environ=env,
+        )
     )
     return env
 

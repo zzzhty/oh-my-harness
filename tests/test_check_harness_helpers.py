@@ -76,7 +76,7 @@ class PluginValidationRoutingTests(unittest.TestCase):
             ],
         )
 
-    def test_other_plugins_keep_bundled_validator(self) -> None:
+    def test_other_plugins_use_selected_validator(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             validator = Path(tmp) / "validate_plugin.py"
             validator.write_text("# fixture\n", encoding="utf-8")

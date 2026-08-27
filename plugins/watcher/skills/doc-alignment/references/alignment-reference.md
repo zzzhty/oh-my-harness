@@ -130,7 +130,15 @@ location or current working directory.
 ```bash
 python3 scripts/watcher doc doctor --config config/repos.example.json
 python3 -m compileall -q scripts/watcher_runtime
-PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py}"
+omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
+omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
+if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
+    if [ -f "$omh_system_validator" ] && [ -f "$omh_system_identifier" ]; then
+        PLUGIN_VALIDATOR="$omh_system_validator"
+    else
+        PLUGIN_VALIDATOR="${OH_MY_HARNESS_ROOT:?set OH_MY_HARNESS_ROOT}/scripts/validate_plugin.py"
+    fi
+fi
 python3 "$PLUGIN_VALIDATOR" .
 ```
 

@@ -84,12 +84,25 @@ Instructions are part of every harness plan. A missing target requires confirmat
 Source-package validation is independent of the selected harness:
 
 ```bash
-PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py}"
+omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
+omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
+if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
+    if [ -f "$omh_system_validator" ] && [ -f "$omh_system_identifier" ]; then
+        PLUGIN_VALIDATOR="$omh_system_validator"
+    else
+        PLUGIN_VALIDATOR="${OH_MY_HARNESS_ROOT:-$PWD}/scripts/validate_plugin.py"
+    fi
+fi
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/watcher
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/workflow
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/update_mattpocock_skills.py --validate-only
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_plugin_generations.py
 ```
+
+Lifecycle validation preserves an explicit `PLUGIN_VALIDATOR`, otherwise uses
+Codex's system `plugin-creator` validator when both it and its identifier helper
+are present, and falls back to `scripts/validate_plugin.py` only when that
+official bundle is incomplete.
 
 The public lifecycle commands own refresh and closure; the Python helpers remain lower-level implementation surfaces:
 
@@ -540,6 +553,15 @@ python3 -m json.tool .agents/plugins/marketplace.json >/dev/null
 python3 -m json.tool .agents/plugins/install-manifest.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.schema.json >/dev/null
+omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
+omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
+if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
+    if [ -f "$omh_system_validator" ] && [ -f "$omh_system_identifier" ]; then
+        PLUGIN_VALIDATOR="$omh_system_validator"
+    else
+        PLUGIN_VALIDATOR="$OH_MY_HARNESS_ROOT/scripts/validate_plugin.py"
+    fi
+fi
 "$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/watcher"
 "$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/workflow"
 "$OH_MY_HARNESS_PYTHON" "$OH_MY_HARNESS_ROOT/scripts/update_mattpocock_skills.py" --validate-only
@@ -553,8 +575,17 @@ Windows PowerShell:
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\plugins\install-manifest.json | Out-Null
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.json | Out-Null
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.schema.json | Out-Null
-& $env:OH_MY_HARNESS_PYTHON $env:PLUGIN_VALIDATOR "$env:OH_MY_HARNESS_ROOT\plugins\watcher"
-& $env:OH_MY_HARNESS_PYTHON $env:PLUGIN_VALIDATOR "$env:OH_MY_HARNESS_ROOT\plugins\workflow"
+$SystemPluginValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\validate_plugin.py"
+$SystemIdentifierValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\identifier_validation.py"
+$PluginValidator = if ($env:PLUGIN_VALIDATOR) {
+    $env:PLUGIN_VALIDATOR
+} elseif ((Test-Path -LiteralPath $SystemPluginValidator -PathType Leaf) -and (Test-Path -LiteralPath $SystemIdentifierValidator -PathType Leaf)) {
+    $SystemPluginValidator
+} else {
+    Join-Path $env:OH_MY_HARNESS_ROOT "scripts\validate_plugin.py"
+}
+& $env:OH_MY_HARNESS_PYTHON $PluginValidator "$env:OH_MY_HARNESS_ROOT\plugins\watcher"
+& $env:OH_MY_HARNESS_PYTHON $PluginValidator "$env:OH_MY_HARNESS_ROOT\plugins\workflow"
 & $env:OH_MY_HARNESS_PYTHON "$env:OH_MY_HARNESS_ROOT\scripts\update_mattpocock_skills.py" --validate-only
 & $env:OH_MY_HARNESS_PYTHON -m unittest discover -s tests -p 'test_*.py' -v
 ```
@@ -581,6 +612,7 @@ scripts/omh.py
 scripts/omh_bootstrap.py
 scripts/remove_harness.py
 scripts/refresh_harness.py
+scripts/validate_plugin.py
 scripts/sync_agents_skills.py
 scripts/sync_codex_agents.py
 scripts/sync_harness_instructions.py

@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -68,6 +69,58 @@ class RefreshHarnessCliTests(unittest.TestCase):
             side_effect=refresh.subprocess.TimeoutExpired("codex --version", 5),
         ):
             self.assertFalse(refresh.codex_executable_is_startable("codex"))
+
+    def test_build_env_prefers_complete_system_plugin_validator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / ".codex"
+            scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
+            scripts.mkdir(parents=True)
+            validator = scripts / "validate_plugin.py"
+            validator.write_text("# validator fixture\n", encoding="utf-8")
+            (scripts / "identifier_validation.py").write_text(
+                "# identifier fixture\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {}, clear=True):
+                env = refresh.build_env(
+                    codex_home=codex_home,
+                    tooling_python=Path("/tooling/python"),
+                )
+
+        self.assertEqual(env["PLUGIN_VALIDATOR"], str(validator))
+
+    def test_build_env_falls_back_when_system_plugin_validator_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / ".codex"
+            scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "validate_plugin.py").write_text(
+                "# validator fixture\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {}, clear=True):
+                env = refresh.build_env(
+                    codex_home=codex_home,
+                    tooling_python=Path("/tooling/python"),
+                )
+
+        self.assertEqual(
+            env["PLUGIN_VALIDATOR"],
+            str(REPO_ROOT / "scripts" / "validate_plugin.py"),
+        )
+
+    def test_build_env_preserves_explicit_plugin_validator(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"PLUGIN_VALIDATOR": "/custom/validate_plugin.py"},
+            clear=True,
+        ):
+            env = refresh.build_env(
+                codex_home=Path("/codex-home"),
+                tooling_python=Path("/tooling/python"),
+            )
+
+        self.assertEqual(env["PLUGIN_VALIDATOR"], "/custom/validate_plugin.py")
 
     def test_nonempty_codex_prune_plan_requires_confirmation_by_default(self) -> None:
         plan = refresh.CodexPrunePlan(

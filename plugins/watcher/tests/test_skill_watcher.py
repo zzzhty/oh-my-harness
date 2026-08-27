@@ -39,7 +39,11 @@ from watcher_runtime.skill.codex_hook_config import (  # noqa: E402
     skill_watcher_command,
 )
 from check_harness import CheckRunner, decode_subprocess_output  # noqa: E402
-from watcher_runtime.skill.doctor import find_managed_hook_issues, main as doctor_main  # noqa: E402
+from watcher_runtime.skill.doctor import (  # noqa: E402
+    find_managed_hook_issues,
+    main as doctor_main,
+    validator_path,
+)
 from watcher_runtime.skill.migrate_skill_watcher_schema import main as reset_schema_main  # noqa: E402
 from watcher_runtime.skill.report_pipeline import (  # noqa: E402
     event_hash,
@@ -117,6 +121,46 @@ class SkillWatcherTests(unittest.TestCase):
 
         def __init__(self) -> None:
             self.writes: list[str] = []
+
+    def test_skill_doctor_prefers_complete_system_validator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / ".codex"
+            scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
+            scripts.mkdir(parents=True)
+            expected = scripts / "validate_plugin.py"
+            expected.write_text("# validator fixture\n", encoding="utf-8")
+            (scripts / "identifier_validation.py").write_text(
+                "# identifier fixture\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {}, clear=True):
+                validator = validator_path(REPO_ROOT, codex_home=codex_home)
+
+        self.assertEqual(validator, expected)
+
+    def test_skill_doctor_falls_back_for_incomplete_system_validator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            codex_home = Path(tmp) / ".codex"
+            scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "validate_plugin.py").write_text(
+                "# validator fixture\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {}, clear=True):
+                validator = validator_path(REPO_ROOT, codex_home=codex_home)
+
+        self.assertEqual(validator, REPO_ROOT / "scripts" / "validate_plugin.py")
+
+    def test_skill_doctor_preserves_explicit_validator_override(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"PLUGIN_VALIDATOR": "/custom/validate_plugin.py"},
+            clear=True,
+        ):
+            validator = validator_path(REPO_ROOT)
+
+        self.assertEqual(validator, Path("/custom/validate_plugin.py"))
 
         def write(self, text: str) -> int:
             text.encode("ascii")

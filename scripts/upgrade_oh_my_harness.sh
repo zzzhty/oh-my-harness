@@ -224,7 +224,16 @@ export OH_MY_HARNESS_HOME="$manager_home"
 export OH_MY_HARNESS_ROOT="$repo_root"
 export OH_MY_HARNESS_PYTHON="$tooling_python"
 export OH_MY_HARNESS_TOOLING_PYTHON="$tooling_python"
-export PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py}"
+if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
+    omh_system_plugin_validator="$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py"
+    omh_system_identifier_validator="$CODEX_HOME/skills/.system/plugin-creator/scripts/identifier_validation.py"
+    if [ -f "$omh_system_plugin_validator" ] && [ -f "$omh_system_identifier_validator" ]; then
+        PLUGIN_VALIDATOR="$omh_system_plugin_validator"
+    else
+        PLUGIN_VALIDATOR="$OH_MY_HARNESS_ROOT/scripts/validate_plugin.py"
+    fi
+fi
+export PLUGIN_VALIDATOR
 
 echo "OH_MY_HARNESS_HOME=$OH_MY_HARNESS_HOME"
 echo "OH_MY_HARNESS_ROOT=$OH_MY_HARNESS_ROOT"

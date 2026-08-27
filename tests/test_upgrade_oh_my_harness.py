@@ -142,6 +142,71 @@ class UnixUpgradeWrapperTests(unittest.TestCase):
         )
         self.assertNotIn("bootstrap Python has no PyYAML", result.stderr)
 
+    def test_wrapper_prefers_complete_system_validator_then_falls_back(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            codex_home = root / ".codex"
+            bootstrap_python = root / "bin" / "bootstrap-python"
+            tooling_python = root / "venv" / "bin" / "python"
+            write_noop_executable(bootstrap_python)
+            write_noop_executable(tooling_python)
+            env = os.environ.copy()
+            env.update({"HOME": str(root), "PATH": "/usr/bin:/bin"})
+            env.pop("PLUGIN_VALIDATOR", None)
+
+            fallback_result = self.run_upgrade(
+                env=env,
+                codex_home=codex_home,
+                harness="zcode",
+                bootstrap_python=bootstrap_python,
+                tooling_python=tooling_python,
+            )
+            system_scripts = (
+                codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
+            )
+            system_scripts.mkdir(parents=True)
+            system_validator = system_scripts / "validate_plugin.py"
+            system_validator.write_text("# validator fixture\n", encoding="utf-8")
+            incomplete_result = self.run_upgrade(
+                env=env,
+                codex_home=codex_home,
+                harness="zcode",
+                bootstrap_python=bootstrap_python,
+                tooling_python=tooling_python,
+            )
+            (system_scripts / "identifier_validation.py").write_text(
+                "# identifier fixture\n",
+                encoding="utf-8",
+            )
+            system_result = self.run_upgrade(
+                env=env,
+                codex_home=codex_home,
+                harness="zcode",
+                bootstrap_python=bootstrap_python,
+                tooling_python=tooling_python,
+            )
+            env["PLUGIN_VALIDATOR"] = "/custom/validate_plugin.py"
+            override_result = self.run_upgrade(
+                env=env,
+                codex_home=codex_home,
+                harness="zcode",
+                bootstrap_python=bootstrap_python,
+                tooling_python=tooling_python,
+            )
+
+        fallback_validator = REPO_ROOT / "scripts" / "validate_plugin.py"
+        self.assertEqual(fallback_result.returncode, 0, fallback_result.stderr)
+        self.assertIn(f"PLUGIN_VALIDATOR={fallback_validator}", fallback_result.stdout)
+        self.assertEqual(incomplete_result.returncode, 0, incomplete_result.stderr)
+        self.assertIn(f"PLUGIN_VALIDATOR={fallback_validator}", incomplete_result.stdout)
+        self.assertEqual(system_result.returncode, 0, system_result.stderr)
+        self.assertIn(f"PLUGIN_VALIDATOR={system_validator}", system_result.stdout)
+        self.assertEqual(override_result.returncode, 0, override_result.stderr)
+        self.assertIn(
+            "PLUGIN_VALIDATOR=/custom/validate_plugin.py",
+            override_result.stdout,
+        )
+
     def test_yes_is_forwarded_to_registry_owned_confirmations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -469,6 +534,17 @@ class PowerShellUpgradeWrapperContractTests(unittest.TestCase):
         self.assertIn("[switch]$Yes", script)
         self.assertIn('$refreshArgs += "--yes"', script)
         self.assertIn('@("--migrate-from-repo", $MigrateFromRepo)', script)
+        self.assertIn('if (-not $env:PLUGIN_VALIDATOR)', script)
+        self.assertIn('$systemPluginValidator', script)
+        self.assertIn('$systemIdentifierValidator', script)
+        self.assertIn(
+            'Join-Path $env:CODEX_HOME "skills\\.system\\plugin-creator\\scripts\\validate_plugin.py"',
+            script,
+        )
+        self.assertIn(
+            'Join-Path $env:OH_MY_HARNESS_ROOT "scripts\\validate_plugin.py"',
+            script,
+        )
         self.assertLess(
             script.index('-Exe $BootstrapPython', script.index('$bootstrapArgs')),
             script.index('-Exe $env:OH_MY_HARNESS_PYTHON', script.index('$refreshArgs')),

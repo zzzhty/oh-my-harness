@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:0837ec8ba61fed644f117f15a8bacc6de340a3073c8b75c6991322c0fc95f9bc",
+  "bundleIdentity": "sha256:c897ac2219bbee1da2f84b402129f2eae487bab7c31b90124b35d35eabb15dcb",
   "generationLength": 16,
   "plugins": [
     {
@@ -11,10 +11,10 @@
       "versionAuthority": "upstream"
     },
     {
-      "contentSha256": "35713be6d98075e17134d2bffee1190fdec971d45b67dcfd6bad64120976b307",
-      "generation": "35713be6d98075e1",
+      "contentSha256": "744369bc57f0d972581855b822c292e712bcc63565de414992612ae99baea3da",
+      "generation": "744369bc57f0d972",
       "name": "watcher",
-      "version": "1.0.0+codex.35713be6d98075e1",
+      "version": "1.0.0+codex.744369bc57f0d972",
       "versionAuthority": "release"
     },
     {
