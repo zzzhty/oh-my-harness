@@ -55,7 +55,8 @@ def load_yaml_module():
         raise SystemExit(
             "PyYAML is required for proposal artifact updates. "
             "Run `python3 scripts/bootstrap_tooling_env.py` on Unix or "
-            "`py scripts\\bootstrap_tooling_env.py` on Windows from the oh-my-harness repo root."
+            "`py scripts\\bootstrap_tooling_env.py` on Windows from the oh-my-harness repo root, "
+            "then invoke Watcher with the manager tooling Python."
         ) from exc
     return yaml
 

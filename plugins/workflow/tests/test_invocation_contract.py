@@ -9,6 +9,8 @@ REPO_ROOT = WORKFLOW_ROOT.parents[1]
 LONG_RUNNING_ROOT = WORKFLOW_ROOT / "skills" / "long-running-goal"
 ORCHESTRATE_ROOT = WORKFLOW_ROOT / "skills" / "orchestrate-subagents"
 SUMMARY_ROOT = WORKFLOW_ROOT / "skills" / "summary-in-html"
+SOP_ROOT = WORKFLOW_ROOT / "skills" / "sop"
+PROMPT_STRATEGY_ROOT = WORKFLOW_ROOT / "skills" / "prompt-strategy-loop"
 
 
 def skill_description(skill_file: Path) -> str:
@@ -101,6 +103,28 @@ class InvocationContractTests(unittest.TestCase):
         self.assertIn("active environment or plan authorizes delegation", prompt_strategy)
         self.assertIn("does not invoke `orchestrate-subagents`", prompt_strategy)
         self.assertNotIn("current environment exposes subagent tools", prompt_strategy)
+
+    def test_companion_skills_only_suggest_long_running_goal_conversion(self) -> None:
+        for skill_file in (
+            SOP_ROOT / "SKILL.md",
+            PROMPT_STRATEGY_ROOT / "SKILL.md",
+        ):
+            with self.subTest(skill_file=skill_file):
+                text = skill_file.read_text(encoding="utf-8")
+                self.assertIn("suggest `long-running-goal`", text)
+                self.assertIn("wait for explicit user confirmation", text)
+                self.assertNotIn("Use `long-running-goal` when", text)
+
+    def test_sop_execute_branch_requires_ready_gate_before_actions(self) -> None:
+        skill = (SOP_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        execute = skill.split("## Execute", 1)[1].split("## Completion", 1)[0]
+
+        gate = execute.index("check_sop_ready.py <sop-file>")
+        first_action = execute.index("Follow the declared steps")
+        self.assertLess(gate, first_action)
+        self.assertIn("without `--allow-draft`", execute)
+        self.assertIn("confirm the top-level status is `Ready`", execute)
+        self.assertIn("If the SOP is `Draft` or the check fails, do not execute it", execute)
 
     def test_broad_review_authority_and_orchestration_invocation_are_separate(self) -> None:
         global_guidance = (

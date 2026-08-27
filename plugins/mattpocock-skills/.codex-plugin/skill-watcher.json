@@ -260,7 +260,6 @@
         }
       ],
       "supporting_skills": [
-        "mattpocock-skills:tdd",
         "mattpocock-skills:code-review"
       ]
     },
@@ -630,12 +629,7 @@
           "match": "phrase"
         }
       ],
-      "supporting_skills": [
-        "mattpocock-skills:grilling",
-        "mattpocock-skills:domain-modeling",
-        "mattpocock-skills:prototype",
-        "mattpocock-skills:research"
-      ]
+      "supporting_skills": []
     },
     "mattpocock-skills:wizard": {
       "role": "specialized",

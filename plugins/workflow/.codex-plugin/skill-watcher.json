@@ -3,6 +3,7 @@
   "skills": {
     "workflow:long-running-goal": {
       "role": "entrypoint",
+      "logical_group": "explicit-workflows",
       "aliases": [
         {"value": "workflow:long-running-goal", "kind": "skill_name", "match": "phrase"},
         {"value": "long-running-goal", "kind": "slug", "match": "token"},
@@ -15,6 +16,7 @@
     },
     "workflow:orchestrate-subagents": {
       "role": "specialized",
+      "logical_group": "explicit-workflows",
       "aliases": [
         {"value": "workflow:orchestrate-subagents", "kind": "skill_name", "match": "phrase"},
         {"value": "orchestrate-subagents", "kind": "slug", "match": "token"},
@@ -24,6 +26,7 @@
     },
     "workflow:prompt-strategy-loop": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "workflow:prompt-strategy-loop", "kind": "skill_name", "match": "phrase"},
         {"value": "prompt-strategy-loop", "kind": "slug", "match": "token"},
@@ -35,6 +38,7 @@
     },
     "workflow:sop": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "workflow:sop", "kind": "skill_name", "match": "phrase"},
         {"value": "sop", "kind": "slug", "match": "token"},
@@ -47,6 +51,7 @@
     },
     "workflow:summary-in-html": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "workflow:summary-in-html", "kind": "skill_name", "match": "phrase"},
         {"value": "summary-in-html", "kind": "slug", "match": "token"},

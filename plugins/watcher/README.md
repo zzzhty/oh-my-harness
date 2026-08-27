@@ -21,12 +21,12 @@ $CODEX_HOME/watcher/
 
 On `SessionStart`, Watcher rebuilds `skill-metadata-cache.json` from the repository-authoritative callable catalog at `scripts/repo_skill_catalog.py` under one explicit oh-my-harness repository root. Marketplace metadata, plugin manifests, plugin cache, and the runtime cache never enumerate callable skills. A missing or invalid explicit repository root, canonical catalog failure, unsupported attribution-overlay schema, or invalid skill relationship stops the refresh visibly.
 
-Repository-owned `.codex-plugin/skill-watcher.json` files are non-callable attribution overlays keyed by durable namespaced Watcher identities. They retain roles, aliases, supporting-skill relationships, logical groups, and legacy mappings without defining the callable inventory. Overlay entries may declare an optional lowercase kebab-case `logical_group`. Skill reports use the derived runtime metadata cache to render both a group-level usage table and each observed skill's group. Because grouping is applied at report time, existing logs can be reclassified without rewriting historical events.
+Repository-owned `.codex-plugin/skill-watcher.json` files are non-callable attribution overlays keyed by durable namespaced Watcher identities. They retain roles, aliases, supporting-skill relationships, logical groups, and legacy mappings without defining the callable inventory. Declare `supporting_skills` only for unconditional dependencies that participate whenever the primary skill runs, because Watcher adds every declared dependency to effective usage; alternatives and conditional branches remain undeclared. Use `explicit-workflows` for skills whose contract requires explicit user selection or confirmation and `implicit-primitives` for skills the model may select from natural-language intent. Skill reports apply grouping at report time, so existing logs can be reclassified without rewriting historical events.
 
 Packaged skills:
 
 - `doc-alignment`: audit or align documentation, scripts, skills, runbooks, operational entry points, and planning folders against current source of truth.
-- `housekeeping`: clean temporary files, generated caches, stale runtime artifacts, obsolete active documentation, outdated paths, and post-migration clutter.
+- `housekeeping`: remove inventoried disposable files, generated caches, stale runtime artifacts, and post-migration physical clutter while preserving durable state.
 - `skill-maintainer`: analyze skill usage evidence and propose bounded `SKILL.md` maintenance updates without automatic source mutation.
 - `skill-compressor`: reduce skill or plugin instruction footprint while preserving operational semantics.
 
@@ -41,9 +41,10 @@ Use the unified CLI from the Watcher plugin root:
 
 ```bash
 export OH_MY_HARNESS_ROOT="$(git rev-parse --show-toplevel)"
-python3 scripts/watcher doc report --config config/repos.example.json --print-report
-python3 scripts/watcher skill report --since 7d
-python3 scripts/watcher migrate-state --dry-run
+omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
+"$omh_tooling_python" -B scripts/watcher doc report --config config/repos.example.json --print-report
+"$omh_tooling_python" -B scripts/watcher skill report --since 7d
+"$omh_tooling_python" -B scripts/watcher migrate-state --dry-run
 ```
 
 `config/repos.example.json` resolves the audited checkout from
@@ -108,4 +109,4 @@ also changes the effective config hash so commit-dependent audits become due imm
 This resolver does not locate the Watcher config file itself. A moved
 `.codex/watcher-doc-audit.json` still requires the caller's `--config` path to be updated.
 
-Run `python3 scripts/watcher migrate-state --apply` to move `$CODEX_HOME/skill-watcher/` to `$CODEX_HOME/watcher/skill/` and `$CODEX_HOME/doc-watcher/` to `$CODEX_HOME/watcher/doc/`. The migration refuses to merge if the target already exists.
+Run `"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" -B scripts/watcher migrate-state --apply` to move `$CODEX_HOME/skill-watcher/` to `$CODEX_HOME/watcher/skill/` and `$CODEX_HOME/doc-watcher/` to `$CODEX_HOME/watcher/doc/`. The migration refuses to merge if the target already exists.

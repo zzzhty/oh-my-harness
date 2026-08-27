@@ -23,7 +23,7 @@ Core fields:
 Skill attribution fields:
 
 - `skill_attribution.primary`: entry skill name, source, role, typed alias evidence, and confidence.
-- `skill_attribution.supporting`: direct supporting skills declared by plugin metadata.
+- `skill_attribution.supporting`: unconditional supporting skills declared by plugin metadata; alternatives and conditional branches remain undeclared.
 - `skill_attribution.effective`: primary plus supporting skill names, used by default reporting.
 - `skill_attribution.mentioned`: extra runtime text matches that are evidence only.
 - `codex.user_skill_context`: redacted summary/hash of extra user context.

@@ -1,6 +1,6 @@
 ---
 name: skill-compressor
-description: Reduce the instruction footprint of agent skills and their references while preserving trigger coverage, required behavior, and validation owned by the changed surface.
+description: Reduce the instruction footprint of agent skills, plugin guidance, and their references while preserving trigger coverage, required behavior, and validation owned by the changed surface.
 ---
 
 # Skill Compressor
@@ -18,8 +18,8 @@ Invoking this skill authorizes only the read-only semantic comparison needed for
 ## Workflow
 
 1. Bound the editable skill metadata, body, references, templates, and helper surfaces. Preserve unrelated dirty work.
-2. Establish a recoverable baseline through Git history or diff. Copy only dirty, untracked, or non-Git inputs that otherwise lack recovery.
-3. Inventory the affected trigger/routing branches, permissions, stops, failure handling, validators, and unique edge cases.
+2. Establish a recoverable baseline through Git history or diff. If dirty, untracked, or non-Git inputs otherwise lack recovery, create a bounded copy only when writes are authorized; in read-only mode, stop and report that equivalence is unverified because no recoverable baseline exists.
+3. Inventory the affected trigger/routing branches, permissions, stops, failure handling, validators, and unique edge cases; freeze this affected-meaning inventory as the equivalence oracle.
 4. Compress attention, not meaning:
    - keep common execution steps and non-default invariants inline;
    - disclose conditional detail one level deep behind a strong pointer;
@@ -27,9 +27,9 @@ Invoking this skill authorizes only the read-only semantic comparison needed for
    - remove duplicated meaning, stale history, motivation, obvious advice, and repeated examples unless one disambiguates behavior;
    - prefer positive target behavior while retaining true destructive, privacy, external-write, and source/cache guardrails.
 5. Validate only the affected surface: skill/frontmatter validation, relative links, owning plugin or domain checks when their contract changed, and `git diff --check -- <changed-paths>`.
-6. Compare the candidate with the baseline and oracle, fix unintended drift, and repeat only affected checks.
+6. Compare the candidate with the baseline and equivalence oracle, fix unintended drift, and repeat only affected checks.
 7. Refresh installed state only when activation is authorized.
 
 ## Completion
 
-Report changed files, size change when relevant, preserved and intentionally changed behavior, checks run, reviewer status, blockers, and residual risk. Claim equivalence only when every affected meaning remains reachable and the candidate passes its scoped oracle.
+Report changed files, size change when relevant, preserved and intentionally changed behavior, checks run, reviewer status, blockers, and residual risk. Claim equivalence only when every affected meaning remains reachable and the candidate passes its equivalence oracle.

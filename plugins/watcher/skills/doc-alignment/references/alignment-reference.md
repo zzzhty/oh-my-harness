@@ -75,7 +75,7 @@ Completion criterion: current navigation reaches one typed owner for each live d
 Use the helper when it fits:
 
 ```bash
-python <skill-folder>/scripts/check_planning_tree.py <planning-root>
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" -B <skill-folder>/scripts/check_planning_tree.py <planning-root>
 ```
 
 Completion criterion: active indexes contain only live work, closed/replaced evidence follows local archive rules, and unresolved residual work remains discoverable as a current item.
@@ -84,15 +84,17 @@ Completion criterion: active indexes contain only live work, closed/replaced evi
 
 For agent skills:
 
-1. Use the skill-creation/update workflow as companion truth for frontmatter, resource layout, `agents/openai.yaml`, and validation.
-2. Keep `SKILL.md` frontmatter to `name` and `description`.
-3. Put all trigger conditions in `description`; the body loads only after trigger.
-4. Keep bodies imperative and procedural. Remove process history, repo-only assumptions, and redundant explanation.
-5. Refer to bundled resources relative to the skill folder.
-6. Prefer generic placeholders plus examples over repo-specific paths, unless the path is intrinsic.
-7. Inspect and update `agents/openai.yaml` when display name, short description, or default prompt no longer matches.
-8. Do not edit cache/build artifacts such as `__pycache__`, bytecode, temp validation output, or generated logs unless explicitly asked.
-9. Validate with the skill validator when available.
+1. Use the skill-creation/update workflow as companion truth for resource layout, `agents/openai.yaml`, and validation, subject to the target's owning invocation contract.
+2. Preserve the target skill's current invocation mode unless the user explicitly requests a change.
+3. For a model-invoked skill, omit `disable-model-invocation` and put every distinct model trigger branch in `description`.
+4. For a user-invoked skill, preserve `disable-model-invocation: true` and keep `description` to a human-facing one-line summary rather than a trigger list.
+5. Preserve other supported frontmatter interface fields, such as an owning `argument-hint`, when the target contract uses them.
+6. Keep bodies imperative and procedural. Remove process history, repo-only assumptions, and redundant explanation.
+7. Refer to bundled resources relative to the skill folder.
+8. Prefer generic placeholders plus examples over repo-specific paths, unless the path is intrinsic.
+9. Inspect and update `agents/openai.yaml` when display name, short description, default prompt, or invocation policy no longer matches.
+10. Keep cache/build artifacts such as `__pycache__`, bytecode, temp validation output, and generated logs unchanged unless explicitly asked.
+11. Validate with the skill validator when available.
 
 When aligning multiple skills, process them in user order or foundational-first; finish and validate a dependency skill before its dependents; keep trigger descriptions distinct; move shared generic rules only when both skills need them; avoid duplicated validation snippets when scripts or helpers cover them; finish with a cross-skill stale-reference, obsolete-term, and broken-link check.
 
@@ -128,8 +130,14 @@ repository config; do not infer repository authority from the plugin cache
 location or current working directory.
 
 ```bash
-python3 scripts/watcher doc doctor --config config/repos.example.json
-python3 -m compileall -q scripts/watcher_runtime
+omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
+"$omh_tooling_python" -B scripts/watcher doc doctor --config config/repos.example.json
+"$omh_tooling_python" -B - <<'PY'
+from pathlib import Path
+
+for source in Path("scripts/watcher_runtime").rglob("*.py"):
+    compile(source.read_bytes(), str(source), "exec")
+PY
 omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
 omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
 if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
@@ -139,7 +147,7 @@ if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
         PLUGIN_VALIDATOR="${OH_MY_HARNESS_ROOT:?set OH_MY_HARNESS_ROOT}/scripts/validate_plugin.py"
     fi
 fi
-python3 "$PLUGIN_VALIDATOR" .
+"$omh_tooling_python" -B "$PLUGIN_VALIDATOR" .
 ```
 
 If a dependency is missing, install it only when allowed; otherwise report the exact module and do not claim validator success. Manual frontmatter/link checks are partial checks, not validator substitutes.

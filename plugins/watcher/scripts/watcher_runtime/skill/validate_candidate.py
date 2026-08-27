@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 from pathlib import Path
 
 from .runtime_paths import expand_path
 
-TODO_MARKER = "[TODO:"
+TODO_PLACEHOLDER_RE = re.compile(r"\[TODO:[^]\r\n]*\]")
 
 
 def load_yaml_module():
@@ -19,7 +20,8 @@ def load_yaml_module():
         raise SystemExit(
             "PyYAML is required for candidate validation. "
             "Run `python3 scripts/bootstrap_tooling_env.py` on Unix or "
-            "`py scripts\\bootstrap_tooling_env.py` on Windows from the oh-my-harness repo root."
+            "`py scripts\\bootstrap_tooling_env.py` on Windows from the oh-my-harness repo root, "
+            "then invoke Watcher with the manager tooling Python."
         ) from exc
     return yaml
 
@@ -40,7 +42,7 @@ def validate_skill(path: Path) -> None:
         contents = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise SystemExit(f"failed to read candidate skill {path}: {exc}") from exc
-    if TODO_MARKER in contents:
+    if TODO_PLACEHOLDER_RE.search(contents):
         raise SystemExit(f"{path} contains a `[TODO: ...]` placeholder")
 
     frontmatter_text, body = split_frontmatter(contents, path)
@@ -83,9 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     candidate_path = expand_path(args.candidate_skill).resolve()
     cwd = expand_path(args.cwd).resolve() if args.cwd else None
     validate_skill(candidate_path)
-    for command in args.validation_command or []:
+    validation_commands = args.validation_command or []
+    for command in validation_commands:
         run_validation_command(command, cwd)
-    print(f"candidate validation passed: {candidate_path}")
+    if validation_commands:
+        print(f"candidate validation passed: {candidate_path}")
+    else:
+        print(
+            "candidate static checks passed; no explicit validation command was "
+            f"provided, so human review is required: {candidate_path}"
+        )
     return 0
 
 

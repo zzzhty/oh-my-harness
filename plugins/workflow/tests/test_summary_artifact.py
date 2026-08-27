@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "scripts"
 RENDERER = ROOT / "skills" / "summary-in-html" / "scripts" / "render_summary_html.py"
 CHECKER = ROOT / "skills" / "summary-in-html" / "scripts" / "check_summary_html.py"
+SCHEMA_DOC = ROOT / "skills" / "summary-in-html" / "references" / "artifact-schema.md"
 sys.path.insert(0, str(SHARED))
 
 from summary_artifact import SummaryArtifactError, artifact_from_data, validate_summary_artifact  # noqa: E402
@@ -248,31 +251,17 @@ class SummaryArtifactTests(unittest.TestCase):
         )
 
     def test_documented_nested_artifact_renders_compatibly(self) -> None:
-        data = {
-            "title": "Workflow & Runtime",
-            "evidence": [{"label": "Inventory", "path": "inputs.json"}],
-            "assets": [
-                {
-                    "path": "assets/architecture.png",
-                    "alt": "Architecture overview",
-                    "caption": "Runtime architecture",
-                }
-            ],
-            "sections": [
-                {
-                    "title": "Purpose",
-                    "summary": "What this scope owns.",
-                    "paragraphs": ["One paragraph."],
-                    "bullets": ["Developer-facing point"],
-                    "files": [{"path": "README.md", "note": "Entry point"}],
-                    "code": [{"language": "python", "text": "print('ok')"}],
-                }
-            ],
-            "blind_spots": ["Tests were not run."],
-        }
+        documented = SCHEMA_DOC.read_text(encoding="utf-8")
+        match = re.search(
+            r"A minimal summary input is:\n\n```json\n(?P<payload>.*?)\n```",
+            documented,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        data = json.loads(match.group("payload"))
 
         artifact = artifact_from_data(data)
-        self.assertEqual(artifact.title, "Workflow & Runtime")
+        self.assertEqual(artifact.title, "Workflow Plugin Summary")
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "summary.json"
@@ -284,20 +273,74 @@ class SummaryArtifactTests(unittest.TestCase):
                 check=False,
                 text=True,
             )
+            checked = subprocess.run(
+                [sys.executable, str(CHECKER), str(output_path)],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
             html = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("Workflow &amp; Runtime", html)
-        self.assertIn('<img src="assets/architecture.png" alt="Architecture overview">', html)
-        self.assertIn("Runtime architecture", html)
-        self.assertIn("README.md", html)
-        self.assertIn("print(&#x27;ok&#x27;)", html)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertIn("Workflow Plugin Summary", html)
+        self.assertNotIn("<img", html)
+        self.assertIn("plugins/workflow/README.md", html)
+        self.assertIn("python -m unittest", html)
         self.assertIn('<body class="reference-summary">', html)
         self.assertNotIn("data-progress-check", html)
         self.assertNotIn("walkthrough-progress", html)
         self.assertNotIn(".file-list a", html)
         self.assertNotIn(".call-tree", html)
         self.assertNotIn("<script>", html)
+
+    def test_documented_explicit_visual_asset_renders_and_passes_checker(self) -> None:
+        documented = SCHEMA_DOC.read_text(encoding="utf-8")
+        minimal_match = re.search(
+            r"A minimal summary input is:\n\n```json\n(?P<payload>.*?)\n```",
+            documented,
+            flags=re.DOTALL,
+        )
+        visual_match = re.search(
+            r"After an explicit visual request.*?```json\n(?P<payload>.*?)\n```",
+            documented,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(minimal_match)
+        self.assertIsNotNone(visual_match)
+        data = json.loads(minimal_match.group("payload"))
+        data.update(json.loads(visual_match.group("payload")))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset = root / "assets" / "architecture.png"
+            asset.parent.mkdir()
+            asset.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                )
+            )
+            input_path = root / "summary.json"
+            output_path = root / "summary.html"
+            input_path.write_text(json.dumps(data), encoding="utf-8")
+            rendered = subprocess.run(
+                [sys.executable, str(RENDERER), "--input", str(input_path), "--out", str(output_path)],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            checked = subprocess.run(
+                [sys.executable, str(CHECKER), str(output_path)],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            html = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
+
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertIn('<img src="assets/architecture.png" alt="Workflow architecture">', html)
+        self.assertIn("Validated workflow structure", html)
 
     def test_explicit_summary_matches_default_rendering(self) -> None:
         data = {

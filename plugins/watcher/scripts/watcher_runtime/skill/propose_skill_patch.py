@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,6 +77,9 @@ def build_proposal(
     timestamp: str,
 ) -> str:
     line_count = len(skill_contents.splitlines())
+    candidate_path = skill_dir / "SKILL.md"
+    posix_candidate = shlex.quote(str(candidate_path))
+    powershell_candidate = "'" + str(candidate_path).replace("'", "''") + "'"
     return "\n".join(
         [
             *render_frontmatter(
@@ -100,7 +104,11 @@ def build_proposal(
             "",
             "## Proposed Bounded Edit",
             "",
-            "No source file was modified. Review the evidence above and write the smallest add, replace, or delete edit that addresses repeated failures or one severe failure.",
+            "This generated draft is a worksheet, not yet a reviewable proposal. Update this Watcher-owned artifact with the smallest exact add, replace, or delete edit that addresses repeated failures or one severe failure. Do not modify the source skill.",
+            "",
+            "- Decision: Undecided; replace with one bounded edit or an evidence-backed no-change decision.",
+            f"- Target: `{candidate_path}`",
+            "- Exact edit: Replace this instruction with the proposed before/after text or precise deletion.",
             "",
             "Suggested decision rules:",
             "",
@@ -116,7 +124,21 @@ def build_proposal(
             "",
             "## Validation Plan",
             "",
-            f"- Run `scripts/watcher skill validate --candidate-skill {skill_dir / 'SKILL.md'}` after drafting a candidate.",
+            "Unix shell:",
+            "",
+            "```bash",
+            'omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"',
+            f'"$omh_tooling_python" -B scripts/watcher skill validate --candidate-skill {posix_candidate}',
+            "```",
+            "",
+            "Windows PowerShell:",
+            "",
+            "```powershell",
+            '$omhManagerRoot = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $HOME ".oh-my-harness" }',
+            f'& (Join-Path $omhManagerRoot "venv\\Scripts\\python.exe") -B scripts/watcher skill validate --candidate-skill {powershell_candidate}',
+            "```",
+            "",
+            "Run the matching manager-tooling command after drafting a candidate.",
             "- Run any task-specific tests or benchmark checks before accepting the edit.",
             "",
         ]

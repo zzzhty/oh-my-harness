@@ -36,7 +36,23 @@ Do not publish changes.
 
 ## Steps
 
+### Step 1 - Run the demo
+
+Action:
+
 Run the demo command.
+
+Expected Output:
+
+The command exits with status zero.
+
+Failure Handling:
+
+Stop and report the failing command.
+
+Completion Criterion:
+
+The zero exit status is recorded in the result.
 
 ## Validation
 

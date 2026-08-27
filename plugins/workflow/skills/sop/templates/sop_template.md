@@ -126,6 +126,12 @@ Durable writeback：
 <stop / retry once / collect diagnostics / escalate>
 ```
 
+完成条件：
+
+```text
+<可观察、可检查的步骤完成条件。>
+```
+
 ### Step 2 - `<步骤名称>`
 
 目的：`<目的>`
@@ -146,6 +152,12 @@ Durable writeback：
 
 ```text
 <stop / retry once / collect diagnostics / escalate>
+```
+
+完成条件：
+
+```text
+<可观察、可检查的步骤完成条件。>
 ```
 
 ## 验证标准

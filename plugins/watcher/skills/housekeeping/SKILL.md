@@ -1,11 +1,11 @@
 ---
 name: housekeeping
-description: Use within Watcher to remove inventoried disposable artifacts or repair stale active guidance after migration, validation, or audit work while preserving user work and durable state.
+description: Remove inventoried disposable artifacts after migration, validation, audit, or other bounded workspace work while preserving user work, durable state, and semantic guidance.
 ---
 
 # Housekeeping
 
-Use this skill for bounded implementation-mode cleanup. Use `doc-alignment` for semantic review or scheduled audits that must keep target repositories read-only.
+Use this skill for bounded implementation-mode removal of physical disposable artifacts. Use `doc-alignment` to audit or repair semantic guidance.
 
 ## Core Contract
 
@@ -14,21 +14,20 @@ Delete only artifacts whose ownership and disposability are established by inspe
 Classify candidates into three groups:
 
 1. **Disposable generated artifacts** — ignored Python/test caches, OS/editor noise, files under known temporary/cache roots, and confirmed superseded local plugin cache versions. These may be removed after inventory.
-2. **Active semantic drift** — current README, AGENTS, runbook, hook, script, skill, TODO, or index content that points at stale names, paths, commands, or workflow claims. Align the active owner instead of deleting history.
-3. **Protected or approval-required state** — tracked or untracked source-looking files, local/private configuration, databases, reports, audit/runtime state, dependency installs, build/deploy output, migrations, and unknown binaries. Preserve and report these unless explicitly authorized.
+2. **Protected or approval-required state** — tracked or untracked source-looking files, local/private configuration, databases, reports, audit/runtime state, dependency installs, build/deploy output, migrations, and unknown binaries. Preserve and report these unless explicitly authorized.
+3. **Semantic guidance** — README, AGENTS, runbook, skill, TODO, or index content. Keep it unchanged in this workflow and hand active drift to `doc-alignment` with the exact path and evidence.
 
-Archives remain historical unless active navigation or their current summary is wrong.
+Archive content remains protected. Hand active-navigation or current-summary drift to `doc-alignment`.
 
 ## Workflow
 
-1. Read current truth: root instructions, relevant README/plugin docs, `.gitignore`, manifests, hook configuration, TODO indexes, and validation guidance.
-2. Inventory the target and ignored state. The executable block below is for POSIX Bash; on Windows, use native PowerShell commands with the same absolute-path, Git-worktree, read-only, exclusion, symlink-boundary, and exit-status gates instead of passing native Windows paths through Bash:
+1. Read current truth: root instructions, relevant cleanup guidance, `.gitignore`, manifests, hook configuration, and artifact ownership rules.
+2. Inventory the target and ignored state. The executable block below is for POSIX Bash; on Windows, use native PowerShell commands with the same absolute-path, Git-worktree, read-only, exclusion, and symlink-boundary gates instead of passing native Windows paths through Bash:
 
 ```bash
 set -euo pipefail
 : "${HOUSEKEEPING_TARGET:?set HOUSEKEEPING_TARGET to an absolute bounded path}"
 housekeeping_target=$HOUSEKEEPING_TARGET
-stale_pattern=${HOUSEKEEPING_STALE_PATTERN:-old-term|old-path|old-command}
 [[ "$housekeeping_target" == /* && -d "$housekeeping_target" ]] || {
   printf 'invalid housekeeping target: %s\n' "$housekeeping_target" >&2
   exit 2
@@ -37,33 +36,18 @@ git -C "$housekeeping_target" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
   printf 'housekeeping target is not a Git worktree: %s\n' "$housekeeping_target" >&2
   exit 2
 }
-git -C "$housekeeping_target" status --short
-git -C "$housekeeping_target" status --ignored --short
+git -C "$housekeeping_target" status --short -- .
+git -C "$housekeeping_target" status --ignored --short -- .
 find "$housekeeping_target" \
   \( -type d \( -name .git -o -name node_modules -o -name .venv \) -prune \) -o \
   \( -type d \( -name __pycache__ -o -name .pytest_cache \) -print \)
-search_status=0
-if command -v rg >/dev/null 2>&1; then
-  rg --hidden -n \
-    --glob '!**/.git/**' \
-    --glob '!**/node_modules/**' \
-    --glob '!**/.venv/**' \
-    "$stale_pattern" "$housekeeping_target" || search_status=$?
-else
-  grep -rInE \
-    --exclude-dir=.git \
-    --exclude-dir=node_modules \
-    --exclude-dir=.venv \
-    -- "$stale_pattern" "$housekeeping_target" || search_status=$?
-fi
-[[ $search_status -eq 0 || $search_status -eq 1 ]] || exit "$search_status"
 ```
 
 3. Record the classification and reason for each candidate class.
-4. Remove disposable artifacts with exact paths or tightly bounded patterns. Repair active semantic drift in its owning file. Keep protected state untouched and identify the approval needed.
-5. Re-run the relevant inventory or stale-term scan. Use `git diff --check -- <changed-paths>` and the owning validator when manifests, skills, hooks, scripts, or current documentation contracts changed.
-6. When a tool or hook recreates an artifact, fix that bounded local root cause when in scope; otherwise report the recreating command and blocker.
+4. Remove disposable artifacts with exact paths or tightly bounded patterns. Keep protected state and semantic guidance untouched; identify required approval or the `doc-alignment` handoff.
+5. Re-run the relevant physical inventory. Use the owning validator only when the artifact-producing configuration or script changed.
+6. When an artifact-producing configuration, script, tool, or hook recreates disposable noise, repair that production behavior only when the user's mutation scope explicitly includes it; this is code/config behavior, not semantic-guidance alignment. Otherwise report the recreating command and blocker.
 
 ## Completion
 
-Report what was removed or aligned, what was preserved, the evidence supporting each classification, validation results, and unresolved approval-required state. A cleanup is complete only when the targeted noise or active drift is gone without losing user work, durable state, or historical evidence.
+Report what was removed, preserved, or handed to `doc-alignment`, the evidence supporting each classification, validation results, and unresolved approval-required state. Cleanup is complete only when the targeted physical noise is gone without losing user work, durable state, semantic guidance, or historical evidence.

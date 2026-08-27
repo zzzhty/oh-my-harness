@@ -31,6 +31,6 @@ For an audit, recommendation, or implementation plan, perform the workflow throu
 
 State the evidence, frozen oracle, selected and materially rejected candidates, reviewer coverage, writeback boundary, affected-surface validation, blockers, and residual risk.
 
-Stop at a proposal when evidence or an oracle is missing, required review conflicts or is unavailable, mutation is unauthorized, or the candidate weakens correctness, permissions, failure handling, or an owning contract. Use `long-running-goal` when the iteration itself becomes a durable multi-milestone objective.
+Stop at a proposal when evidence or an oracle is missing, required review conflicts or is unavailable, mutation is unauthorized, or the candidate weakens correctness, permissions, failure handling, or an owning contract. When the iteration may need a durable multi-milestone objective, suggest `long-running-goal` and wait for explicit user confirmation before creating or converting its contract.
 
 Evaluator delegation requires that the active environment or plan authorizes delegation and does not invoke `orchestrate-subagents`; use that skill only when the user explicitly requests subagent orchestration.

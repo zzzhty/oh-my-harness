@@ -81,9 +81,8 @@ SKILL_WATCHER_ROLES = {
 SKILL_WATCHER_SUPPORTING = {
     "grill-me": ["grilling"],
     "grill-with-docs": ["grilling", "domain-modeling"],
-    "implement": ["tdd", "code-review"],
+    "implement": ["code-review"],
     "improve-codebase-architecture": ["codebase-design"],
-    "wayfinder": ["grilling", "domain-modeling", "prototype", "research"],
 }
 SKILL_WATCHER_ALIASES = {
     "ask-matt": [("ask matt", "phrase", "phrase"), ("which matt pocock skill", "phrase", "phrase")],
@@ -539,7 +538,9 @@ def update_plugin_manifest(
         "developerName": "Matt Pocock",
         "category": "Productivity",
         "capabilities": ["skills"],
-        "defaultPrompt": ["Help me choose the right Matt Pocock skill."],
+        "defaultPrompt": [
+            "Use $mattpocock-skills:ask-matt to help me choose the right Matt Pocock skill."
+        ],
     }
     manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
@@ -561,6 +562,14 @@ Skill-only local Codex package of Matt Pocock's published skills.
 Upstream: https://github.com/mattpocock/skills
 
 Packaged from: `{tag}` (`{commit}`)
+
+## Quick Start
+
+The router is user-invoked, so call it explicitly:
+
+```text
+Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
+```
 
 ## Skills
 

@@ -11,15 +11,16 @@ same audit remains valid from the source plugin or an installed plugin cache.
 From the Watcher plugin root, start with deterministic evidence:
 
 ```bash
-python3 scripts/watcher doc doctor --config config/repos.example.json
-python3 scripts/watcher doc commit-counter --config config/repos.example.json
-python3 scripts/watcher doc report --config config/repos.example.json --mode commit-dependent --mark-audited --digest
+omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
+"$omh_tooling_python" -B scripts/watcher doc doctor --config config/repos.example.json
+"$omh_tooling_python" -B scripts/watcher doc commit-counter --config config/repos.example.json
+"$omh_tooling_python" -B scripts/watcher doc report --config config/repos.example.json --mode commit-dependent --mark-audited --digest
 ```
 
 Use `config/repos.json` when an approved private config exists. For one repository:
 
 ```bash
-python3 scripts/watcher doc audit --repo <repo-path> --name <repo-name> --print-report
+"$omh_tooling_python" -B scripts/watcher doc audit --repo <repo-path> --name <repo-name> --print-report
 ```
 
 When commit-dependent report skips a repository, record it as skipped. Configuration changes can make a repository due below its commit threshold. A normal repository audit covers its configured profile set; use a profile selector only for an explicit narrow run and do not treat unselected profiles as disabled. If any repository fails, surface the repository, command or path, and exact failure text.

@@ -1,6 +1,6 @@
 {
   "name": "mattpocock-skills",
-  "version": "1.2.3+codex.7fdc478b4dd7aa02",
+  "version": "1.2.3+codex.1b99dd16bd582276",
   "description": "Local Codex package of Matt Pocock's upstream agent skills.",
   "author": {
     "name": "Matt Pocock"
@@ -25,7 +25,7 @@
       "skills"
     ],
     "defaultPrompt": [
-      "Help me choose the right Matt Pocock skill."
+      "Use $mattpocock-skills:ask-matt to help me choose the right Matt Pocock skill."
     ]
   }
 }

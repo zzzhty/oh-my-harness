@@ -245,7 +245,7 @@ Out-of-scope dirty changes: <none or excluded paths>
 
 ### M0 - `<阶段名称>`
 
-状态：`Ready`
+状态：`Not Started`
 
 范围：
 
@@ -385,7 +385,7 @@ Checkpoint evidence：
 
 | 阶段 | 状态 | Review | Checkpoint |
 |---|---|---|---|
-| M0 `<阶段名称>` | Ready | Pending | Pending |
+| M0 `<阶段名称>` | Not Started | Pending | Pending |
 | M1 `<阶段名称>` | Not Started | Pending | Pending |
 | M2 `<阶段名称>` | Not Started | Pending | Pending |
 | Close | Not Started | Pending | Pending |

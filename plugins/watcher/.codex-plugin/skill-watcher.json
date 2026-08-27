@@ -3,6 +3,7 @@
   "skills": {
     "watcher:doc-alignment": {
       "role": "discipline",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "watcher:doc-alignment", "kind": "skill_name", "match": "phrase"},
         {"value": "doc-alignment", "kind": "slug", "match": "token"},
@@ -13,17 +14,18 @@
     },
     "watcher:housekeeping": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "watcher:housekeeping", "kind": "skill_name", "match": "phrase"},
         {"value": "housekeeping", "kind": "slug", "match": "token"},
-        {"value": "cleanup", "kind": "token", "match": "token"},
-        {"value": "clean up", "kind": "phrase", "match": "phrase"},
-        {"value": "repo cleanup", "kind": "phrase", "match": "phrase"}
+        {"value": "remove disposable artifacts", "kind": "phrase", "match": "phrase"},
+        {"value": "clear generated caches", "kind": "phrase", "match": "phrase"}
       ],
-      "supporting_skills": ["watcher:doc-alignment"]
+      "supporting_skills": []
     },
     "watcher:skill-compressor": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "watcher:skill-compressor", "kind": "skill_name", "match": "phrase"},
         {"value": "skill-compressor", "kind": "slug", "match": "token"},
@@ -34,6 +36,7 @@
     },
     "watcher:skill-maintainer": {
       "role": "specialized",
+      "logical_group": "implicit-primitives",
       "aliases": [
         {"value": "watcher:skill-maintainer", "kind": "skill_name", "match": "phrase"},
         {"value": "skill-maintainer", "kind": "slug", "match": "token"},

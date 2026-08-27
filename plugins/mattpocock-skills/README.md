@@ -6,6 +6,14 @@ Upstream: https://github.com/mattpocock/skills
 
 Packaged from: `v1.2.3` (`6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`)
 
+## Quick Start
+
+The router is user-invoked, so call it explicitly:
+
+```text
+Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
+```
+
 ## Skills
 
 - `ask-matt`

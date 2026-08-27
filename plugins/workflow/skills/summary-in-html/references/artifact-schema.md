@@ -12,17 +12,17 @@ Required or useful top-level fields:
 
 - `title`
 - optional `subtitle`, `scope_label`, and absolute `source_root`
-- `evidence`: `{path, label?, role?}`
-- `assets`: `{path, alt, caption}`
-- `sections`
-- `blind_spots`
+- `evidence`: a list of `{path, label?, role?}` objects
+- `assets`: a list of `{path, alt, caption}` objects
+- `sections`: a list of section objects
+- `blind_spots`: a list of strings
 
 Each section has a `title` and may include:
 
 - `summary`
 - `paragraphs` and `bullets` as string lists
-- `files`: `{path, note?}`
-- `code`: `{text, language?}`
+- `files`: a list of `{path, note?}` objects
+- `code`: a list of `{text, language?}` objects
 - `completion_check` where the document contract requires one
 
 Omit empty optional fields. Paths and required asset fields are non-empty. The renderer validates member types before writing HTML.
@@ -39,7 +39,8 @@ A minimal summary input is:
     {
       "title": "Purpose",
       "summary": "What this scope owns.",
-      "files": [{"path": "plugins/workflow/README.md"}]
+      "files": [{"path": "plugins/workflow/README.md"}],
+      "code": [{"text": "python -m unittest", "language": "bash"}]
     }
   ],
   "blind_spots": ["Tests were not run."]
@@ -53,3 +54,17 @@ Read `source_walkthrough_contract.md`, set `document_type` to `source_walkthroug
 ## Assets And Rendering
 
 Include assets only when generated visuals were requested and the files exist; follow `visual_asset_contract.md`. The rendered page remains standalone with inline CSS, no remote fonts, and no external scripts.
+
+After an explicit visual request and after the generated file exists, add this shape to the common object:
+
+```json
+{
+  "assets": [
+    {
+      "path": "assets/architecture.png",
+      "alt": "Workflow architecture",
+      "caption": "Validated workflow structure"
+    }
+  ]
+}
+```

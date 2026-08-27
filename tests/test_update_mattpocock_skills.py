@@ -233,10 +233,18 @@ class MattPocockUpdaterTests(unittest.TestCase):
             plugin_manifest = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(plugin_manifest["version"], "1.2.3+codex.old-token")
             self.assertIn("unchanged upstream", plugin_manifest["interface"]["longDescription"])
+            self.assertEqual(
+                plugin_manifest["interface"]["defaultPrompt"],
+                [
+                    "Use $mattpocock-skills:ask-matt to help me choose the right "
+                    "Matt Pocock skill."
+                ],
+            )
 
             readme = (plugin / "README.md").read_text(encoding="utf-8")
             self.assertIn("`v1.2.3` (`6acc160e4e0cd062`)", readme)
             self.assertIn("copied unchanged", readme)
+            self.assertIn("Use $mattpocock-skills:ask-matt", readme)
             self.assertNotIn("Omitted Upstream Skills", readme)
 
             upstream_lock = json.loads(
@@ -485,6 +493,17 @@ class MattPocockUpdaterTests(unittest.TestCase):
             (plugin / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertTrue(manifest["version"].startswith("1.2.3+codex."))
+        self.assertEqual(
+            manifest["interface"]["defaultPrompt"],
+            [
+                "Use $mattpocock-skills:ask-matt to help me choose the right "
+                "Matt Pocock skill."
+            ],
+        )
+        self.assertIn(
+            "Use $mattpocock-skills:ask-matt",
+            (plugin / "README.md").read_text(encoding="utf-8"),
+        )
 
         expected_skills = {
             "ask-matt",

@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,9 +16,10 @@ SKILL = SKILL_DIR / "SKILL.md"
 ALIGNMENT = SKILL_DIR / "references" / "alignment-reference.md"
 WATCHER_AUDIT = SKILL_DIR / "references" / "watcher-audit.md"
 WATCHER = SKILL_DIR.parents[1] / ".codex-plugin" / "skill-watcher.json"
+WATCHER_README = SKILL_DIR.parents[1] / "README.md"
 WATCHER_SKILLS = SKILL_DIR.parent
 MAINTAINER = WATCHER_SKILLS / "skill-maintainer" / "SKILL.md"
-PATCH_POLICY = WATCHER_SKILLS / "skill-maintainer" / "references" / "patch-policy.md"
+MAINTAINER_REFERENCES = WATCHER_SKILLS / "skill-maintainer" / "references"
 COMPRESSOR = WATCHER_SKILLS / "skill-compressor" / "SKILL.md"
 HOUSEKEEPING = WATCHER_SKILLS / "housekeeping" / "SKILL.md"
 
@@ -82,18 +85,84 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
             "runtime checks: `check_<target>`",
             "Root docs are current overview and execution entry points only",
             "Active index files are navigation and execution posture",
-            "Keep `SKILL.md` frontmatter to `name` and `description`",
+            "Preserve the target skill's current invocation mode",
+            "For a model-invoked skill",
+            "For a user-invoked skill",
+            "preserve `disable-model-invocation: true`",
+            "human-facing one-line summary",
             "Match validation to the changed surface",
         ):
             self.assertIn(semantic, text)
-        self.assertIn("python3 -m compileall -q scripts/watcher_runtime", text)
+        self.assertNotIn("compileall", text)
+        self.assertIn('omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"', text)
+        self.assertNotRegex(text, r'"\$omh_tooling_python" (?!-B\b)')
+        self.assertIn('compile(source.read_bytes(), str(source), "exec")', text)
         self.assertGreaterEqual(text.count("Completion criterion:"), 6)
+
+    def test_documented_python_syntax_check_does_not_write_bytecode(self) -> None:
+        text = ALIGNMENT.read_text(encoding="utf-8")
+        match = re.search(
+            r'"\$omh_tooling_python" -B - <<\'PY\'\n(?P<program>.*?)\nPY',
+            text,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package = root / "scripts" / "watcher_runtime"
+            package.mkdir(parents=True)
+            source = package / "example.py"
+            source.write_text("value = 1\n", encoding="utf-8")
+            before = sorted(path.relative_to(root) for path in root.rglob("*"))
+            completed = subprocess.run(
+                [sys.executable, "-c", match.group("program")],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            after = sorted(path.relative_to(root) for path in root.rglob("*"))
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(after, before)
+
+    def test_watcher_entry_with_documented_no_bytecode_flag_writes_no_cache(self) -> None:
+        alignment = ALIGNMENT.read_text(encoding="utf-8")
+        audit = WATCHER_AUDIT.read_text(encoding="utf-8")
+        self.assertIn('"$omh_tooling_python" -B scripts/watcher', alignment)
+        self.assertNotRegex(audit, r'"\$omh_tooling_python" (?!-B\b)')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            shutil.copy2(SKILL_DIR.parents[1] / "scripts" / "watcher", scripts / "watcher")
+            shutil.copytree(
+                SKILL_DIR.parents[1] / "scripts" / "watcher_runtime",
+                scripts / "watcher_runtime",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            completed = subprocess.run(
+                [sys.executable, "-B", str(scripts / "watcher"), "--help"],
+                cwd=root,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            cache_paths = [
+                path for path in root.rglob("*") if path.name == "__pycache__" or path.suffix == ".pyc"
+            ]
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(cache_paths, [])
 
     def test_callable_and_watcher_identities_remain_unchanged(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
 
         self.assertIn("name: doc-alignment", skill)
+        self.assertNotIn("disable-model-invocation", skill)
         self.assertIn("watcher:doc-alignment", watcher["skills"])
         aliases = {
             item["value"]
@@ -106,7 +175,6 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
 class WatcherSkillInstructionContractTests(unittest.TestCase):
     def test_skill_maintainer_completion_is_reviewable_and_source_preserving(self) -> None:
         skill = MAINTAINER.read_text(encoding="utf-8")
-        policy = PATCH_POLICY.read_text(encoding="utf-8")
 
         for requirement in (
             "target skill",
@@ -119,8 +187,12 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             "source `SKILL.md` remained unchanged",
         ):
             self.assertIn(requirement, skill)
-        self.assertIn("Every proposal must include", policy)
-        self.assertNotIn("Every proposal should include", policy)
+        self.assertIn("Before recommending or completing a proposal", skill)
+        self.assertIn("update the Watcher-owned proposal artifact", skill)
+        self.assertIn("## Candidate Validation", skill)
+        self.assertIn("route candidates that change invocation", skill.casefold())
+        self.assertFalse((MAINTAINER_REFERENCES / "patch-policy.md").exists())
+        self.assertFalse((MAINTAINER_REFERENCES / "validation-policy.md").exists())
 
     def test_skill_compressor_delegates_meaning_changes_to_one_review_owner(self) -> None:
         text = COMPRESSOR.read_text(encoding="utf-8")
@@ -129,7 +201,48 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         self.assertIn("route the candidate through `workflow:prompt-strategy-loop`", text)
         self.assertIn("Core Rule is the single owner", text)
         self.assertIn("keep the candidate explicitly unverified", text)
+        self.assertIn("create a bounded copy only when writes are authorized", text)
+        self.assertIn("in read-only mode, stop", text)
+        self.assertIn("plugin guidance", text.split("---", 2)[1])
+        self.assertIn("freeze this affected-meaning inventory as the equivalence oracle", text)
         self.assertNotIn("independent evaluation is required when compression changes", text)
+
+    def test_watcher_skills_keep_distinct_seams_and_ui_metadata(self) -> None:
+        housekeeping = HOUSEKEEPING.read_text(encoding="utf-8")
+        maintainer = MAINTAINER.read_text(encoding="utf-8")
+        readme = WATCHER_README.read_text(encoding="utf-8")
+        self.assertIn("removal of physical disposable artifacts", housekeeping)
+        self.assertIn("Keep it unchanged in this workflow", housekeeping)
+        self.assertNotIn("Repair active semantic drift", housekeeping)
+        self.assertIn("/venv/bin/python -B", maintainer)
+        self.assertIn('"$omh_tooling_python" -B scripts/watcher', readme)
+
+        watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
+        housekeeping_metadata = watcher["skills"]["watcher:housekeeping"]
+        self.assertEqual(housekeeping_metadata["supporting_skills"], [])
+        housekeeping_aliases = {
+            alias["value"] for alias in housekeeping_metadata["aliases"]
+        }
+        for generic_alias in ("cleanup", "clean up", "repo cleanup"):
+            self.assertNotIn(generic_alias, housekeeping_aliases)
+        self.assertIn("remove disposable artifacts", housekeeping_aliases)
+        self.assertIn("clear generated caches", housekeeping_aliases)
+
+        doc_alignment_metadata = (
+            WATCHER_SKILLS / "doc-alignment" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("report-only audit mode", doc_alignment_metadata)
+        self.assertIn("Do not modify target files", doc_alignment_metadata)
+
+        for skill_name in (
+            "doc-alignment",
+            "housekeeping",
+            "skill-compressor",
+            "skill-maintainer",
+        ):
+            metadata = WATCHER_SKILLS / skill_name / "agents" / "openai.yaml"
+            self.assertTrue(metadata.is_file(), metadata)
+            self.assertIn(f"${skill_name}", metadata.read_text(encoding="utf-8"))
 
     @unittest.skipIf(os.name == "nt", "POSIX Bash housekeeping example")
     def test_housekeeping_inventory_example_is_executable_bounded_and_read_only(self) -> None:
@@ -139,25 +252,32 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         script = match.group("script")
 
         self.assertNotIn("<target>", script)
-        self.assertIn('git -C "$housekeeping_target" status', script)
+        self.assertIn('git -C "$housekeeping_target" status --short -- .', script)
+        self.assertIn('git -C "$housekeeping_target" status --ignored --short -- .', script)
         self.assertIn('find "$housekeeping_target"', script)
+        self.assertNotIn("stale_pattern", script)
+        self.assertNotIn("grep", script)
+        self.assertNotIn("rg ", script)
 
         with (
             tempfile.TemporaryDirectory() as temp_dir,
             tempfile.TemporaryDirectory() as outside_dir,
         ):
-            target = Path(temp_dir).resolve()
+            repo = Path(temp_dir).resolve()
+            target = repo / "scope"
+            target.mkdir()
             outside = Path(outside_dir).resolve()
             subprocess.run(
-                ["git", "init", "-q", str(target)],
+                ["git", "init", "-q", str(repo)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            (target / ".gitignore").write_text(
+            (repo / ".gitignore").write_text(
                 "__pycache__/\n.pytest_cache/\nnode_modules/\n.venv/\n",
                 encoding="utf-8",
             )
+            (repo / "outside.txt").write_text("outside-scope\n", encoding="utf-8")
             for relative in (
                 "src/__pycache__",
                 ".pytest_cache",
@@ -165,8 +285,8 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
                 ".venv/lib/__pycache__",
             ):
                 (target / relative).mkdir(parents=True)
-            (target / "guidance.md").write_text("old-term\n", encoding="utf-8")
-            outside_marker = "old-term-outside-target"
+            (target / "guidance.md").write_text("semantic guidance\n", encoding="utf-8")
+            outside_marker = "outside-target"
             (outside / "outside.md").write_text(
                 outside_marker + "\n",
                 encoding="utf-8",
@@ -200,46 +320,19 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
                 text=True,
             )
 
-            no_match_env = env.copy()
-            no_match_env["HOUSEKEEPING_STALE_PATTERN"] = "not-present"
-            no_match = subprocess.run(
-                ["bash", "-c", script],
-                cwd=target,
-                env=no_match_env,
-                capture_output=True,
-                text=True,
-            )
-            without_rg = subprocess.run(
-                [
-                    "bash",
-                    "-c",
-                    "command() {\n"
-                    "  if [[ ${1-} == -v && ${2-} == rg ]]; then return 1; fi\n"
-                    "  builtin command \"$@\"\n"
-                    "}\n"
-                    "rg() { return 127; }\n"
-                    + script,
-                ],
-                cwd=target,
-                env=env,
-                capture_output=True,
-                text=True,
-            )
             after = target_state()
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(no_match.returncode, 0, no_match.stderr)
-        self.assertEqual(without_rg.returncode, 0, without_rg.stderr)
         self.assertEqual(after, before)
         self.assertIn(str(target / "src" / "__pycache__"), result.stdout)
         self.assertIn(str(target / ".pytest_cache"), result.stdout)
         self.assertNotIn(str(target / "node_modules" / "pkg" / "__pycache__"), result.stdout)
         self.assertNotIn(str(target / ".venv" / "lib" / "__pycache__"), result.stdout)
-        self.assertIn("guidance.md:1:old-term", result.stdout)
-        self.assertIn("guidance.md:1:old-term", without_rg.stdout)
+        self.assertNotIn("semantic guidance", result.stdout)
+        self.assertNotIn("../outside.txt", result.stdout)
+        self.assertNotIn("outside-scope", result.stdout)
         if outside_link is not None:
             self.assertNotIn(outside_marker, result.stdout)
-            self.assertNotIn(outside_marker, without_rg.stdout)
 
     @unittest.skipIf(os.name == "nt", "POSIX Bash housekeeping example")
     def test_housekeeping_inventory_rejects_a_non_git_target(self) -> None:

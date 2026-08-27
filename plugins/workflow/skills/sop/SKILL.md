@@ -7,7 +7,7 @@ description: Create, run, or revise a reusable Standard Operating Procedure for 
 
 Use this skill when a repeated workflow is stable enough to execute the same way again.
 
-Route unresolved design or prompt behavior to `prompt-strategy-loop`. Use `long-running-goal` when the work needs staged milestones, checkpoint evidence, or close/archive lifecycle.
+Route unresolved design or prompt behavior to `prompt-strategy-loop`. When the work may need staged milestones, checkpoint evidence, or close/archive lifecycle, suggest `long-running-goal` and wait for explicit user confirmation before creating or converting its contract.
 
 ## Suitability
 
@@ -23,17 +23,18 @@ An SOP is ready to author when its trigger, inputs, ordered actions, outputs, va
 6. Validate:
 
 ```bash
-python <skill-folder>/scripts/check_sop_ready.py <sop-file>
+python <skill-folder>/scripts/check_sop_ready.py [--allow-draft] <sop-file>
 python <skill-folder>/scripts/check_sop_links.py <sop-root-or-file>
 ```
 
 ## Execute
 
 1. Re-read the SOP and newest request; classify the requested mode as execute, update, explain, or dry-run.
-2. Follow the declared steps and permissions in order, using only available inputs. Keep report-only procedures non-mutating and treat a missing required input as a stop.
-3. Stop at the first declared stop condition or failed required validation. Record the evidence the SOP requires.
-4. Report outputs, commands, changed files or artifacts, validation, blockers, and residual risk.
+2. Before the first action, run `check_sop_ready.py <sop-file>` without `--allow-draft` and confirm the top-level status is `Ready`. If the SOP is `Draft` or the check fails, do not execute it; stop or route the request to Create Or Update.
+3. Follow the declared steps and permissions in order, using only available inputs. Keep report-only procedures non-mutating and treat a missing required input as a stop.
+4. Stop at the first declared stop condition or failed required validation. Record the evidence the SOP requires.
+5. Report outputs, commands, changed files or artifacts, validation, blockers, and residual risk.
 
 ## Completion
 
-A reusable SOP identifies its trigger, inputs, working location, execution harness, allowed actions, ordered steps, outputs, validation evidence, stop and escalation boundary, durable writeback, and reuse prompt. The template and readiness checker are authoritative for the field-level contract.
+A reusable SOP identifies its trigger, inputs, working location, execution harness, allowed actions, ordered steps with completion criteria, outputs, validation evidence, stop and escalation boundary, durable writeback, and reuse prompt. The template and readiness checker are authoritative for the field-level contract; the default check authorizes only `Ready`, while `--allow-draft` validates a complete but non-executable `Draft`.

@@ -1560,7 +1560,11 @@ Checkpoint evidence：close revision recorded.
 
     def test_goal_checker_accepts_valid_contract_matrix(self) -> None:
         ready = self.ready
-        draft = ready.replace("Overall status: Ready", "Overall status: Draft")
+        draft = replace_all(
+            ready,
+            ("Overall status: Ready", "Overall status: Draft"),
+            ("| M0 | Ready | Pending | Pending |", "| M0 | Not Started | Pending | Pending |"),
+        )
         draft_pending = draft + "\nGoal status: Draft\n"
         draft_pending = draft_pending.replace(
             "Not applicable: this demo does not access external systems.",
@@ -1682,6 +1686,126 @@ Checkpoint evidence：close revision recorded.
     def test_sop_checker_validates_placeholders_inside_fences(self) -> None:
         self.assert_checker_contract(SOP_CHECKER, FIXTURES / "ready_sop.md")
 
+    def test_sop_checker_enforces_ready_lifecycle_and_step_contract(self) -> None:
+        ready = (FIXTURES / "ready_sop.md").read_text(encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def run(name: str, text: str, *args: str) -> subprocess.CompletedProcess[str]:
+                document = root / name
+                document.write_text(text, encoding="utf-8")
+                return self.run_checker(SOP_CHECKER, document, *args)
+
+            draft = ready.replace("Status: Ready", "Status: Draft")
+            draft_default = run("draft-default.md", draft)
+            draft_allowed = run("draft-allowed.md", draft, "--allow-draft")
+            invalid_status = run(
+                "in-progress.md",
+                ready.replace("Status: Ready", "Status: In Progress"),
+            )
+            empty_shell = run(
+                "empty-shell.md",
+                "Status: Ready\n\n"
+                + "\n\n".join(
+                    f"## {heading}"
+                    for heading in (
+                        "Summary",
+                        "Trigger",
+                        "Preconditions",
+                        "Working Directory",
+                        "Inputs",
+                        "Execution Harness",
+                        "Allowed Actions",
+                        "Forbidden Actions",
+                        "Steps",
+                        "Validation",
+                        "Output Contract",
+                        "Stop Conditions",
+                        "Update Rules",
+                        "Reuse Prompt",
+                    )
+                )
+                + "\n",
+            )
+            missing_completion = run(
+                "missing-completion.md",
+                re.sub(
+                    r"(?ms)^Completion Criterion:\n\n.*?(?=^## Validation)",
+                    "",
+                    ready,
+                ),
+            )
+            fenced_step_text, replacement_count = re.subn(
+                r"(?ms)^### Step 1\b.*?(?=^## Validation)",
+                "```markdown\n"
+                "### Step 1: Fake\n\n"
+                "Action:\nRun it.\n\n"
+                "Expected Output:\nOutput exists.\n\n"
+                "Failure Handling:\nStop.\n\n"
+                "Completion Criterion:\nCheck passes.\n"
+                "```\n\n",
+                ready,
+            )
+            self.assertEqual(replacement_count, 1)
+            fenced_step = run("fenced-step.md", fenced_step_text)
+            fenced_values = run(
+                "fenced-values.md",
+                replace_all(
+                    ready,
+                    (
+                        "Action:\n\nRun the demo command.",
+                        "Action:\n\n```bash\nrun-demo\n```",
+                    ),
+                    (
+                        "Expected Output:\n\nThe command exits with status zero.",
+                        "Expected Output:\n\n```text\nExit status: 0\n```",
+                    ),
+                    (
+                        "Failure Handling:\n\nStop and report the failing command.",
+                        "Failure Handling:\n\n```text\nStop and report the failing command.\n```",
+                    ),
+                    (
+                        "Completion Criterion:\n\nThe zero exit status is recorded in the result.",
+                        "Completion Criterion:\n\n```text\nThe zero exit status is recorded.\n```",
+                    ),
+                ),
+            )
+
+        self.assertEqual(draft_default.returncode, 1)
+        self.assertIn("SOP status must be Ready; found Draft", draft_default.stderr)
+        self.assertEqual(draft_allowed.returncode, 0, draft_allowed.stderr)
+        self.assertEqual(invalid_status.returncode, 1)
+        self.assertIn(
+            "invalid top-level SOP status; expected Draft or Ready; found In Progress",
+            invalid_status.stderr,
+        )
+        self.assertEqual(empty_shell.returncode, 1)
+        self.assertIn("required section has no substantive content: summary", empty_shell.stderr)
+        self.assertEqual(missing_completion.returncode, 1)
+        self.assertIn("Step 1 missing required field: completion criterion", missing_completion.stderr)
+        self.assertEqual(fenced_step.returncode, 1)
+        self.assertIn("steps section must include at least one `### Step` entry", fenced_step.stderr)
+        self.assertEqual(fenced_values.returncode, 0, fenced_values.stderr)
+
+    def test_goal_draft_requires_all_milestones_not_started(self) -> None:
+        ready = self.ready
+        invalid_draft = ready.replace("Overall status: Ready", "Overall status: Draft")
+        valid_draft = replace_all(
+            invalid_draft,
+            ("| M0 | Ready | Pending | Pending |", "| M0 | Not Started | Pending | Pending |"),
+        )
+
+        invalid = self.run_goal(invalid_draft, "--allow-draft", name="invalid-draft.md")
+        valid = self.run_goal(valid_draft, "--allow-draft", name="valid-draft.md")
+
+        self.assertEqual(invalid.returncode, 1)
+        self.assertIn(
+            "overall Draft requires every milestone Not Started/Pending/Pending; found M0",
+            invalid.stderr,
+        )
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+
     def test_goal_template_marks_only_documentation_examples(self) -> None:
         template = (
             ROOT
@@ -1697,6 +1821,9 @@ Checkpoint evidence：close revision recorded.
             template,
         )
         self.assertEqual(template.count("placeholder-example"), 2)
+        self.assertIn("状态：`Not Started`", template)
+        self.assertIn("| M0 `<阶段名称>` | Not Started | Pending | Pending |", template)
+        self.assertNotIn("状态：`Ready`", template)
 
 
 if __name__ == "__main__":

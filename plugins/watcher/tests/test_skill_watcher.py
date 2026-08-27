@@ -83,6 +83,10 @@ from watcher_runtime.skill.report_pipeline import (  # noqa: E402
 from sync_codex_agents import load_sources  # noqa: E402
 from watcher_runtime.skill.report_pipeline import parse_since, read_events_since  # noqa: E402
 from watcher_runtime.skill.proposal_artifact import update_status  # noqa: E402
+from watcher_runtime.skill.validate_candidate import (  # noqa: E402
+    main as validate_candidate_main,
+    validate_skill,
+)
 
 
 WINDOWS_PWSH_ENCODING_TEST = unittest.skipUnless(
@@ -569,11 +573,11 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(len(metadata["legacy_names"]), 11)
         self.assertEqual(
             sum(len(values["aliases"]) for values in metadata["skills"].values()),
-            145,
+            144,
         )
         self.assertEqual(
             sum(len(values["supporting_skills"]) for values in metadata["skills"].values()),
-            11,
+            5,
         )
         self.assertEqual(
             {
@@ -638,6 +642,24 @@ class SkillWatcherTests(unittest.TestCase):
             )
             self.assertEqual(values["logical_group"], expected_group)
 
+        local_groups = {
+            "watcher:doc-alignment": "implicit-primitives",
+            "watcher:housekeeping": "implicit-primitives",
+            "watcher:skill-compressor": "implicit-primitives",
+            "watcher:skill-maintainer": "implicit-primitives",
+            "workflow:long-running-goal": "explicit-workflows",
+            "workflow:orchestrate-subagents": "explicit-workflows",
+            "workflow:prompt-strategy-loop": "implicit-primitives",
+            "workflow:sop": "implicit-primitives",
+            "workflow:summary-in-html": "implicit-primitives",
+        }
+        for skill_name, expected_group in local_groups.items():
+            self.assertEqual(metadata["skills"][skill_name]["logical_group"], expected_group)
+        self.assertEqual(
+            metadata["skills"]["watcher:housekeeping"]["supporting_skills"],
+            [],
+        )
+
         self.assertNotIn("mattpocock-skills:to-prd", watcher_identities)
         self.assertNotIn("mattpocock-skills:to-issues", watcher_identities)
         self.assertNotIn("mattpocock-skills:writing-great-skills", watcher_identities)
@@ -646,17 +668,11 @@ class SkillWatcherTests(unittest.TestCase):
             set(metadata["skills"]["mattpocock-skills:implement"]["supporting_skills"]),
             {
                 "mattpocock-skills:code-review",
-                "mattpocock-skills:tdd",
             },
         )
         self.assertEqual(
-            set(metadata["skills"]["mattpocock-skills:wayfinder"]["supporting_skills"]),
-            {
-                "mattpocock-skills:domain-modeling",
-                "mattpocock-skills:grilling",
-                "mattpocock-skills:prototype",
-                "mattpocock-skills:research",
-            },
+            metadata["skills"]["mattpocock-skills:wayfinder"]["supporting_skills"],
+            [],
         )
 
         renamed = (
@@ -851,6 +867,32 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(sop_assistant["skill_attribution"]["primary"]["name"], "workflow:sop")
         self.assertEqual(sop_assistant["skill_attribution"]["primary"]["source"], "assistant_announcement")
         self.assertEqual(sop_assistant["skill_attribution"]["primary"]["matched_alias"], "sop")
+
+        for ordinary_cleanup in (
+            "Please clean up this parser implementation.",
+            "Please do a repo cleanup of stale abstractions.",
+        ):
+            with self.subTest(ordinary_cleanup=ordinary_cleanup):
+                cleanup_event = normalize_hook_payload(
+                    {
+                        "hook_event_name": "UserPromptSubmit",
+                        "prompt": ordinary_cleanup,
+                    },
+                    repo_root=REPO_ROOT,
+                )
+                self.assertIsNone(cleanup_event["skill_attribution"]["primary"])
+
+        disposable_cleanup = normalize_hook_payload(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Remove disposable artifacts after validation.",
+            },
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(
+            disposable_cleanup["skill_attribution"]["primary"]["name"],
+            "watcher:housekeeping",
+        )
 
     def test_metadata_discovery_ignores_marketplace_and_plugin_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1295,16 +1337,32 @@ class SkillWatcherTests(unittest.TestCase):
         proposal = build_proposal(
             proposal_id="proposal-1",
             skill_name="demo",
-            skill_dir=Path("/tmp/demo"),
+            skill_dir=Path("/tmp/Skill Dir"),
             skill_contents="line\n",
             report="# Report\n",
-            snapshot_path=Path("/tmp/demo/SKILL.md"),
+            snapshot_path=Path("/tmp/Skill Dir/SKILL.md"),
             timestamp="20260528T000000Z",
         )
 
         self.assertTrue(proposal.startswith("---\n"))
         self.assertIn('status: "draft"', proposal)
         self.assertIn('skill_name: "demo"', proposal)
+        self.assertIn("generated draft is a worksheet, not yet a reviewable proposal", proposal)
+        self.assertIn("- Decision: Undecided", proposal)
+        self.assertIn("- Exact edit:", proposal)
+        self.assertIn("Do not modify the source skill", proposal)
+        self.assertIn('/venv/bin/python"', proposal)
+        self.assertIn(r"venv\Scripts\python.exe", proposal)
+        self.assertIn("Windows PowerShell:", proposal)
+        self.assertGreaterEqual(proposal.count(" -B scripts/watcher skill validate "), 2)
+        unix_command = next(
+            line
+            for line in proposal.splitlines()
+            if line.startswith('"$omh_tooling_python" -B scripts/watcher skill validate')
+        )
+        unix_argv = shlex.split(unix_command)
+        candidate_index = unix_argv.index("--candidate-skill")
+        self.assertEqual(unix_argv[candidate_index + 1], "/tmp/Skill Dir/SKILL.md")
 
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp) / "state"
@@ -1341,6 +1399,46 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertTrue(rejected_exists)
         self.assertIn("status: rejected", updated)
         self.assertIn("bad evidence", rejected_text)
+
+    def test_candidate_validator_distinguishes_documented_marker_from_placeholder(self) -> None:
+        maintainer = ROOT / "skills" / "skill-maintainer" / "SKILL.md"
+        validate_skill(maintainer)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            documented = root / "documented.md"
+            documented.write_text(
+                "---\nname: demo\ndescription: Demo skill.\n---\n"
+                "Explain that `[TODO:` starts an unfinished placeholder.\n",
+                encoding="utf-8",
+            )
+            unresolved = root / "unresolved.md"
+            unresolved.write_text(
+                "---\nname: demo\ndescription: Demo skill.\n---\n"
+                "[TODO: replace this guidance]\n",
+                encoding="utf-8",
+            )
+
+            validate_skill(documented)
+            with self.assertRaises(SystemExit) as raised:
+                validate_skill(unresolved)
+
+        self.assertIn("contains a `[TODO: ...]` placeholder", str(raised.exception))
+
+    def test_candidate_validator_marks_static_only_result_for_human_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = Path(tmp) / "SKILL.md"
+            candidate.write_text(
+                "---\nname: demo\ndescription: Demo skill.\n---\nBody.\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with mock.patch("sys.stdout", stdout):
+                result = validate_candidate_main(["--candidate-skill", str(candidate)])
+
+        self.assertEqual(result, 0)
+        self.assertIn("candidate static checks passed", stdout.getvalue())
+        self.assertIn("human review is required", stdout.getvalue())
 
     def test_report_reader_and_state_support_incremental_windows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

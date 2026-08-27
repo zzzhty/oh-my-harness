@@ -1453,6 +1453,22 @@ def main() -> int:
             errors.append(
                 "overall goal status must be Ready, In Progress, or Closed; found Draft"
             )
+        elif overall_status == "draft":
+            non_draft_rows = [
+                state.name
+                for state in states
+                if (
+                    state.status.casefold(),
+                    state.review.casefold(),
+                    state.checkpoint.casefold(),
+                )
+                != ("not started", "pending", "pending")
+            ]
+            if non_draft_rows:
+                errors.append(
+                    "overall Draft requires every milestone Not Started/Pending/Pending; found "
+                    + ", ".join(non_draft_rows)
+                )
         elif overall_status == "ready":
             if not current_rows:
                 errors.append("overall Ready requires exactly one Ready milestone")
