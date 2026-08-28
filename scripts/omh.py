@@ -1342,9 +1342,23 @@ def _selected_command(argv: Sequence[str]) -> str | None:
     return None
 
 
-def _add_harness_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("targets", nargs="*")
-    parser.add_argument("--all", action="store_true")
+def _add_harness_common(
+    parser: argparse.ArgumentParser,
+    *,
+    harness_choices: Sequence[str],
+) -> None:
+    available = ", ".join(harness_choices)
+    parser.add_argument(
+        "targets",
+        nargs="*",
+        metavar="HARNESS",
+        help=f"Harness id(s). Available harnesses: {available}.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Select all registry harnesses for install; other commands select all desired harnesses.",
+    )
     parser.add_argument("--harness", help=argparse.SUPPRESS)
     parser.add_argument("--codex-home")
     parser.add_argument("--codex")
@@ -1353,6 +1367,7 @@ def _add_harness_common(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    harness_choices = _load_registry().choices
     parser = argparse.ArgumentParser(
         prog="omh",
         description="Manage the complete oh-my-harness lifecycle.",
@@ -1361,14 +1376,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     install = sub.add_parser("install", help="Install one or more harness distributions.")
-    _add_harness_common(install)
+    _add_harness_common(install, harness_choices=harness_choices)
     install.add_argument("--no-check", action="store_true")
     install.add_argument("--migrate-marketplace", action="store_true")
     install.add_argument("--migrate-from-repo")
     install.set_defaults(func=command_install)
 
     refresh = sub.add_parser("refresh", help="Reconcile installed harnesses with the current release.")
-    _add_harness_common(refresh)
+    _add_harness_common(refresh, harness_choices=harness_choices)
     refresh.add_argument("--repair", action="store_true", help="Force current-version re-materialization.")
     refresh.add_argument("--no-check", action="store_true")
     refresh.add_argument("--migrate-marketplace", action="store_true")
@@ -1376,7 +1391,7 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.set_defaults(func=command_refresh)
 
     remove = sub.add_parser("remove", help="Remove manager-owned resources from harnesses.")
-    _add_harness_common(remove)
+    _add_harness_common(remove, harness_choices=harness_choices)
     remove.set_defaults(func=command_remove)
 
     update = sub.add_parser("update", help="Update manager source and refresh installed harnesses.")
@@ -1401,11 +1416,11 @@ def build_parser() -> argparse.ArgumentParser:
     status.set_defaults(func=command_status)
 
     check = sub.add_parser("check", help="Perform read-only closure validation.")
-    _add_harness_common(check)
+    _add_harness_common(check, harness_choices=harness_choices)
     check.set_defaults(func=lambda args: command_check(args, strict=False))
 
     doctor = sub.add_parser("doctor", help="Run strict lifecycle diagnostics.")
-    _add_harness_common(doctor)
+    _add_harness_common(doctor, harness_choices=harness_choices)
     doctor.set_defaults(func=lambda args: command_check(args, strict=True))
 
     version = sub.add_parser("version", help="Show release and distribution identity.")

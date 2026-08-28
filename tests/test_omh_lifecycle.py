@@ -118,6 +118,24 @@ class OmhCliTests(unittest.TestCase):
         self.assertNotIn("_resume-rollback", help_text)
         self.assertNotIn(argparse.SUPPRESS, help_text)
 
+    def test_harness_command_help_lists_registry_owned_target_choices(self) -> None:
+        registry = self.registry()
+        with mock.patch.object(omh, "_load_registry", return_value=registry) as load:
+            parser = omh.build_parser()
+
+        load.assert_called_once_with()
+        subparsers = next(
+            action
+            for action in parser._actions
+            if isinstance(action, argparse._SubParsersAction)
+        )
+        expected = "Available harnesses: claude-code, codex, zcode."
+        for command in ("install", "refresh", "remove", "check", "doctor"):
+            with self.subTest(command=command):
+                help_text = " ".join(subparsers.choices[command].format_help().split())
+                self.assertIn(expected, help_text)
+                self.assertIn("all registry harnesses", help_text)
+
     def test_internal_resume_commands_remain_dispatchable(self) -> None:
         with (
             mock.patch.object(
@@ -979,6 +997,23 @@ class BootstrapHelpTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("usage: omh", result.stdout)
+
+    def test_install_help_lists_current_harnesses_without_site_packages(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                str(REPO_ROOT / "scripts" / "omh.py"),
+                "install",
+                "--help",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Available harnesses:", result.stdout)
+        self.assertIn("pi-agent", result.stdout)
 
     def test_help_bypasses_tooling_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

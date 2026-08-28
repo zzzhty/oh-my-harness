@@ -38,18 +38,46 @@ Every refresh and closure check selects one complete distribution with `--harnes
 the first installation, all supported lifecycle management goes through `omh`:
 
 ```bash
+omh install --help
 omh install [HARNESS...]
 omh refresh [HARNESS...]
 omh refresh [HARNESS...] --repair
 omh remove HARNESS... | --all
-omh update --check
-omh update
+omh update --check [--channel stable|main]
+omh update [--channel stable|main]
 omh status
 omh check
 omh doctor
 omh manager repair
 omh manager uninstall
 ```
+
+`HARNESS` selects an oh-my-harness distribution, not the harness application
+itself. Install and configure the Pi, Claude Code, Gemini CLI, or other client
+separately. Run `omh install --help` in a new environment to list the current
+registry-owned choices; the list is generated from `.agents/harnesses/registry.json`
+rather than duplicated in the CLI. `omh install --all` installs every current
+registry choice, while `--all` on refresh, remove, check, or doctor selects the
+desired harness set already recorded by the manager.
+
+When a harness was added after the installed manager revision, update the
+manager before selecting it. The stable channel follows the latest `vX.Y.Z`
+release; use `main` only when the required harness is present on `origin/main`
+but not yet in a stable release:
+
+```bash
+omh update --check --channel main
+omh update --channel main
+omh install pi-agent --dry-run
+omh install pi-agent --yes
+```
+
+Do not move or pull `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/repo`
+directly. If update reports that the managed checkout differs from manager
+lifecycle state, run `omh status`. With `operation: none`, run
+`omh manager repair` to reconstruct the recorded checkout, then retry the
+update. If an interrupted operation is active, run `omh recover` before any
+new lifecycle mutation.
 
 `omh refresh` never fetches remote source; it reconciles the current managed
 release. `omh update` is the explicit remote transition and defaults to the
