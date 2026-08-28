@@ -10,9 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  identity-preview:
-    name: identity preview
-    if: github.event_name == 'pull_request'
+  final-candidate-preview:
+    name: final candidate preview
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'feat/scope-discipline-milestone-gate'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +24,61 @@ jobs:
           python-version: '3.12'
       - name: Install tooling dependencies
         run: python -m pip install -r requirements.txt
-      - name: Generate plugin identity preview
+      - name: Update Watcher metadata snapshot
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("plugins/watcher/tests/test_skill_watcher.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "self.assertEqual(len(watcher_identities), 34)":
+                  "self.assertEqual(len(watcher_identities), 35)",
+              "            144,\n        )\n        self.assertEqual(\n            sum(len(values[\"supporting_skills\"])":
+                  "            147,\n        )\n        self.assertEqual(\n            sum(len(values[\"supporting_skills\"]) ",
+              '{"discipline": 6, "entrypoint": 2, "specialized": 23, "wrapper": 3}':
+                  '{"discipline": 7, "entrypoint": 2, "specialized": 23, "wrapper": 3}',
+              '            "workflow:prompt-strategy-loop": "implicit-primitives",\n':
+                  '            "workflow:prompt-strategy-loop": "implicit-primitives",\n'
+                  '            "workflow:scope-discipline": "guardrails",\n',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one metadata snapshot match, found {count}: {old!r}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Generate plugin identities
         shell: bash
         run: python scripts/update_plugin_generations.py --json > identity-preview.json
-      - name: Upload plugin identity preview
+      - name: Compile Python
+        run: python -m compileall -q scripts tests plugins/watcher plugins/workflow
+      - name: Root tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Watcher tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s plugins/watcher/tests -p "test_*.py"
+      - name: Workflow tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
+      - name: Distribution identity
+        run: python scripts/check_plugin_generations.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check
+      - name: Upload final candidate
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-identity-preview
+          name: scope-discipline-final-candidate
           path: |
+            plugins/watcher/tests/test_skill_watcher.py
+            plugins/watcher/.codex-plugin/plugin.json
             plugins/workflow/.codex-plugin/plugin.json
             .agents/plugins/distribution-identity.json
             identity-preview.json
