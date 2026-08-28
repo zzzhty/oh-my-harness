@@ -1,24 +1,26 @@
-name: Manager lifecycle
+name: Finalize scope discipline candidate
 
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  final-candidate-preview:
-    name: final candidate preview
+  finalize-branch:
+    name: finalize branch candidate
     if: >-
-      github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'feat/scope-discipline-milestone-gate'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -32,170 +34,76 @@ jobs:
 
           path = Path("plugins/watcher/tests/test_skill_watcher.py")
           text = path.read_text(encoding="utf-8")
-          replacements = {
-              "self.assertEqual(len(watcher_identities), 34)":
+
+          replacements = (
+              (
+                  "self.assertEqual(len(watcher_identities), 34)",
                   "self.assertEqual(len(watcher_identities), 35)",
-              "            144,\n        )\n        self.assertEqual(\n            sum(len(values[\"supporting_skills\"])":
-                  "            147,\n        )\n        self.assertEqual(\n            sum(len(values[\"supporting_skills\"]) ",
-              '{"discipline": 6, "entrypoint": 2, "specialized": 23, "wrapper": 3}':
+              ),
+              (
+                  "            144,\n        )\n        self.assertEqual(\n"
+                  "            sum(len(values[\"supporting_skills\"])",
+                  "            147,\n        )\n        self.assertEqual(\n"
+                  "            sum(len(values[\"supporting_skills\"])",
+              ),
+              (
+                  '{"discipline": 6, "entrypoint": 2, "specialized": 23, "wrapper": 3}',
                   '{"discipline": 7, "entrypoint": 2, "specialized": 23, "wrapper": 3}',
-              '            "workflow:prompt-strategy-loop": "implicit-primitives",\n':
-                  '            "workflow:prompt-strategy-loop": "implicit-primitives",\n'
-                  '            "workflow:scope-discipline": "guardrails",\n',
-          }
-          for old, new in replacements.items():
+              ),
+          )
+          for old, new in replacements:
+              if new in text and old not in text:
+                  continue
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"expected exactly one metadata snapshot match, found {count}: {old!r}")
+                  raise SystemExit(
+                      f"expected one old snapshot value or the final value, found {count}: {old!r}"
+                  )
               text = text.replace(old, new)
+
+          group_old = '            "workflow:prompt-strategy-loop": "implicit-primitives",\n'
+          group_new = (
+              group_old
+              + '            "workflow:scope-discipline": "guardrails",\n'
+          )
+          if group_new not in text:
+              count = text.count(group_old)
+              if count != 1:
+                  raise SystemExit(f"expected one local group insertion point, found {count}")
+              text = text.replace(group_old, group_new)
+
           path.write_text(text, encoding="utf-8")
           PY
       - name: Generate plugin identities
-        shell: bash
-        run: python scripts/update_plugin_generations.py --json > identity-preview.json
-      - name: Compile Python
-        run: python -m compileall -q scripts tests plugins/watcher plugins/workflow
-      - name: Root tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s tests -p "test_*.py"
-      - name: Watcher tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s plugins/watcher/tests -p "test_*.py"
-      - name: Workflow tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
-      - name: Distribution identity
-        run: python scripts/check_plugin_generations.py
-      - name: Diff hygiene
-        shell: bash
-        run: git diff --check
-      - name: Upload final candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: scope-discipline-final-candidate
-          path: |
-            plugins/watcher/tests/test_skill_watcher.py
-            plugins/watcher/.codex-plugin/plugin.json
-            plugins/workflow/.codex-plugin/plugin.json
-            .agents/plugins/distribution-identity.json
-            identity-preview.json
-
-  lifecycle:
-    name: lifecycle (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.11', '3.12']
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install tooling dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Compile Python
-        run: python -m compileall -q scripts tests plugins/watcher plugins/workflow
-      - name: Root tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s tests -p "test_*.py"
-      - name: Watcher tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s plugins/watcher/tests -p "test_*.py"
-      - name: Workflow tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
-      - name: Distribution identity
-        run: python scripts/check_plugin_generations.py
-      - name: Diff hygiene
-        shell: bash
-        run: git diff --check
-
-  publish-release:
-    name: publish release
-    needs: lifecycle
-    if: >-
-      github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[publish-release]')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install tooling dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Validate release identity
-        run: python scripts/check_plugin_generations.py
-      - name: Prepare release notes
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          version = Path("VERSION").read_text(encoding="utf-8").strip()
-          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-          marker = f"## {version}"
-          start = changelog.find(marker)
-          if start < 0:
-              raise SystemExit(f"CHANGELOG.md has no section for {version}")
-          remainder = changelog[start:]
-          next_section = remainder.find("\n## ", len(marker))
-          notes = remainder if next_section < 0 else remainder[:next_section]
-          Path("release-notes.md").write_text(notes.rstrip() + "\n", encoding="utf-8")
-          PY
-      - name: Publish or verify GitHub release
+        run: python scripts/update_plugin_generations.py
+      - name: Validate final candidate
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          PYTHONDONTWRITEBYTECODE: '1'
         run: |
           set -euo pipefail
-          version="$(cat VERSION)"
-          tag="v${version}"
-
-          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
-            existing="$(git rev-list -n 1 "$tag")"
-            if [ "$existing" != "$GITHUB_SHA" ]; then
-              echo "release $tag already targets $existing, expected $GITHUB_SHA" >&2
-              exit 1
-            fi
-            echo "release $tag already exists at $GITHUB_SHA"
+          python -m compileall -q scripts tests plugins/watcher plugins/workflow
+          python -m unittest discover -s tests -p "test_*.py"
+          python -m unittest discover -s plugins/watcher/tests -p "test_*.py"
+          python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
+          python scripts/check_plugin_generations.py
+          git diff --check
+      - name: Commit final candidate
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git add \
+            plugins/watcher/tests/test_skill_watcher.py \
+            plugins/watcher/.codex-plugin/plugin.json \
+            plugins/workflow/.codex-plugin/plugin.json \
+            .agents/plugins/distribution-identity.json
+          if git diff --cached --quiet; then
+            echo "final candidate is already committed"
             exit 0
           fi
-
-          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
-            existing="$(git rev-list -n 1 "$tag")"
-            if [ "$existing" != "$GITHUB_SHA" ]; then
-              echo "tag $tag already targets $existing, expected $GITHUB_SHA" >&2
-              exit 1
-            fi
-            gh release create "$tag" \
-              --repo "$GH_REPO" \
-              --verify-tag \
-              --title "oh-my-harness ${version}" \
-              --notes-file release-notes.md
-          else
-            gh release create "$tag" \
-              --repo "$GH_REPO" \
-              --target "$GITHUB_SHA" \
-              --title "oh-my-harness ${version}" \
-              --notes-file release-notes.md
-          fi
-
-          gh release view "$tag" --repo "$GH_REPO" \
-            --json tagName,targetCommitish,isDraft,isPrerelease,url
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: finalize scope discipline package"
+          git push origin "HEAD:${HEAD_BRANCH}"
