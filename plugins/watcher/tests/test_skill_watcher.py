@@ -650,7 +650,7 @@ class SkillWatcherTests(unittest.TestCase):
             "workflow:long-running-goal": "explicit-workflows",
             "workflow:orchestrate-subagents": "explicit-workflows",
             "workflow:prompt-strategy-loop": "implicit-primitives",
-            "workflow:scope-discipline": "guardrails",
+            "workflow:scope-discipline": "explicit-workflows",
             "workflow:sop": "implicit-primitives",
             "workflow:summary-in-html": "implicit-primitives",
         }

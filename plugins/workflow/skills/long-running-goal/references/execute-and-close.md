@@ -12,18 +12,19 @@ At initial execution, or when resuming after an interruption or milestone transi
 
 For an `Enabled` or `Disabled` policy, apply this rule: Before any command may write task-temporary data, resolve the platform/runtime temporary root once, create the recorded goal/sequence-owned child namespace beneath it, replace a deferred roots field with the fully resolved absolute owner path, and bind every task-temporary producer in this goal to that recorded namespace. Reuse the recorded value for the rest of execution and at Close; if no producer ever creates a root, record the runtime outcome `None created` instead. A sequence parent binds only its orchestration/integration producers and never routes child temporary data through the parent root. A `Not applicable` policy creates no root.
 
-At each milestone entry, apply `../components/milestone-scope-gate.md` to derive the current boundary. Reapply it only before material scope or validation expansion and after validation to confirm the exit condition; do not run it for every ordinary command or edit.
+At each milestone entry, apply `../components/milestone-scope-gate.md` to derive the current boundary. Reapply it only before material scope or validation expansion and after checkpoint evidence is recorded to confirm the exit condition; do not run it for every ordinary command or edit.
 
 For each milestone:
 
 1. Mark it `In Progress`.
 2. Apply `../components/milestone-scope-gate.md`, then implement only its recorded scope and necessary consequences.
 3. If a gate, validation rule, rollback path, milestone boundary, Loop field, or skill strategy is too weak for observed risk, pause mutation only long enough to update the contract; do not ask for permission unless a runtime hard stop applies.
-4. Run the milestone validation commands.
-5. Confirm the milestone-scope exit gate, then record changed files, behavior impact, command results, doc sync, rollback path, remaining risk, and checkpoint evidence.
+4. Run the milestone validation commands and complete its review gate.
+5. Record scope and necessary-consequence completion, changed files, behavior impact, command results, doc sync, rollback path, and remaining risk.
 6. If the milestone exercises a Loop Blueprint, also record trigger/input path, orchestration or worktree isolation evidence, connector read/write evidence, independent verification, YOLO actions, and runtime-hard-stop decisions.
 7. Apply `../components/checkpoint.md`.
-8. Mark milestone `Done`, review `Passed`, and checkpoint `Done` only after evidence is recorded.
+8. Confirm the milestone-scope exit gate.
+9. Mark milestone `Done`, review `Passed`, and checkpoint `Done` only after evidence is recorded.
 
 When both the review gate and milestone-scope exit gate pass, enter the next milestone automatically. When either fails, keep fixing and diagnosing in scope while the next useful step is clear; stop only at the runtime-hard-stop boundary.
 

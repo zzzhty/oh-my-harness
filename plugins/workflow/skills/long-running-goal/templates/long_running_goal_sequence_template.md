@@ -64,7 +64,7 @@ Housekeeping boundary: `<Enabled uses watcher:housekeeping only for inventoried 
 
 1. Create each child from `long_running_goal_template.md`, complete its own `grill-with-docs` preflight and time assessment, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries.
 2. Keep every child overall `Draft` with every atomic row `Not Started / Pending / Pending` until M0 or a predecessor handoff promotes it.
-3. Use relative Markdown links. A Closed row moves its complete atomic child goal from `Live goal` to the `Closeout evidence` archive link; do not replace it with a summary.
+3. Use relative Markdown links. Replace each backticked `Live goal` link example with an actual relative Markdown link when instantiating this template. A Closed row moves its complete atomic child goal from `Live goal` to the `Closeout evidence` archive link; do not replace it with a summary.
 4. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes preflight or its time assessment.
 5. Create only one active harness system goal for this parent. Never create nested system goals for children.
 6. Record a separate parent housekeeping choice only for sequence-owned orchestration/integration caches. Never add housekeeping columns to the child registers or use the parent policy to override a child policy.
@@ -83,8 +83,8 @@ Every marker must exactly match the linked child. Missing fields, `:skip:` marke
 
 | Order | Child ID | Parent milestone | Live goal | Closeout evidence | Depends on | State | Current milestone | Close revision |
 |---|---|---|---|---|---|---|---|---|
-| 1 | `<child-a>` | `M1` | [`<child-a>`](./<child-a>_long_running_goal_plan.md) | `n/a` | `n/a` | `Draft` | `n/a` | `n/a` |
-| 2 | `<child-b>` | `M2` | [`<child-b>`](./<child-b>_long_running_goal_plan.md) | `n/a` | `<child-a>` | `Draft` | `n/a` | `n/a` |
+| 1 | `<child-a>` | `M1` | `[<child-a>](./<child-a>_long_running_goal_plan.md)` | `n/a` | `n/a` | `Draft` | `n/a` | `n/a` |
+| 2 | `<child-b>` | `M2` | `[<child-b>](./<child-b>_long_running_goal_plan.md)` | `n/a` | `<child-a>` | `Draft` | `n/a` | `n/a` |
 
 The `Child Execution Register` is the sole current-state authority for child lifecycle and milestone position. Do not add `Current child:`, `Active child:`, or `Current child milestone:` fields elsewhere. Keep transition evidence historical and keep the resume prompt free of copied current child or milestone values.
 
@@ -140,9 +140,9 @@ Execution mode: `Loop-shaped execution`
 3. Parent mapping is fixed: Draft child -> `Not Started`; Ready -> `In Progress`; In Progress -> `In Progress`; In Progress with a Blocked atomic milestone -> `Blocked`; Closed -> `Done`.
 4. Promotion-drift exception: a parent child stage may be `Blocked` while its child remains `Draft / n/a`, but that exact section must record real section-local runtime hard-stop evidence and no later child may start.
 5. In the all-Draft snapshot all parent milestones are Not Started. After every preflight and check passes, set only parent Overall status and M0 to Ready for the one authorization. When M0 starts, set parent Overall status to In Progress and keep it there until Closed; M0 Done promotes the first child, and promoted Ready children map to In Progress parent stages. Each `M<Order>` owns one child. Integration remains Not Started until all children are Closed; Close remains Not Started until integration is Done.
-6. After a predecessor Close, verify its archived atomic closeout and revision, parent review/checkpoint, next-child preflight/boundaries, handoff inputs, and sequence checker; then promote automatically without another authorization.
+6. After a predecessor Close, verify its archived atomic closeout and revision, parent review/checkpoint and milestone-scope exit gate, next-child preflight/boundaries, handoff inputs, and sequence checker; then promote automatically without another authorization.
 7. A child hard stop remains at the owning child. Keep its overall state `In Progress`, mark its atomic current milestone and mapped parent stage `Blocked`, and put `Runtime hard-stop evidence:` in both owning sections with a date, child ID, and breakpoint or attempted diagnostics. Promotion drift additionally names semantic drift/failed handoff and the required re-grill/external decision. Parent-only M0, Integration, or Close evidence uses the same date and diagnostics rule plus the stage owner token `sequence`, `integration`, or `close`. Do not skip or reorder children.
-8. Apply `components/checkpoint.md` before every parent milestone or Close becomes Done. Record commands, behavior, docs, rollback, risks, harness evidence, revision, and out-of-scope dirt.
+8. Apply `components/checkpoint.md` before every parent milestone or Close becomes Done. Record commands, behavior, docs, rollback, risks, harness evidence, revision, and out-of-scope dirt; after a parent milestone records checkpoint evidence, confirm `components/milestone-scope-gate.md` before marking it Done or promoting the next child.
 9. Do not widen gates, hide failure, use fallback or alternate backends, report partial work as success, or convert a permission boundary into a non-stop.
 10. Only an explicit `Enabled` policy may invoke `watcher:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If watcher is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent.
 11. Close only after every child is Closed, integration is Done, every parent/child housekeeping disposition is recorded, close evidence passes, current docs are synchronized, and active navigation is clean.

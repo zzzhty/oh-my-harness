@@ -46,6 +46,6 @@ A milestone may advance when:
 - checkpoint evidence is recorded;
 - no unresolved in-scope failure or semantic conflict remains.
 
-Do not add another final scope audit after these conditions pass. Apply the ordinary checkpoint component and enter the next milestone automatically.
+The checkpoint component has already recorded its evidence before this gate passes. Once these conditions pass, enter the next milestone automatically without another final scope audit.
 
 Completion criterion: material expansions were routed through the shared necessity gate, later-stage work was not pulled forward, required validation passed, and the milestone exited without unsupported residual work or an extra audit loop.

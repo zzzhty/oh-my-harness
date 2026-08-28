@@ -48,28 +48,44 @@ class ScopeDisciplineTests(unittest.TestCase):
         skill = (LONG_RUNNING_ROOT / "SKILL.md").read_text(encoding="utf-8")
         execute = EXECUTE.read_text(encoding="utf-8")
         component = MILESTONE_GATE.read_text(encoding="utf-8")
+        atomic_template = (
+            LONG_RUNNING_ROOT / "templates" / "long_running_goal_template.md"
+        ).read_text(encoding="utf-8")
+        sequence_template = (
+            LONG_RUNNING_ROOT / "templates" / "long_running_goal_sequence_template.md"
+        ).read_text(encoding="utf-8")
         templates = (
-            LONG_RUNNING_ROOT / "templates" / "long_running_goal_template.md",
-            LONG_RUNNING_ROOT / "templates" / "long_running_goal_sequence_template.md",
+            atomic_template,
+            sequence_template,
         )
 
         self.assertIn("components/milestone-scope-gate.md", skill)
         self.assertIn("At each milestone entry", execute)
         self.assertIn("before material scope or validation expansion", execute)
         self.assertIn("milestone-scope exit gate", execute)
+        self.assertLess(
+            execute.index("Apply `../components/checkpoint.md`"),
+            execute.index("Confirm the milestone-scope exit gate"),
+        )
         self.assertIn("../../scope-discipline/references/necessity-gate.md", component)
+        self.assertIn(
+            "The checkpoint component has already recorded its evidence",
+            component,
+        )
         for semantic in (
             "Necessary consequence",
             "Later milestone work",
             "Speculative expansion",
             "Semantic conflict",
-            "Do not add another final scope audit",
+            "without another final scope audit",
             "Completion criterion:",
         ):
             self.assertIn(semantic, component)
 
-        for template in templates:
-            text = template.read_text(encoding="utf-8")
+        self.assertIn("components/milestone-scope-gate.md", atomic_template)
+        self.assertIn("components/milestone-scope-gate.md", sequence_template)
+
+        for text in templates:
             self.assertNotIn("Scope budget", text)
             self.assertNotIn("Validation budget", text)
             self.assertNotIn("Maximum tool count", text)
@@ -80,7 +96,7 @@ class ScopeDisciplineTests(unittest.TestCase):
         long_running = watcher["skills"]["workflow:long-running-goal"]
 
         self.assertEqual(scope["role"], "discipline")
-        self.assertEqual(scope["logical_group"], "guardrails")
+        self.assertEqual(scope["logical_group"], "explicit-workflows")
         self.assertEqual(scope["supporting_skills"], [])
         self.assertEqual(long_running["supporting_skills"], [])
         aliases = {item["value"] for item in scope["aliases"]}

@@ -141,10 +141,10 @@ Ready 前必须冻结 approval 模型；若存在可预见但未确认的 approv
 2. 阶段必须顺序执行：`M0 -> M1 -> M2 -> ... -> Close`。
 3. 每个阶段开始前必须把阶段状态改为 `In Progress`。
 4. 每个阶段完成后必须记录 review 结论、运行命令、通过证据、失败断点和未解决风险。
-5. 每个阶段必须应用 `components/checkpoint.md` 并记录 checkpoint evidence。若项目已有 Git / version-control 工作流且用户或项目要求阶段性提交，优先使用本计划中记录的 `<goal_slug> M<N>: <summary>` 或本项目约定格式作为 commit/revision 证据；非 VCS 环境不得强行初始化 Git 或伪造 commit。
+5. 每个阶段必须先应用 `components/checkpoint.md` 并记录 checkpoint evidence，再确认 `components/milestone-scope-gate.md` 的 exit gate，之后才可标记 `Done` 或推进。若项目已有 Git / version-control 工作流且用户或项目要求阶段性提交，优先使用本计划中记录的 `<goal_slug> M<N>: <summary>` 或本项目约定格式作为 commit/revision 证据；非 VCS 环境不得强行初始化 Git 或伪造 commit。
 6. 若本 goal 存在 Loop Blueprint，每个触及 trigger、input、orchestration、worktree、connector read/write boundaries、independent verification、runtime hard stops 或 durable learning 的阶段必须记录 harness evidence。
-7. Review gate 通过后默认继续进入下一阶段；不得因为普通阶段边界、checkpoint、rebuild、refresh、reinstall 或可记录风险而中断询问。
-8. 未满足当前阶段 Review gate 时，不得进入下一阶段；若下一步修复或诊断清晰且仍在本 goal 范围内，继续修复并重新验证，不要先询问 permission。
+7. Review gate 与 milestone-scope exit gate 均通过后默认继续进入下一阶段；不得因为普通阶段边界、checkpoint、rebuild、refresh、reinstall 或可记录风险而中断询问。
+8. 未满足当前阶段任一 gate 时，不得进入下一阶段；若下一步修复或诊断清晰且仍在本 goal 范围内，继续修复并重新验证，不要先询问 permission。
 9. 只有遇到运行时硬停止才询问用户：本地诊断/修复至少三次或三种方式后仍技术上无法继续、缺少无法本地取得的凭据/文件/事实源、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、或必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。
 10. 任何阶段失败必须记录 root cause、失败命令、文件路径、已知 breakpoint 和下一步修复建议；只有符合上一条硬停止条件时才停下等待用户。
 11. 不允许用 silent fallback、兼容假成功、部分成功包装、alternate backend、隐藏错误或 silent degradation 来绕过 gate。
@@ -163,7 +163,7 @@ Ready 前必须冻结 approval 模型；若存在可预见但未确认的 approv
 | `Not Started` | 该阶段尚未开始，且必须等待前置阶段 Done |
 | `In Progress` | 当前阶段正在实现或验证 |
 | `Blocked` | 当前阶段触发运行时硬停止；未决设计必须在 Ready 前解决，否则保持 Draft |
-| `Done` | 阶段 Review gate、量化验收和 checkpoint evidence 均已完成 |
+| `Done` | 阶段 Review gate、量化验收、checkpoint evidence 和 milestone-scope exit gate 均已完成 |
 | `Closed` | 仅用于整体计划完成后关闭并从 active TODO/goal 导航移除 |
 
 ## 全局验收规则

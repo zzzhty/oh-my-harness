@@ -285,6 +285,50 @@
         "shadowPaths": []
       },
       "extras": []
+    },
+    "pi-agent": {
+      "displayName": "Pi Agent",
+      "root": {
+        "candidates": [
+          {
+            "source": "environment",
+            "name": "PI_CODING_AGENT_DIR",
+            "append": ""
+          },
+          {
+            "source": "user-home",
+            "append": ".pi/agent"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "AGENTS.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": [
+          "AGENTS.override.md"
+        ]
+      },
+      "extras": []
     }
   }
 }

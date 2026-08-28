@@ -614,6 +614,10 @@ class RefreshHarnessCliTests(unittest.TestCase):
     def test_native_harness_does_not_read_codex_marketplace_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with (
+                mock.patch.dict(
+                    refresh.os.environ,
+                    {"PI_CODING_AGENT_DIR": str(Path(tmp) / "pi-agent")},
+                ),
                 mock.patch.object(refresh, "require_excluded_skill_roots_clear"),
                 mock.patch.object(
                     refresh,
@@ -627,7 +631,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                 self.run_main(
                     [
                         "--harness",
-                        "zcode",
+                        "pi-agent",
                         "--codex-home",
                         str(Path(tmp) / "codex"),
                         "--dry-run",

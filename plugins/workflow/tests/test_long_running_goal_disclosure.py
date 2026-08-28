@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,9 @@ PREFLIGHT = SKILL_DIR / "components" / "planning-preflight.md"
 ATOMIC_TEMPLATE = SKILL_DIR / "templates" / "long_running_goal_template.md"
 SEQUENCE_TEMPLATE = SKILL_DIR / "templates" / "long_running_goal_sequence_template.md"
 WATCHER = SKILL_DIR.parents[1] / ".codex-plugin" / "skill-watcher.json"
+sys.path.insert(0, str(SKILL_DIR.parents[1] / "scripts"))
+
+from markdown_contract import missing_relative_links  # noqa: E402
 
 
 class LongRunningGoalDisclosureTests(unittest.TestCase):
@@ -114,6 +118,19 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         }
         self.assertIn("long-running goal sequence", aliases)
         self.assertIn("umbrella long-running goal", aliases)
+
+    def test_sequence_template_link_examples_are_inert_until_instantiated(self) -> None:
+        template = SEQUENCE_TEMPLATE.read_text(encoding="utf-8")
+
+        self.assertEqual(missing_relative_links(SEQUENCE_TEMPLATE), [])
+        self.assertIn(
+            "Replace each backticked `Live goal` link example with an actual relative Markdown link",
+            template,
+        )
+        self.assertIn(
+            "`[<child-a>](./<child-a>_long_running_goal_plan.md)`",
+            template,
+        )
 
     def test_task_temporary_cache_policy_is_explicit_cross_platform_and_bounded(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")

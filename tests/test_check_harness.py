@@ -434,6 +434,10 @@ class CheckHarnessCliTests(unittest.TestCase):
     def test_native_harness_does_not_read_codex_marketplace_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with (
+                mock.patch.dict(
+                    check_harness.os.environ,
+                    {"PI_CODING_AGENT_DIR": str(Path(tmp) / "pi-agent")},
+                ),
                 mock.patch.object(
                     check_harness,
                     "load_install_manifest",
@@ -448,7 +452,7 @@ class CheckHarnessCliTests(unittest.TestCase):
                 self.run_main(
                     [
                         "--harness",
-                        "zcode",
+                        "pi-agent",
                         "--codex-home",
                         str(Path(tmp) / "codex"),
                     ]

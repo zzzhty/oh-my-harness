@@ -38,7 +38,7 @@
     },
     "workflow:scope-discipline": {
       "role": "discipline",
-      "logical_group": "guardrails",
+      "logical_group": "explicit-workflows",
       "aliases": [
         {"value": "workflow:scope-discipline", "kind": "skill_name", "match": "phrase"},
         {"value": "scope-discipline", "kind": "slug", "match": "token"},
