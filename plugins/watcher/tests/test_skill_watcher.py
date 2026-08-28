@@ -569,11 +569,11 @@ class SkillWatcherTests(unittest.TestCase):
     def test_mattpocock_v123_metadata_preserves_native_and_historical_attribution(self) -> None:
         metadata = discover_skill_metadata(REPO_ROOT)
         watcher_identities = set(metadata["skills"])
-        self.assertEqual(len(watcher_identities), 34)
+        self.assertEqual(len(watcher_identities), 35)
         self.assertEqual(len(metadata["legacy_names"]), 11)
         self.assertEqual(
             sum(len(values["aliases"]) for values in metadata["skills"].values()),
-            144,
+            147,
         )
         self.assertEqual(
             sum(len(values["supporting_skills"]) for values in metadata["skills"].values()),
@@ -587,7 +587,7 @@ class SkillWatcherTests(unittest.TestCase):
                 )
                 for role in {values["role"] for values in metadata["skills"].values()}
             },
-            {"discipline": 6, "entrypoint": 2, "specialized": 23, "wrapper": 3},
+            {"discipline": 7, "entrypoint": 2, "specialized": 23, "wrapper": 3},
         )
         for skill_name in (
             "code-review",
@@ -650,6 +650,7 @@ class SkillWatcherTests(unittest.TestCase):
             "workflow:long-running-goal": "explicit-workflows",
             "workflow:orchestrate-subagents": "explicit-workflows",
             "workflow:prompt-strategy-loop": "implicit-primitives",
+            "workflow:scope-discipline": "guardrails",
             "workflow:sop": "implicit-primitives",
             "workflow:summary-in-html": "implicit-primitives",
         }
