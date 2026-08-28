@@ -120,7 +120,8 @@ if ($PSScriptRoot) {
 
 $bootstrapRoot = $null
 if (-not $installer) {
-    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     if (-not $git) {
         Write-AccentError -Message (
             "error: Git not found. Install Git before running the streamed installer."
