@@ -54,6 +54,8 @@ Before `Ready`, freeze:
 
 Milestone boundaries, reviews, checkpoints, rebuilds, refreshes, dependency restores, code or documentation edits, tests, formatting, link checks, and other planned non-destructive local operations are non-stops. Run them and continue when their gates pass.
 
+During milestone execution, apply `components/milestone-scope-gate.md` as the stage adapter for the shared scope-discipline necessity gate. It constrains only unplanned scope or validation expansion; it never removes work already frozen by the user, goal, repository contract, review gate, or checkpoint.
+
 Diagnose and fix ordinary failures while the next useful step is clear and in scope. Ask the user only at a runtime hard stop:
 
 - repeated technical impossibility, normally after at least three attempts or three distinct approaches unless the failure is immediately decisive;

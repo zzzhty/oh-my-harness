@@ -9,7 +9,7 @@
   "interface": {
     "displayName": "Workflow",
     "shortDescription": "Use reusable workflow skills maintained in oh-my-harness.",
-    "longDescription": "Workflow packages reusable agent procedures for continuation-ready long-running goals with frozen YOLO non-stops and runtime hard stops, SOP harnesses, prompt/strategy loops, user-requested subagent orchestration, scoped HTML summaries and source-code walkthroughs, and other repeatable agent workflows installable from the oh-my-harness marketplace.",
+    "longDescription": "Workflow packages reusable agent procedures for continuation-ready long-running goals with frozen YOLO non-stops, runtime hard stops, and milestone scope gates; SOP harnesses; prompt and strategy loops; explicit scope discipline; user-requested subagent orchestration; scoped HTML summaries and source-code walkthroughs; and other repeatable agent workflows installable from the oh-my-harness marketplace.",
     "developerName": "Max",
     "category": "Productivity",
     "capabilities": [

@@ -36,6 +36,16 @@
       ],
       "supporting_skills": []
     },
+    "workflow:scope-discipline": {
+      "role": "discipline",
+      "logical_group": "guardrails",
+      "aliases": [
+        {"value": "workflow:scope-discipline", "kind": "skill_name", "match": "phrase"},
+        {"value": "scope-discipline", "kind": "slug", "match": "token"},
+        {"value": "scope discipline", "kind": "phrase", "match": "phrase"}
+      ],
+      "supporting_skills": []
+    },
     "workflow:sop": {
       "role": "specialized",
       "logical_group": "implicit-primitives",
