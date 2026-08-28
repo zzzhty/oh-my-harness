@@ -98,6 +98,13 @@ class HarnessClosureTests(unittest.TestCase):
 
 
 class PluginListParserTests(unittest.TestCase):
+    def test_empty_marketplace_state_parses_as_no_rows(self) -> None:
+        self.assertEqual(codex_plugin_rows("No marketplace plugins found.\n"), {})
+
+    def test_unknown_output_before_marketplace_header_still_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unexpected output before marketplace header"):
+            codex_plugin_rows("unexpected plugin output\n")
+
     def test_parses_installed_and_uninstalled_rows(self) -> None:
         output = (
             "Marketplace `oh-my-harness`\n"

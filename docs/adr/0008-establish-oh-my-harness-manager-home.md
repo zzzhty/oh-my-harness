@@ -45,11 +45,16 @@ activate the venv. Public lifecycle syntax is platform-neutral; for example,
 Repository `upgrade_oh_my_harness.sh/.ps1` wrappers remain compatibility
 surfaces but are no longer launcher authority.
 
-The initializer obtains its Git source from an explicit `--repository` or the
-invoking checkout's `remote.origin.url`; it does not embed an obsolete or
-unverified repository URL. It records the exact repository, ref, revision,
-harness, and owned paths in `state/install.json`. It does not edit shell
-profiles or machine-wide `PATH` state.
+The Python initializer obtains its Git source from an explicit `--repository`
+or the invoking checkout's `remote.origin.url`. The standalone platform
+wrappers embed the canonical HTTPS repository and `main` only as their default
+bootstrap acquisition source; documented `--repository` and `--ref` arguments
+override that source before any clone. A streamed wrapper clones a temporary
+checkout, invokes that checkout's Python initializer with the original
+arguments, and removes the temporary checkout afterward. The Python initializer
+still owns the only managed clone and records the exact repository, ref,
+revision, harness, and owned paths in `state/install.json`. Neither layer edits
+shell profiles or machine-wide `PATH` state.
 
 `state/install.json` is an exact-shape installation lifecycle record and has no
 independent schema-version field. Its repository and revision remain an

@@ -33,8 +33,8 @@ Every refresh and closure check selects one complete distribution with `--harnes
 
 ## Lifecycle Manager
 
-`install.sh` and `install.ps1` are bootstrap-only. After the first installation,
-all supported lifecycle management goes through `omh`:
+`install.sh` and `install.ps1` are standalone bootstrap-only entry points. After
+the first installation, all supported lifecycle management goes through `omh`:
 
 ```bash
 omh install [HARNESS...]
@@ -179,11 +179,20 @@ in this repository.
 ## Local Install
 
 The initializer creates one manager-owned installation under
-`${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}`. It clones the current checkout's
-`remote.origin.url` into `repo/`, rebuilds `venv/`, writes `state/install.json`,
-and creates ordinary `oh-my-harness` and `omh` launchers under `bin/`. Pass
-`--repository <url>` only when the initializer is not running from a checkout
-with a configured origin.
+`${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}`. `install.sh` and `install.ps1`
+are standalone bootstrap entry points: when run from a checkout they use its
+Python installer directly; when streamed or downloaded alone they clone a
+temporary bootstrap checkout and invoke the same installer from there. The
+Python installer remains the sole owner of the managed `repo/` clone, `venv/`,
+`state/install.json`, and ordinary `oh-my-harness` and `omh` launchers under
+`bin/`. The temporary checkout is removed after the installer exits and never
+becomes installation authority.
+
+Git and Python 3.11 or newer must already be available. A streamed install uses
+the canonical HTTPS repository and `main` by default. Documented
+`--repository` and `--ref` arguments select both the temporary bootstrap source
+and the managed installation source, so a custom source does not execute an
+installer from a different repository.
 
 `state/install.json` records one initialization lifecycle and its source
 snapshot. It has no independent schema-version field, and its recorded
@@ -203,6 +212,19 @@ Unix:
 ./install.sh --harness codex --yes
 export PATH="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/bin:$PATH"
 omh --help
+```
+
+The same initializer can be run without a pre-existing checkout:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh | bash
+```
+
+The streamed wrapper reads live confirmations from the controlling terminal.
+For a non-interactive first install, forward `--yes` explicitly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh | bash -s -- --yes
 ```
 
 To relocate an existing authoritative checkout into the manager home, move it
@@ -271,6 +293,12 @@ Windows PowerShell:
 .\install.ps1 --harness codex --yes
 $env:PATH = "$env:USERPROFILE\.oh-my-harness\bin;$env:PATH"
 omh --help
+```
+
+PowerShell can likewise bootstrap without a checkout:
+
+```powershell
+irm https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.ps1 | iex
 ```
 
 The initializer does not edit shell profiles or the machine-wide `PATH`. Add the
@@ -601,6 +629,8 @@ plugins/
   watcher/
   workflow/
   mattpocock-skills/
+install.sh
+install.ps1
 requirements.txt
 scripts/bootstrap_tooling_env.py
 scripts/check_harness.py

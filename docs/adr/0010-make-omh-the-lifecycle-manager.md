@@ -4,11 +4,16 @@ status: accepted
 
 # Make `omh` the post-bootstrap lifecycle manager
 
-`install.sh` and `install.ps1` are bootstrap-only entry points. They may create the
-manager home, clone the first managed checkout, install the stable bootstrap shim,
-build the tooling environment, write launchers, and invoke the initial
-`omh install`. After that point, all supported lifecycle mutation is owned by
-`omh`.
+`install.sh` and `install.ps1` are standalone bootstrap-only entry points. When
+a companion Python installer is unavailable, they may clone a temporary
+bootstrap checkout from the canonical HTTPS repository or the explicit
+`--repository` and `--ref`, then invoke that checkout's installer with the
+original arguments. The temporary checkout is an acquisition adapter, is
+removed after invocation, and never becomes lifecycle authority. The Python
+installer may create the manager home, clone the first managed checkout,
+install the stable bootstrap shim, build the tooling environment, write
+launchers, and invoke the initial `omh install`. After that point, all supported
+lifecycle mutation is owned by `omh`.
 
 The public harness lifecycle is:
 

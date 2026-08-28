@@ -29,17 +29,18 @@ class PluginListRow:
 def codex_plugin_rows(output: str) -> dict[tuple[str, str], PluginListRow]:
     """Parse `codex plugin list`, rejecting unrecognized candidate rows."""
 
+    lines = [raw_line.strip() for raw_line in output.splitlines() if raw_line.strip()]
+    if lines == ["No marketplace plugins found."]:
+        return {}
+
     rows: dict[tuple[str, str], PluginListRow] = {}
     marketplace_name: str | None = None
     reading_rows = False
-    for raw_line in output.splitlines():
-        line = raw_line.strip()
+    for line in lines:
         marketplace_match = re.fullmatch(r"Marketplace `([^`]+)`", line)
         if marketplace_match:
             marketplace_name = marketplace_match.group(1)
             reading_rows = False
-            continue
-        if not line:
             continue
         if marketplace_name is None:
             raise ValueError(f"unexpected output before marketplace header: {line!r}")
