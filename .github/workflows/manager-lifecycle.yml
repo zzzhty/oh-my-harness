@@ -10,6 +10,29 @@ permissions:
   contents: read
 
 jobs:
+  identity-preview:
+    name: identity preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install tooling dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Generate plugin identity preview
+        shell: bash
+        run: python scripts/update_plugin_generations.py --json > identity-preview.json
+      - name: Upload plugin identity preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-identity-preview
+          path: |
+            plugins/workflow/.codex-plugin/plugin.json
+            .agents/plugins/distribution-identity.json
+            identity-preview.json
+
   lifecycle:
     name: lifecycle (${{ matrix.os }}, Python ${{ matrix.python-version }})
     timeout-minutes: 20
