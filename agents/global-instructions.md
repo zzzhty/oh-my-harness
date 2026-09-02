@@ -3,11 +3,17 @@
 - Observe before acting; for uncertain, scheduled, recurring, or long-running work, keep durable, inspectable evidence in a named thread, repo file, automation memory, report, TODO, or skill when the state matters beyond the current turn. Do not leave important project state only in chat history.
 - Apply Occam's razor: do not add entities without necessity. Prefer fixing the root cause in the owning surface over adding patches, wrappers, shims, fallback paths, alternate backends, compatibility layers, or parallel abstractions that route around the real problem.
 - Keep planning schemes separate: use system planning for ordinary complex tasks. Suggest `long-running-goal` only as an option. Create or convert its contract—and run its required planning preflight—only after the user explicitly requests the goal or confirms the conversion; execute it only after an explicit execution request.
-- Verification defines done. Use the smallest check that can falsify the changed behavior; do not validate unaffected surfaces or create extra evidence artifacts solely as proof of diligence.
 - Automate waiting, checking, summarizing, and reporting; preserve human judgment for mutation, escalation, privacy-sensitive actions, messages to others, source skill mutations, automation changes, and irreversible actions.
 - Only a `Ready` `long-running-goal` continuation contract pre-approves planned, non-destructive local work inside its frozen scope as YOLO non-stops; a `Draft` does not. Execute such work without pausing and stop only at a declared runtime hard stop.
 - Turn repeated successful workflows into skills, scripts, plugin docs, or checklists so future runs need less re-teaching without hiding review boundaries.
 - For global subagent workflow guidance, Codex sessions use the installed note at `$CODEX_HOME/agents/operating-principles.md`; if `$CODEX_HOME` is unset, use `~/.codex/agents/operating-principles.md`. Other harnesses use only their own native support surface.
+
+## Verification policy
+
+- Verification defines done. Use proportional verification: start with the smallest behavior-level check that can falsify the changed behavior, and add another persistent check only for a distinct, evidenced failure mode. Do not validate unaffected surfaces or create extra evidence artifacts solely as proof of diligence.
+- Escalate to content identity only when exact bytes are semantic under a pre-existing owner contract, the user explicitly requests exact-content integrity, or current evidence demonstrates a failure that semantic validation cannot detect. Name the owner, evidence, and weaker check before implementation; the current change cannot create its own exception.
+- Treat uncertainty as validation status, not corruption. Keep reversible local work available with an actionable diagnostic and an explicit unverified result; reserve hard stops for security, privacy, destructive actions, compatibility, and declared integrity boundaries.
+- Existing verification contracts remain in force until their owner is explicitly changed. Proportional verification does not authorize removing or silently rebaselining them.
 
 ## Failure-handling policy
 
@@ -20,7 +26,6 @@
 - Keep tests focused on behavioral red lines, integration contracts, and regression-prone flows.
 - Prefer consolidating narrow single-point assertions into behavior-level tests when setup and failure mode are shared.
 - Avoid fragmented tests for trivial helpers unless they protect real compatibility, safety, or failure-handling boundaries.
-- Do not add SHA-256/checksum receipts, snapshots/golden files, or duplicate defensive tests as generic completion evidence. Add such mechanisms only when explicitly requested, when they protect an observed failure mode, or when an owning content-identity or integrity contract requires them. This rule is prospective; it does not by itself authorize removing or silently rebaselining any existing hash, checksum, snapshot, golden file, test, or owning contract.
 - Preserve explicit coverage for privacy, destructive actions, schema compatibility, cross-platform command generation, and user-visible workflow guarantees.
 
 ## Delegation policy
