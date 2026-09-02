@@ -10,15 +10,15 @@
 
 ## Verification policy
 
-- Verification defines done. Use proportional verification: start with the smallest behavior-level check that can falsify the changed behavior, and add another persistent check only for a distinct, evidenced failure mode. Do not validate unaffected surfaces or create extra evidence artifacts solely as proof of diligence.
-- Escalate to content identity only when exact bytes are semantic under a pre-existing owner contract, the user explicitly requests exact-content integrity, or current evidence demonstrates a failure that semantic validation cannot detect. Name the owner, evidence, and weaker check before implementation; the current change cannot create its own exception.
-- Treat uncertainty as validation status, not corruption. Keep reversible local work available with an actionable diagnostic and an explicit unverified result; reserve hard stops for security, privacy, destructive actions, compatibility, and declared integrity boundaries.
+- Verification defines done. Verify proportionally with the smallest behavior-level check that falsifies changed behavior. Add persistent checks only for distinct evidenced failure modes; skip unaffected surfaces and proof-only artifacts.
+- Use content identity—hashes, checksums, snapshots, or goldens—only when an existing contract makes exact bytes semantic, the user explicitly requests it, or semantic checks miss an evidenced failure. State owner, evidence, and weaker check first; changes cannot self-authorize.
+- Outside required verification gates, preserve reversible work and report an explicit unverified result with an actionable diagnostic. Continue to honor existing boundaries, including failure handling, user authorization, owner-declared hard stops, security, privacy, destructive actions, compatibility, and integrity.
 - Existing verification contracts remain in force until their owner is explicitly changed. Proportional verification does not authorize removing or silently rebaselining them.
 
 ## Failure-handling policy
 
 - Surface failures directly: report the root cause, failing command/path, and exact breakpoint when known.
-- Fix the underlying issue first. Do not mask or route around failures with fallbacks, silent degradation, temporary workarounds, compatibility shims, alternate systems, data paths, implementations, backends, changed assumptions, or fake success states unless explicitly requested.
+- Fix root causes first. Use fallbacks, degradation, workarounds, shims, alternate routes, changed assumptions, or fake success only when explicitly requested.
 - If the root cause cannot be fixed yet, stop after collecting minimal useful diagnostics and report the concrete blocker clearly.
 
 ## Test coverage policy
@@ -31,7 +31,7 @@
 ## Delegation policy
 
 - Use subagents only when the user explicitly asks for subagents or the active environment/plan authorizes them. When a task invokes `$orchestrate-subagents`, use that skill as the detailed workflow instead of duplicating recipes here.
-- Broad read-only review requests, such as PR, branch, diff, architecture, skill, prompt, docs, contract, security, or regression review, authorize read-only subagent review. This authorization does not invoke `$orchestrate-subagents` by itself. Declare read-only permission in every assignment prompt and do not grant a write scope. Consolidate evidence-backed findings and mark partial coverage or subagent failures explicitly.
+- Broad read-only review requests authorize read-only subagents; this does not invoke `$orchestrate-subagents`. Assignment prompts must state read-only permission and forbid writes; consolidate evidence-backed findings and report partial coverage or subagent failures.
 - Delegate only bounded tasks with clear inputs, expected outputs, stopping conditions, and read-only scope or disjoint write ownership.
 - Do not delegate tiny tasks, tightly coupled sequential debugging, or work where multiple agents may race on the same files.
 - Keep the main agent responsible for planning, final decisions, integration, verification, and user-facing conclusions; subagents must report concise findings with relevant paths, commands run, evidence, and unresolved blockers.
