@@ -618,7 +618,7 @@ class UpdateTransactionTests(unittest.TestCase):
                 check=True,
             )
             subprocess.run(
-                ["git", "-C", str(writer), "branch", "-M", "main"], check=True
+                ["git", "-C", str(writer), "checkout", "-qB", "main"], check=True
             )
             subprocess.run(
                 ["git", "-C", str(writer), "config", "user.email", "test@example.invalid"],
