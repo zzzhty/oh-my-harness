@@ -42,13 +42,15 @@ Instruction target classification has one evidence source:
   confirmation, while unmanaged links and unsupported target types fail closed.
 
 Update preflight reads both revisions from Git objects and records their source
-paths and SHA-256 digests in the operation journal. The resumed updater verifies
-the predecessor before writing manager state or refreshing a harness. This
-second check also protects a direct jump made by a client predating the bridge.
-Refresh accepts journal provenance only when the operation id, operation type,
-and checked-out revision match the active journal. Rollback and explicit recovery
-use the same evidence, so copy targets can move in either direction without
-weakening ordinary replacement confirmation.
+paths and SHA-256 digests in the operation journal. When an update enters a new
+migration stage, preflight and the resumed updater verify its predecessor before
+writing manager state or refreshing a harness. This check also protects a direct
+jump made by a client predating the bridge. Updates that remain within the same
+stage do not replay its historical predecessor check. Refresh accepts journal
+provenance only when the operation id, operation type, and checked-out revision
+match the active journal. Rollback and explicit recovery use the same evidence,
+so copy targets can move in either direction without weakening ordinary
+replacement confirmation.
 
 The registry peer remains active after the semantic split until a separately
 authorized retirement. Commit A, B, and C must not be amended, squashed, rebased,

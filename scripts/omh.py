@@ -279,7 +279,22 @@ def _validate_instruction_transition(
 ) -> None:
     before_migration = before_source.get("migration")
     target_migration = target_source.get("migration")
-    if isinstance(target_migration, dict):
+    entering_target_stage = True
+    if isinstance(before_migration, dict) and isinstance(target_migration, dict):
+        if before_migration.get("id") != target_migration.get("id"):
+            raise SystemExit("instruction source migration id changed across update")
+        before_stage = before_migration.get("stage")
+        target_stage = target_migration.get("stage")
+        assert isinstance(before_stage, str) and isinstance(target_stage, str)
+        entering_target_stage = before_stage != target_stage
+        if abs(
+            INSTRUCTION_MIGRATION_STAGE_ORDER[target_stage]
+            - INSTRUCTION_MIGRATION_STAGE_ORDER[before_stage]
+        ) > 1:
+            raise SystemExit(
+                "instruction source migration checkpoints must be traversed in order"
+            )
+    if isinstance(target_migration, dict) and entering_target_stage:
         predecessor = target_migration.get("requiredPredecessorRevision")
         if isinstance(predecessor, str):
             predecessor_source = _instruction_source_at_revision(repo, predecessor)
@@ -338,20 +353,7 @@ def _validate_instruction_transition(
                     "cannot validate instruction source migration current ancestry: "
                     f"git exited {current_ancestry.returncode}: {detail or 'no detail'}"
                 )
-    if isinstance(before_migration, dict) and isinstance(target_migration, dict):
-        if before_migration.get("id") != target_migration.get("id"):
-            raise SystemExit("instruction source migration id changed across update")
-        before_stage = before_migration.get("stage")
-        target_stage = target_migration.get("stage")
-        assert isinstance(before_stage, str) and isinstance(target_stage, str)
-        if abs(
-            INSTRUCTION_MIGRATION_STAGE_ORDER[target_stage]
-            - INSTRUCTION_MIGRATION_STAGE_ORDER[before_stage]
-        ) > 1:
-            raise SystemExit(
-                "instruction source migration checkpoints must be traversed in order"
-            )
-    elif isinstance(before_migration, dict):
+    if isinstance(before_migration, dict) and not isinstance(target_migration, dict):
         before_stage = before_migration.get("stage")
         if (
             isinstance(before_stage, str)

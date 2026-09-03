@@ -502,7 +502,14 @@ class UpdateTransactionTests(unittest.TestCase):
         new = subprocess.check_output(["git", "-C", str(writer), "rev-parse", "HEAD"], text=True).strip()
         return home_repo, old, new
 
-    def seed_state(self, home: Path, repo: Path, old: str) -> None:
+    def seed_state(
+        self,
+        home: Path,
+        repo: Path,
+        old: str,
+        *,
+        bundle_identity: str = "sha256:old",
+    ) -> None:
         (home / "state").mkdir(parents=True, exist_ok=True)
         (home / "state" / "install.json").write_text(
             json.dumps(
@@ -524,7 +531,7 @@ class UpdateTransactionTests(unittest.TestCase):
             repository=str(repo.parent.parent / "remote.git"),
             revision=old,
             release_version="1.0.0",
-            bundle_identity="sha256:old",
+            bundle_identity=bundle_identity,
             channel="main",
             requested_ref="origin/main",
         )
@@ -593,6 +600,92 @@ class UpdateTransactionTests(unittest.TestCase):
             write_desired.assert_called_once_with(
                 home, ("codex",), channel="stable"
             )
+
+    def test_check_does_not_revalidate_predecessor_after_semantic_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote.git"
+            writer = root / "writer"
+            home = root / "home"
+            repo = home / "repo"
+            subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+            subprocess.run(
+                ["git", "clone", "--no-hardlinks", "-q", str(REPO_ROOT), str(writer)],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "remote", "set-url", "origin", str(remote)],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "branch", "-M", "main"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "config", "user.email", "test@example.invalid"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "config", "user.name", "Test"],
+                check=True,
+            )
+            registry_path = writer / ".agents/harnesses/registry.json"
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            registry["sources"]["instructions"]["migration"][
+                "requiredPredecessorRevision"
+            ] = "0" * 40
+            registry_path.write_text(
+                json.dumps(registry, indent=2) + "\n", encoding="utf-8"
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "add", ".agents/harnesses/registry.json"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "commit", "-qm", "semantic split"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "push", "-qu", "origin", "main"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"],
+                check=True,
+            )
+            subprocess.run(["git", "clone", "-q", str(remote), str(repo)], check=True)
+            old = subprocess.check_output(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+            ).strip()
+
+            (writer / "steady-update-marker").write_text("new\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(writer), "add", "steady-update-marker"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "commit", "-qm", "steady update"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(writer), "push", "-q", "origin", "main"],
+                check=True,
+            )
+
+            identity = json.loads(
+                (repo / ".agents/plugins/distribution-identity.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.seed_state(
+                home,
+                repo,
+                old,
+                bundle_identity=str(identity["bundleIdentity"]),
+            )
+            args = argparse.Namespace(
+                **{**vars(self.args()), "home": str(home), "check": True}
+            )
+            with mock.patch.object(omh, "REPO_ROOT", repo):
+                self.assertEqual(omh.command_update(args), 0)
 
     def test_update_commits_new_manager_state_only_after_new_cli_resume(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
