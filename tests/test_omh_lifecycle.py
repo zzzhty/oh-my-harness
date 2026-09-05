@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -609,12 +610,17 @@ class UpdateTransactionTests(unittest.TestCase):
             home = root / "home"
             repo = home / "repo"
             subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+            shutil.copytree(
+                REPO_ROOT,
+                writer,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            )
             subprocess.run(
-                ["git", "clone", "--no-hardlinks", "-q", str(REPO_ROOT), str(writer)],
+                ["git", "-C", str(writer), "init", "-q"],
                 check=True,
             )
             subprocess.run(
-                ["git", "-C", str(writer), "remote", "set-url", "origin", str(remote)],
+                ["git", "-C", str(writer), "remote", "add", "origin", str(remote)],
                 check=True,
             )
             subprocess.run(
@@ -637,7 +643,7 @@ class UpdateTransactionTests(unittest.TestCase):
                 json.dumps(registry, indent=2) + "\n", encoding="utf-8"
             )
             subprocess.run(
-                ["git", "-C", str(writer), "add", ".agents/harnesses/registry.json"],
+                ["git", "-C", str(writer), "add", "."],
                 check=True,
             )
             subprocess.run(
