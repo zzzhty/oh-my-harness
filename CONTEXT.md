@@ -39,7 +39,7 @@ The `codex` harness skills driver that installs the exact skills-bearing package
 _Avoid_: `$CODEX_HOME/skills` projection, optional partial plugin mode, directory projection
 
 **Harness Instructions Projection**:
-The registry-selected global instructions file derived from the repository root `AGENTS.md`; every Harness Plan owns exactly one such projection.
+The registry-selected global instructions file derived from `agents/global-instructions.md`; every Harness Plan owns exactly one such projection. Root `AGENTS.md` is repository-local routing, not a global instructions source.
 _Avoid_: `~/.agents/AGENTS.md`, independently selected instructions harness, silent replacement
 
 **Codex Invocation Identity**:
