@@ -156,11 +156,20 @@ class HarnessRegistryTests(unittest.TestCase):
                 "pi-agent",
                 environ={},
                 user_home=home,
+                os_name="posix",
+            )
+            windows_plan = resolve_harness_plan(
+                self.registry,
+                "pi-agent",
+                environ={},
+                user_home=home,
+                os_name="nt",
             )
 
         self.assertEqual(plan.root, home / ".pi/agent")
         self.assertEqual(plan.skills_root, home / ".pi/agent/skills")
         self.assertEqual(plan.skills_materialization, "directory-symlink")
+        self.assertEqual(windows_plan.skills_materialization, "directory-junction")
         self.assertEqual(plan.instructions_target, home / ".pi/agent/AGENTS.md")
         self.assertEqual(plan.instructions_materialization, "copy")
         self.assertEqual(
