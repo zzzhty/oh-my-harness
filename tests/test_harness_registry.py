@@ -151,22 +151,28 @@ class HarnessRegistryTests(unittest.TestCase):
     def test_pi_agent_uses_its_native_global_configuration_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "users" / "tester"
-            plan = resolve_harness_plan(
-                self.registry,
-                "pi-agent",
-                environ={},
-                user_home=home,
-            )
+            for os_name, materialization in (
+                ("posix", "directory-symlink"),
+                ("nt", "directory-junction"),
+            ):
+                with self.subTest(os_name=os_name):
+                    plan = resolve_harness_plan(
+                        self.registry,
+                        "pi-agent",
+                        environ={},
+                        user_home=home,
+                        os_name=os_name,
+                    )
 
-        self.assertEqual(plan.root, home / ".pi/agent")
-        self.assertEqual(plan.skills_root, home / ".pi/agent/skills")
-        self.assertEqual(plan.skills_materialization, "directory-symlink")
-        self.assertEqual(plan.instructions_target, home / ".pi/agent/AGENTS.md")
-        self.assertEqual(plan.instructions_materialization, "copy")
-        self.assertEqual(
-            plan.instruction_shadow_paths,
-            (home / ".pi/agent/AGENTS.override.md",),
-        )
+                    self.assertEqual(plan.root, home / ".pi/agent")
+                    self.assertEqual(plan.skills_root, home / ".pi/agent/skills")
+                    self.assertEqual(plan.skills_materialization, materialization)
+                    self.assertEqual(plan.instructions_target, home / ".pi/agent/AGENTS.md")
+                    self.assertEqual(plan.instructions_materialization, "copy")
+                    self.assertEqual(
+                        plan.instruction_shadow_paths,
+                        (home / ".pi/agent/AGENTS.override.md",),
+                    )
 
     def test_bridge_ready_requires_two_regular_byte_identical_sources(self) -> None:
         original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
