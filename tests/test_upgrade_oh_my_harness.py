@@ -42,6 +42,8 @@ def write_fake_codex(path: Path) -> None:
         "#!/usr/bin/env sh\n"
         "if [ \"${1-}\" = \"--version\" ]; then\n"
         "    echo 'codex-cli 999.0.0-test'\n"
+        "elif [ \"${1-}\" = \"plugin\" ] && [ \"${2-}\" = \"list\" ]; then\n"
+        "    echo '{\"installed\": [], \"available\": []}'\n"
         "fi\n"
         "exit 0\n",
         encoding="utf-8",

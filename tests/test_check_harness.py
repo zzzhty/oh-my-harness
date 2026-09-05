@@ -99,37 +99,135 @@ class HarnessClosureTests(unittest.TestCase):
 
 class PluginListParserTests(unittest.TestCase):
     def test_empty_marketplace_state_parses_as_no_rows(self) -> None:
-        self.assertEqual(codex_plugin_rows("No marketplace plugins found.\n"), {})
+        self.assertEqual(
+            codex_plugin_rows(json.dumps({"installed": [], "available": []})),
+            {},
+        )
 
-    def test_unknown_output_before_marketplace_header_still_fails_closed(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unexpected output before marketplace header"):
+    def test_non_json_output_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not valid JSON"):
             codex_plugin_rows("unexpected plugin output\n")
 
     def test_parses_installed_and_uninstalled_rows(self) -> None:
-        output = (
-            "Marketplace `oh-my-harness`\n"
-            "/repo/.agents/plugins/marketplace.json\n\n"
-            "PLUGIN  STATUS              VERSION  PATH\n"
-            "alpha@oh-my-harness  installed, enabled  1.2.3  /cache/alpha\n"
-            "beta@oh-my-harness  not installed          /repo/plugins/beta\n"
+        output = json.dumps(
+            {
+                "installed": [
+                    {
+                        "pluginId": "alpha@oh-my-harness",
+                        "name": "alpha",
+                        "marketplaceName": "oh-my-harness",
+                        "version": "1.2.3",
+                        "installed": True,
+                        "enabled": True,
+                    },
+                    {
+                        "pluginId": "beta@oh-my-harness",
+                        "name": "beta",
+                        "marketplaceName": "oh-my-harness",
+                        "version": "2.0.0",
+                        "installed": True,
+                        "enabled": False,
+                    },
+                ],
+                "available": [
+                    {
+                        "pluginId": "gamma@oh-my-harness",
+                        "name": "gamma",
+                        "marketplaceName": "oh-my-harness",
+                        "version": "3.0.0",
+                        "installed": False,
+                        "enabled": False,
+                    }
+                ],
+            }
         )
         self.assertEqual(
             codex_plugin_rows(output),
             {
                 ("oh-my-harness", "alpha"): PluginListRow("installed, enabled", "1.2.3"),
-                ("oh-my-harness", "beta"): PluginListRow("not installed", ""),
+                ("oh-my-harness", "beta"): PluginListRow("installed", "2.0.0"),
+                ("oh-my-harness", "gamma"): PluginListRow("not installed", ""),
             },
         )
 
-    def test_malformed_candidate_row_fails_closed(self) -> None:
-        output = (
-            "Marketplace `oh-my-harness`\n"
-            "/repo/.agents/plugins/marketplace.json\n\n"
-            "PLUGIN  STATUS              VERSION  PATH\n"
-            "alpha@oh-my-harness installed, enabled 1.2.3 /cache/alpha\n"
+    def test_scoped_parse_ignores_duplicate_unrelated_catalog_rows(self) -> None:
+        own = {
+            "pluginId": "alpha@oh-my-harness",
+            "name": "alpha",
+            "marketplaceName": "oh-my-harness",
+            "version": "1.2.3",
+            "installed": True,
+            "enabled": True,
+        }
+        unrelated = {
+            "pluginId": "conductor@openai-curated-remote",
+            "name": "conductor",
+            "marketplaceName": "openai-curated-remote",
+            "installed": False,
+            "enabled": False,
+        }
+        output = json.dumps(
+            {
+                "installed": [own],
+                "available": [
+                    {**unrelated, "version": "1.0.0"},
+                    {**unrelated, "version": "1.6.6"},
+                ],
+            }
         )
-        with self.assertRaisesRegex(ValueError, "malformed plugin list row"):
+        self.assertEqual(
+            codex_plugin_rows(
+                output,
+                marketplace_name="oh-my-harness",
+                plugin_names={"alpha"},
+            ),
+            {
+                ("oh-my-harness", "alpha"): PluginListRow(
+                    "installed, enabled", "1.2.3"
+                ),
+            },
+        )
+
+    def test_malformed_relevant_entry_fails_closed(self) -> None:
+        output = json.dumps(
+            {
+                "installed": [
+                    {
+                        "pluginId": "alpha@oh-my-harness",
+                        "name": "alpha",
+                        "marketplaceName": "oh-my-harness",
+                        "version": "",
+                        "installed": True,
+                        "enabled": True,
+                    }
+                ],
+                "available": [],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "installed plugin row has no version"):
             codex_plugin_rows(output)
+
+    def test_checker_requests_machine_readable_available_rows(self) -> None:
+        runner = check_harness.CheckRunner()
+        result = mock.Mock(
+            returncode=0,
+            stdout=json.dumps({"installed": [], "available": []}),
+            stderr="",
+        )
+        with mock.patch.object(runner, "run_command", return_value=result) as run:
+            self.assertEqual(
+                runner.read_plugin_rows(
+                    "codex",
+                    marketplace_name="oh-my-harness",
+                    plugin_names={"alpha"},
+                    env={"PATH": "/bin"},
+                ),
+                {},
+            )
+        run.assert_called_once_with(
+            ["codex", "plugin", "list", "--json", "--available"],
+            env={"PATH": "/bin"},
+        )
 
 
 class PluginInstallationClosureTests(unittest.TestCase):

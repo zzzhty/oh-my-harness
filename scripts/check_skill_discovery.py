@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import os
-import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,52 +26,87 @@ class PluginListRow:
     version: str
 
 
-def codex_plugin_rows(output: str) -> dict[tuple[str, str], PluginListRow]:
-    """Parse `codex plugin list`, rejecting unrecognized candidate rows."""
+def codex_plugin_rows(
+    output: str,
+    *,
+    marketplace_name: str | None = None,
+    plugin_names: Collection[str] = (),
+) -> dict[tuple[str, str], PluginListRow]:
+    """Parse relevant rows from the JSON form of `codex plugin list`."""
 
-    lines = [raw_line.strip() for raw_line in output.splitlines() if raw_line.strip()]
-    if lines == ["No marketplace plugins found."]:
-        return {}
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"plugin list output is not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("plugin list JSON must be an object")
 
+    groups: list[tuple[str, object]] = [
+        ("installed", payload.get("installed")),
+        ("available", payload.get("available")),
+    ]
     rows: dict[tuple[str, str], PluginListRow] = {}
-    marketplace_name: str | None = None
-    reading_rows = False
-    for line in lines:
-        marketplace_match = re.fullmatch(r"Marketplace `([^`]+)`", line)
-        if marketplace_match:
-            marketplace_name = marketplace_match.group(1)
-            reading_rows = False
-            continue
-        if marketplace_name is None:
-            raise ValueError(f"unexpected output before marketplace header: {line!r}")
-        if re.fullmatch(r"PLUGIN\s+STATUS\s+VERSION\s+PATH", line):
-            reading_rows = True
-            continue
-        if not reading_rows:
-            if re.match(r"\S+@\S+\s{2,}", line):
-                raise ValueError(f"plugin row appeared before table header: {line!r}")
-            continue
-        columns = re.split(r"\s{2,}", line, maxsplit=3)
-        if len(columns) < 3:
-            raise ValueError(f"malformed plugin list row: {line!r}")
-        plugin_name, separator, listed_marketplace = columns[0].rpartition("@")
-        if not separator or not plugin_name or listed_marketplace != marketplace_name:
-            raise ValueError(
-                f"plugin selector does not match marketplace {marketplace_name!r}: {columns[0]!r}"
-            )
-        status = columns[1]
-        if status not in {"installed, enabled", "installed", "not installed"}:
-            raise ValueError(f"unrecognized plugin status in row: {line!r}")
-        if status == "not installed":
-            version = ""
-        elif len(columns) < 4 or not columns[2].strip():
-            raise ValueError(f"installed plugin row has no version: {line!r}")
-        else:
-            version = columns[2].strip()
-        key = (marketplace_name, plugin_name)
-        if key in rows:
-            raise ValueError(f"duplicate plugin list row: {plugin_name}@{marketplace_name}")
-        rows[key] = PluginListRow(status=status, version=version)
+    relevant_plugin_names = frozenset(plugin_names)
+    scoped = marketplace_name is not None or bool(relevant_plugin_names)
+    for group_name, entries in groups:
+        if not isinstance(entries, list):
+            raise ValueError(f"plugin list JSON {group_name!r} field must be an array")
+        for index, entry in enumerate(entries, start=1):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"plugin list JSON {group_name} entry #{index} must be an object"
+                )
+            plugin_name = entry.get("name")
+            listed_marketplace = entry.get("marketplaceName")
+            if not isinstance(plugin_name, str) or not plugin_name.strip():
+                raise ValueError(
+                    f"plugin list JSON {group_name} entry #{index} has no name"
+                )
+            if not isinstance(listed_marketplace, str) or not listed_marketplace.strip():
+                raise ValueError(
+                    f"plugin list JSON {group_name} entry #{index} has no marketplaceName"
+                )
+            plugin_name = plugin_name.strip()
+            listed_marketplace = listed_marketplace.strip()
+            if (
+                scoped
+                and listed_marketplace != marketplace_name
+                and plugin_name not in relevant_plugin_names
+            ):
+                continue
+
+            expected_selector = f"{plugin_name}@{listed_marketplace}"
+            if entry.get("pluginId") != expected_selector:
+                raise ValueError(
+                    f"plugin list JSON selector mismatch for {expected_selector}"
+                )
+            installed = entry.get("installed")
+            enabled = entry.get("enabled")
+            expected_installed = group_name == "installed"
+            if installed is not expected_installed or not isinstance(enabled, bool):
+                raise ValueError(
+                    f"plugin list JSON state is malformed for {expected_selector}"
+                )
+            if installed:
+                raw_version = entry.get("version")
+                if not isinstance(raw_version, str) or not raw_version.strip():
+                    raise ValueError(
+                        f"installed plugin row has no version: {expected_selector}"
+                    )
+                version = raw_version.strip()
+                status = "installed, enabled" if enabled else "installed"
+            else:
+                if enabled:
+                    raise ValueError(
+                        f"uninstalled plugin row is enabled: {expected_selector}"
+                    )
+                version = ""
+                status = "not installed"
+
+            key = (listed_marketplace, plugin_name)
+            if key in rows:
+                raise ValueError(f"duplicate plugin list row: {expected_selector}")
+            rows[key] = PluginListRow(status=status, version=version)
     return rows
 
 

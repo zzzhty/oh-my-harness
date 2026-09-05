@@ -107,8 +107,15 @@ class HarnessFixture:
             encoding="utf-8",
         )
 
-    def rows(self, _codex: str, *, env: dict[str, str]) -> dict[tuple[str, str], PluginListRow]:
-        del env
+    def rows(
+        self,
+        _codex: str,
+        *,
+        marketplace_name: str,
+        plugin_names: set[str],
+        env: dict[str, str],
+    ) -> dict[tuple[str, str], PluginListRow]:
+        del marketplace_name, plugin_names, env
         return {
             ("test", name): PluginListRow(
                 "installed, enabled",

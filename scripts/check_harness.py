@@ -209,15 +209,24 @@ class CheckRunner:
         self,
         codex: str,
         *,
+        marketplace_name: str,
+        plugin_names: set[str],
         env: dict[str, str],
     ) -> dict[tuple[str, str], PluginListRow] | None:
-        result = self.run_command([codex, "plugin", "list"], env=env)
+        result = self.run_command(
+            [codex, "plugin", "list", "--json", "--available"],
+            env=env,
+        )
         if result.returncode != 0:
             output = (result.stderr or result.stdout).strip()
             self.fail(f"`codex plugin list` failed: {output}")
             return None
         try:
-            return codex_plugin_rows(result.stdout)
+            return codex_plugin_rows(
+                result.stdout,
+                marketplace_name=marketplace_name,
+                plugin_names=plugin_names,
+            )
         except ValueError as exc:
             self.fail(f"failed to parse `codex plugin list` output: {exc}")
             return None
@@ -595,7 +604,12 @@ def main() -> None:
             desired_plugins,
             marketplace_file=plan.marketplace_path,
         )
-        rows = runner.read_plugin_rows(codex, env=env)
+        rows = runner.read_plugin_rows(
+            codex,
+            marketplace_name=marketplace_name,
+            plugin_names=set(catalog.plugin_names),
+            env=env,
+        )
         if plugin_sources is not None:
             runner.check_plugin_packages(catalog, plugin_sources=plugin_sources)
         if plugin_sources is not None and rows is not None:
