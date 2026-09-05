@@ -213,8 +213,8 @@ class HarnessRegistryTests(unittest.TestCase):
         migration.pop("requiredPredecessorRevision")
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
-            repo.joinpath("AGENTS.md").write_text("same\n", encoding="utf-8")
             repo.joinpath("agents").mkdir(parents=True)
+            repo.joinpath("AGENTS.md").write_text("same\n", encoding="utf-8")
             repo.joinpath("agents/global-instructions.md").write_text(
                 "same\n", encoding="utf-8"
             )
