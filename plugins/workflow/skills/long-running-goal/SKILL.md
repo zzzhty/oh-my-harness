@@ -13,9 +13,9 @@ A `Ready` goal records current truth, ordered work, the next milestone, gates, v
 
 Use `templates/long_running_goal_template.md` for one goal and `templates/long_running_goal_sequence_template.md` for a strict sequence unless the repository has a stronger local convention. Prefer the user-specified path, then an existing active goal/TODO directory or index, and use `docs/todo/<goal_slug>_long_running_goal_plan.md` only as a fallback. Do not create a parallel planning tree or append `/todo` to a directory that already serves as the goal directory. Templates and readiness checkers own field shape and structural completeness.
 
-Before goal creation or conversion, or before first implementation when the goal lacks a completed marker, apply `components/planning-preflight.md`. Its timeboxed execution-time assessment must report a rough remaining elapsed-time range or a bounded critical-path breakdown, and its explicit task-temporary-cache housekeeping choice is required even when the user skips `grill-with-docs`.
+Before goal creation or conversion, or first implementation without a completed marker, apply `components/planning-preflight.md`. Reuse settled decisions, resolve material gaps, and record the marker. Time estimates are optional. Task temporary cache cleanup defaults to `Disabled`; only `Enabled` requires explicit cleanup authorization.
 
-Explicit goal creation may produce a complete `Draft` or `Ready` contract. Keep unresolved design, approval, permission, input, and housekeeping choices visible in a `Draft`; validate that lifecycle with `check_goal_ready.py --allow-draft`. Never invent or infer a missing decision merely to satisfy a checker, and never treat generic no-cleanup or non-destructive language as the user's explicit housekeeping choice.
+Creation may produce a non-executable `Draft` with unresolved decisions or a complete `Ready` contract. Validate Draft with `check_goal_ready.py --allow-draft`. Never invent missing design or permission to satisfy a checker.
 
 ## Request Supersession
 
@@ -60,7 +60,7 @@ Diagnose and fix ordinary failures while the next useful step is clear and in sc
 
 - repeated technical impossibility, normally after at least three attempts or three distinct approaches unless the failure is immediately decisive;
 - required credentials, files, tools, or source-of-truth inputs are unavailable locally;
-- the next step is destructive, irreversible, privacy-sensitive, externally visible, or an unapproved external write;
+- the next destructive, irreversible, privacy-sensitive, externally visible, or external-write step requires authorization beyond the frozen contract;
 - evidence contradicts frozen semantics and continuing would change scope or product behavior;
 - a required subagent, connector, worktree, or verifier failed and no meaningful in-plan local fallback remains.
 

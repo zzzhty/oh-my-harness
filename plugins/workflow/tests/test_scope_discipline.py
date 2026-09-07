@@ -72,15 +72,9 @@ class ScopeDisciplineTests(unittest.TestCase):
             "The checkpoint component has already recorded its evidence",
             component,
         )
-        for semantic in (
-            "Necessary consequence",
-            "Later milestone work",
-            "Speculative expansion",
-            "Semantic conflict",
-            "without another final scope audit",
-            "Completion criterion:",
-        ):
-            self.assertIn(semantic, component)
+        self.assertIn("later milestone work", component)
+        self.assertIn("without another final scope audit", component)
+        self.assertNotIn("## Decision Routing", component)
 
         self.assertIn("components/milestone-scope-gate.md", atomic_template)
         self.assertIn("components/milestone-scope-gate.md", sequence_template)

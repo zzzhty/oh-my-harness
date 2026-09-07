@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:b5b6bd06f42e130340d0b505aab3770f582a7bd8d4d777c5be0f8dd5de0ee01e",
+  "bundleIdentity": "sha256:f7ef15f864b985e0057050229a75999cfbc23ce971763cf36ae6ebf7490e22c8",
   "generationLength": 16,
   "plugins": [
     {
@@ -11,17 +11,17 @@
       "versionAuthority": "upstream"
     },
     {
-      "contentSha256": "d9700fadabd26bdc88320ddee7e0bb4e1066d2103da3738e722b5d5243b9e6d3",
-      "generation": "d9700fadabd26bdc",
+      "contentSha256": "23f0e4b7746eb3b4616e78180ee7173dc67945e22645f0370452e836d2d97eb4",
+      "generation": "23f0e4b7746eb3b4",
       "name": "watcher",
-      "version": "1.0.0+codex.d9700fadabd26bdc",
+      "version": "1.0.0+codex.23f0e4b7746eb3b4",
       "versionAuthority": "release"
     },
     {
-      "contentSha256": "764c183c1ca30988a7ea2b2d695c6cad1efaeb206f60b278a57917275ce26aa5",
-      "generation": "764c183c1ca30988",
+      "contentSha256": "b1791581f2372ef16193a73fe6b4e6ad6c5bc997dbcbf8b6da483407326690b5",
+      "generation": "b1791581f2372ef1",
       "name": "workflow",
-      "version": "1.0.0+codex.764c183c1ca30988",
+      "version": "1.0.0+codex.b1791581f2372ef1",
       "versionAuthority": "release"
     }
   ],

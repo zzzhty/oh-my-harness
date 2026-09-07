@@ -7,7 +7,7 @@ S1 established the current baseline: `agents/global-instructions.md` owns global
 ## Future Scope
 
 - Collect real read-only review runs for broad PR, branch, architecture, skill, prompt, docs, and contract tasks; use the evidence to refine recipes only when a repeated failure or friction pattern exists.
-- Decide whether repeated validated assignment prompts require custom-agent TOML, and document model, sandbox, fallback, sync validation, rollback, and parent integration before adding any preset.
+- Decide whether repeated validated assignment prompts require custom-agent TOML, and document model, sandbox, availability/fallback behavior, write-conflict handling, sync validation, rollback, and parent integration before adding any preset.
 - Mine Superpowers only for targeted workflow ideas such as staged implementer, specification review, and quality review, while preserving `workflow` as the owner and avoiding duplicate orchestration layers.
 - Keep parent ownership of planning, write-scope decisions, final judgment, integration, validation, and user-facing conclusions.
 

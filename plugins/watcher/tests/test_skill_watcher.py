@@ -53,7 +53,7 @@ from watcher_runtime.skill.report_pipeline import (  # noqa: E402
     state_since,
     update_report_state,
 )
-from watcher_runtime.skill.propose_skill_patch import build_proposal  # noqa: E402
+from watcher_runtime.skill.propose_skill_patch import build_proposal, main as propose_main  # noqa: E402
 from watcher_runtime.skill.redact_event import REDACTION, redact_event  # noqa: E402
 from refresh_harness import (  # noqa: E402
     cached_plugin_names,
@@ -1334,16 +1334,76 @@ class SkillWatcherTests(unittest.TestCase):
             self.assertEqual(runtime_safe_slug("skill watcher:demo", fallback="x"), "skill-watcher-demo")
             self.assertEqual(runtime_safe_slug("!!!", fallback="x"), "x")
 
+    def test_proposal_filters_identity_and_validates_only_materialized_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = root / "doc-alignment"
+            skill_dir.mkdir()
+            source = skill_dir / "SKILL.md"
+            contents = "---\nname: doc-alignment\ndescription: Audit current docs.\n---\n\n# Audit\nRead current docs.\n"
+            source.write_text(contents, encoding="utf-8")
+            state = root / "state"
+            args = ["--skill-dir", str(skill_dir), "--state-dir", str(state)]
+            for identity_args in ([], ["--skill", ""], ["--skill", "   "]):
+                with self.subTest(identity_args=identity_args):
+                    with mock.patch("sys.stderr", new=io.StringIO()), self.assertRaises(SystemExit) as error:
+                        propose_main(args + identity_args)
+                    self.assertEqual(error.exception.code, 2)
+                    self.assertFalse(state.exists())
+            log = root / "events.jsonl"
+            events = [
+                {
+                    "timestamp": timestamp,
+                    "event_type": "turn_summary",
+                    "skill_attribution": {
+                        "primary": {"name": identity, "role": "entrypoint"},
+                        "supporting": [], "effective": [identity], "mentioned": [],
+                    },
+                    "user_feedback": feedback,
+                }
+                for identity, timestamp, feedback in (
+                    ("watcher:doc-alignment", "2026-06-01T00:00:00Z", "outside-window"),
+                    ("watcher:doc-alignment", "2026-06-06T00:00:00Z", "selected-evidence"),
+                    ("other:doc-alignment", "2026-06-06T00:00:00Z", "wrong-identity"),
+                )
+            ]
+            log.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+            with mock.patch("sys.stdout", new=io.StringIO()):
+                result = propose_main(args + ["--skill", "watcher:doc-alignment", "--since", "2026-06-05T00:00:00Z", "--log-file", str(log)])
+            self.assertEqual(result, 0)
+            proposal_path, = (state / "proposals").glob("*-proposal.md")
+            proposal = proposal_path.read_text(encoding="utf-8")
+            self.assertIn("selected-evidence", proposal)
+            self.assertNotIn("wrong-identity", proposal)
+            self.assertNotIn("outside-window", proposal)
+            command = next(line for line in proposal.splitlines() if line.startswith('"$omh_tooling_python" -B scripts/watcher skill validate'))
+            argv = shlex.split(command)
+            candidate = Path(argv[argv.index("--candidate-skill") + 1])
+            self.assertNotEqual(candidate, source)
+            self.assertFalse(candidate.exists())
+            with self.assertRaises(SystemExit):
+                validate_skill(candidate)
+            candidate.parent.mkdir()
+            candidate.write_text("invalid candidate", encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                validate_skill(candidate)
+            candidate.write_text(contents.replace("Read current docs.", "Compare current docs with source evidence."), encoding="utf-8")
+            validate_skill(candidate)
+            self.assertEqual(source.read_text(encoding="utf-8"), contents)
+            snapshot, = (state / "snapshots").glob("*-SKILL.md")
+            self.assertEqual(snapshot.read_text(encoding="utf-8"), contents)
+
     def test_proposal_frontmatter_and_status_transitions(self) -> None:
         skill_dir = Path("/tmp/Skill Dir")
-        candidate_path = skill_dir / "SKILL.md"
+        candidate_path = Path("/tmp/Proposals Dir/proposal-1-candidate/SKILL.md")
         proposal = build_proposal(
             proposal_id="proposal-1",
             skill_name="demo",
             skill_dir=skill_dir,
             skill_contents="line\n",
             report="# Report\n",
-            snapshot_path=candidate_path,
+            snapshot_path=Path("/tmp/snapshots/source-SKILL.md"),
+            candidate_path=candidate_path,
             timestamp="20260528T000000Z",
         )
 
@@ -1366,6 +1426,8 @@ class SkillWatcherTests(unittest.TestCase):
         unix_argv = shlex.split(unix_command)
         candidate_index = unix_argv.index("--candidate-skill")
         self.assertEqual(unix_argv[candidate_index + 1], str(candidate_path))
+        self.assertNotEqual(candidate_path, skill_dir / "SKILL.md")
+        self.assertIn("Validation has not run", proposal)
 
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp) / "state"

@@ -1,6 +1,6 @@
 # Conditional Alignment Reference
 
-Read only the sections triggered by the target named in `../SKILL.md`. The entry skill owns mode selection and audit safety. This reference owns classification, surface-specific alignment, severity, reporting detail, and validation selection.
+Read only the sections triggered by the target named in `../SKILL.md`. The entry skill owns mode selection and audit safety. This reference owns classification, surface-specific alignment, severity, reporting detail, and validation selection. In report-only mode, use the alignment rules as audit criteria: record unmet conditions and recommendations without repairing targets. In implementation mode, satisfy the affected alignment rules and required checks before claiming completion.
 
 ## Review Inventory And Classification
 
@@ -35,7 +35,6 @@ Classify findings:
 
 Each finding needs paths or command evidence, reasoning, severity, and a bounded next action. Final reporting identifies reviewed entry points, changed or proposed semantics, moves, archives, renames or preserved history, exact validation, unresolved conflicts, and legacy identifiers.
 
-Completion criterion: the active inventory has one current owner per live role, history is distinguished from current guidance, every finding is evidence-backed and classified, and final reporting covers the changed or proposed surface.
 
 ## Script And Entry-Point Naming
 
@@ -51,7 +50,6 @@ Keep directory naming consistent:
 
 Avoid names that encode old product semantics, local machine details, or implementation accidents. After renaming, update wrappers, package commands, `.devcontainer`, CI/workflow config, `.github`, the resolved repository skill root, README/runbook examples, and child runner calls. Preserve executable bits and validate syntax with the owning shell/runtime.
 
-Completion criterion: every executable path and caller uses the chosen name, the old name scan is clean outside declared history/compatibility, and the owning parser or runtime accepts the renamed entry point.
 
 ## Documentation Tree Alignment
 
@@ -61,7 +59,6 @@ Completion criterion: every executable path and caller uses the chosen name, the
 4. If active docs mention old user-facing terms, replace them or explain the real code field, test, migration, compatibility boundary, or archive context.
 5. Keep reusable templates free of concrete task state.
 
-Completion criterion: current navigation reaches one typed owner for each live document role, historical material is clearly historical, and templates contain no task state.
 
 ## Planning/TODO Tree Alignment
 
@@ -78,7 +75,6 @@ Use the helper when it fits:
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" -B <skill-folder>/scripts/check_planning_tree.py <planning-root>
 ```
 
-Completion criterion: active indexes contain only live work, closed/replaced evidence follows local archive rules, and unresolved residual work remains discoverable as a current item.
 
 ## Skill Alignment
 
@@ -98,7 +94,6 @@ For agent skills:
 
 When aligning multiple skills, process them in user order or foundational-first; finish and validate a dependency skill before its dependents; keep trigger descriptions distinct; move shared generic rules only when both skills need them; avoid duplicated validation snippets when scripts or helpers cover them; finish with a cross-skill stale-reference, obsolete-term, and broken-link check.
 
-Completion criterion: every changed skill preserves distinct triggers and operational semantics, metadata/resources agree with the body, generated caches remain untouched, and skill validation passes.
 
 ## Validation
 
@@ -151,5 +146,3 @@ fi
 ```
 
 If a dependency is missing, install it only when allowed; otherwise report the exact module and do not claim validator success. Manual frontmatter/link checks are partial checks, not validator substitutes.
-
-Completion criterion: every changed surface has a passing owning check, every failed command/path is reported exactly, and no partial/manual check is represented as full validation.

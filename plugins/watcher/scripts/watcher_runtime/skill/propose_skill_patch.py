@@ -74,10 +74,10 @@ def build_proposal(
     skill_contents: str,
     report: str,
     snapshot_path: Path,
+    candidate_path: Path,
     timestamp: str,
 ) -> str:
     line_count = len(skill_contents.splitlines())
-    candidate_path = skill_dir / "SKILL.md"
     posix_candidate = shlex.quote(str(candidate_path))
     powershell_candidate = "'" + str(candidate_path).replace("'", "''") + "'"
     return "\n".join(
@@ -107,7 +107,8 @@ def build_proposal(
             "This generated draft is a worksheet, not yet a reviewable proposal. Update this Watcher-owned artifact with the smallest exact add, replace, or delete edit that addresses repeated failures or one severe failure. Do not modify the source skill.",
             "",
             "- Decision: Undecided; replace with one bounded edit or an evidence-backed no-change decision.",
-            f"- Target: `{candidate_path}`",
+            f"- Target: `{skill_dir / 'SKILL.md'}`",
+            f"- Candidate: `{candidate_path}`",
             "- Exact edit: Replace this instruction with the proposed before/after text or precise deletion.",
             "",
             "Suggested decision rules:",
@@ -123,6 +124,8 @@ def build_proposal(
             "- Treat this proposal as requiring human review unless objective validation passes.",
             "",
             "## Validation Plan",
+            "",
+            "Validation has not run. After choosing the exact edit, write the complete revised SKILL.md to the candidate path above, creating its parent directory if needed. Keep the source and snapshot unchanged. Do not validate the original file as evidence for the proposed edit; a no-change decision needs no candidate.",
             "",
             "Unix shell:",
             "",
@@ -151,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         description="Generate a Watcher skill maintenance proposal.",
     )
     parser.add_argument("--skill-dir", required=True, help="Directory containing the target SKILL.md.")
-    parser.add_argument("--skill", help="Skill name for log filtering. Defaults to skill-dir basename.")
+    parser.add_argument("--skill", required=True, help="Exact skill identity used in logs, such as watcher:doc-alignment.")
     parser.add_argument("--since", default="7d", help="Evidence window such as 1d, 7d, or ISO timestamp.")
     parser.add_argument("--state-dir", help="Runtime state directory. Defaults to $CODEX_HOME/watcher/skill.")
     parser.add_argument("--log-file", help="Explicit JSONL log path. Overrides --state-dir logs/events.jsonl.")
@@ -161,13 +164,17 @@ def main(argv: list[str] | None = None) -> int:
 
     state_dir = state_dir_from_env_or_arg(args.state_dir)
     skill_dir = expand_path(args.skill_dir).resolve()
-    skill_name = args.skill or skill_dir.name
+    skill_name = args.skill.strip()
+    if not skill_name:
+        parser.error("--skill must be a non-empty exact log identity")
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     proposal_id = proposal_id_for(timestamp, skill_name)
 
     skill_contents = read_skill(skill_dir)
-    snapshot_path = save_snapshot(skill_dir, state_dir, skill_name, timestamp)
     report = load_report(args, state_dir, skill_name)
+    snapshot_path = save_snapshot(skill_dir, state_dir, skill_name, timestamp)
+    output_dir = expand_path(args.output_dir) if args.output_dir else proposals_dir(state_dir)
+    candidate_path = output_dir / f"{proposal_id}-candidate" / "SKILL.md"
     proposal = build_proposal(
         proposal_id=proposal_id,
         skill_name=skill_name,
@@ -175,10 +182,10 @@ def main(argv: list[str] | None = None) -> int:
         skill_contents=skill_contents,
         report=report,
         snapshot_path=snapshot_path,
+        candidate_path=candidate_path,
         timestamp=timestamp,
     )
 
-    output_dir = expand_path(args.output_dir) if args.output_dir else proposals_dir(state_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     proposal_path = output_dir / f"{proposal_id}-proposal.md"
     try:

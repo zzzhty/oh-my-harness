@@ -51,8 +51,8 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertIn("Use implementation mode when the user asks", text)
         self.assertIn("references/watcher-audit.md", text)
         self.assertIn("references/alignment-reference.md", text)
-        self.assertIn("report-only work must leave target repositories unchanged", text)
-        self.assertIn("every triggered reference completion criterion", text)
+        self.assertIn("unresolved target drift does not prevent completing the audit", text)
+        self.assertIn("Leave target repositories unchanged", text)
 
     def test_watcher_audit_reference_is_complete_for_operations_branch(self) -> None:
         text = WATCHER_AUDIT.read_text(encoding="utf-8")
@@ -97,7 +97,7 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertIn('omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"', text)
         self.assertNotRegex(text, r'"\$omh_tooling_python" (?!-B\b)')
         self.assertIn('compile(source.read_bytes(), str(source), "exec")', text)
-        self.assertGreaterEqual(text.count("Completion criterion:"), 6)
+        self.assertIn("In report-only mode, use the alignment rules as audit criteria", text)
 
     def test_documented_python_syntax_check_does_not_write_bytecode(self) -> None:
         text = ALIGNMENT.read_text(encoding="utf-8")
@@ -187,8 +187,8 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             "source `SKILL.md` remained unchanged",
         ):
             self.assertIn(requirement, skill)
-        self.assertIn("Before recommending or completing a proposal", skill)
-        self.assertIn("update the Watcher-owned proposal artifact", skill)
+        self.assertIn("separate candidate path", skill)
+        self.assertIn("validation as pending", skill)
         self.assertIn("## Candidate Validation", skill)
         self.assertIn("route candidates that change invocation", skill.casefold())
         self.assertFalse((MAINTAINER_REFERENCES / "patch-policy.md").exists())
@@ -201,8 +201,8 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         self.assertIn("route the candidate through `workflow:prompt-strategy-loop`", text)
         self.assertIn("Core Rule is the single owner", text)
         self.assertIn("keep the candidate explicitly unverified", text)
-        self.assertIn("create a bounded copy only when writes are authorized", text)
-        self.assertIn("in read-only mode, stop", text)
+        self.assertIn("Before mutation, ensure a recoverable baseline", text)
+        self.assertIn("may continue without creating a backup", text)
         self.assertIn("plugin guidance", text.split("---", 2)[1])
         self.assertIn("freeze this affected-meaning inventory as the equivalence oracle", text)
         self.assertNotIn("independent evaluation is required when compression changes", text)
@@ -320,6 +320,15 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
                 text=True,
             )
 
+            env["HOUSEKEEPING_TARGET_KIND"] = "git"
+            failed = subprocess.run(
+                ["bash", "-c", "git() { printf 'Git inventory unavailable\\n' >&2; return 77; }\n" + script],
+                cwd=target, env=env, capture_output=True, text=True,
+            )
+            self.assertEqual(failed.returncode, 77)
+            self.assertIn("Git inventory unavailable", failed.stderr)
+            self.assertNotIn(str(target / "src" / "__pycache__"), failed.stdout)
+
             after = target_state()
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -335,7 +344,7 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             self.assertNotIn(outside_marker, result.stdout)
 
     @unittest.skipIf(os.name == "nt", "POSIX Bash housekeeping example")
-    def test_housekeeping_inventory_rejects_a_non_git_target(self) -> None:
+    def test_housekeeping_inventory_reads_a_non_git_cache_without_mutation(self) -> None:
         text = HOUSEKEEPING.read_text(encoding="utf-8")
         match = re.search(r"```bash\n(?P<script>.*?)\n```", text, flags=re.DOTALL)
         self.assertIsNotNone(match)
@@ -343,8 +352,13 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir).resolve()
+            cache = target / "__pycache__"
+            cache.mkdir()
+            marker = cache / "generated.pyc"
+            marker.write_bytes(b"cache")
             env = os.environ.copy()
             env["HOUSEKEEPING_TARGET"] = str(target)
+            env["HOUSEKEEPING_TARGET_KIND"] = "cache"
             result = subprocess.run(
                 ["bash", "-c", script],
                 cwd=target,
@@ -353,8 +367,10 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
                 text=True,
             )
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("housekeeping target is not a Git worktree", result.stderr)
+            self.assertEqual(marker.read_bytes(), b"cache")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(str(cache), result.stdout)
         self.assertNotIn("fatal:", result.stderr)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "watcher",
-  "version": "1.0.0+codex.d9700fadabd26bdc",
+  "version": "1.0.0+codex.23f0e4b7746eb3b4",
   "description": "Observe agent skill usage and audit documentation drift from one consolidated watcher plugin.",
   "author": {
     "name": "Local developer"

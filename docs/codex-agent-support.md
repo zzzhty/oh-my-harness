@@ -33,10 +33,4 @@ support-file path.
 
 ## Future Custom Agents
 
-Future custom agents may be added under `agents/` only after a separate active
-plan defines:
-
-- why `task_name` assignments plus prompt-declared permissions are insufficient
-- the ownership model and parent integration boundary
-- fallback behavior when a custom agent is unavailable
-- sync validation and rollback rules
+The [follow-up plan](todo/subagent-orchestration-follow-up.md) owns the evidence and design requirements for any future custom-agent presets.

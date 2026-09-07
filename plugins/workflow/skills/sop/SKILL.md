@@ -11,14 +11,14 @@ Route unresolved design or prompt behavior to `prompt-strategy-loop`. When the w
 
 ## Suitability
 
-An SOP is ready to author when its trigger, inputs, ordered actions, outputs, validation, failure handling, stop conditions, and durable owner can be explicit. For agent-executed or automated procedures, also freeze the execution mode, orchestration, isolation, connector permissions, independent verification, escalation, and writeback. A manual SOP may mark those fields `Not applicable` with a reason.
+An SOP is ready to author when its trigger, inputs, permissions, steps, outputs, validation, and stop conditions are known. State the execution mode in a short Execution Harness section. Add orchestration, isolation, connector permissions, independent verification, escalation, and writeback only when the procedure uses them; manual procedures need no `Not applicable` inventory.
 
 ## Create Or Update
 
 1. Read the current source of truth: instructions, README, runbook, script, automation state, prior SOP, and relevant failure evidence.
 2. Classify the procedure as manual, agent-executed, automated, report-only, validation, maintenance/release, or incident/failure.
 3. Copy `templates/sop_template.md` into the existing owning runbook, operations, workflow, plugin-doc, or SOP directory. Use `docs/sop/<sop-slug>.md` only when no owner already exists.
-4. Replace placeholders, keep unverified commands visibly marked as expected, and include a reuse prompt naming the SOP path, trigger, execution mode, mutation boundary, expected output, and stop conditions.
+4. Replace placeholders and keep unverified commands visibly marked as expected. Include the working location with inputs when commands depend on it. A reuse prompt is optional; link to the contract instead of restating it.
 5. When behavior changes, update the affected trigger, inputs, steps, validation, failure/stop, and harness fields as one contract. Use evidence-backed review through `prompt-strategy-loop` for prompts, rubrics, permissions, automation triggers, or verification rules.
 6. Validate:
 
@@ -37,4 +37,4 @@ python <skill-folder>/scripts/check_sop_links.py <sop-root-or-file>
 
 ## Completion
 
-A reusable SOP identifies its trigger, inputs, working location, execution harness, allowed actions, ordered steps with completion criteria, outputs, validation evidence, stop and escalation boundary, durable writeback, and reuse prompt. The template and readiness checker are authoritative for the field-level contract; the default check authorizes only `Ready`, while `--allow-draft` validates a complete but non-executable `Draft`.
+A reusable SOP has eight core sections: Trigger, Inputs, Execution Harness, Allowed Actions, Steps, Validation, Output Contract, and Stop Conditions. Each step names its action and expected output; add local failure handling or completion criteria only when the shared stop and validation rules are insufficient. Summary, preconditions, separate working directory, forbidden actions, update rules, and reuse prompt are optional. The checker accepts only `Ready` by default; `--allow-draft` validates a non-executable `Draft`. Passing a check never grants additional action permissions.

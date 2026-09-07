@@ -47,6 +47,11 @@ STEP_FIELD_PATTERNS = {
     "failure handling": r"(?:失败处理|Failure Handling)",
     "completion criterion": r"(?:完成条件|Completion Criterion)",
 }
+REQUIRED_SECTIONS = {
+    "trigger", "inputs", "execution harness", "allowed actions", "steps",
+    "validation", "output contract", "stop conditions",
+}
+REQUIRED_STEP_FIELDS = {"action", "expected output"}
 
 
 def markdown_h2_sections(text: str) -> list[tuple[str, str]]:
@@ -137,7 +142,8 @@ def matching_section_bodies(text: str) -> tuple[dict[str, str], list[str]]:
                 break
     for label in SECTION_PATTERNS:
         if label not in matches:
-            errors.append(f"missing required section: {label}")
+            if label in REQUIRED_SECTIONS:
+                errors.append(f"missing required section: {label}")
         elif not substantive_content(matches[label]):
             errors.append(f"required section has no substantive content: {label}")
     return matches, errors
@@ -167,7 +173,8 @@ def step_contract_errors(steps_body: str) -> list[str]:
         for label in STEP_FIELD_PATTERNS:
             candidates = [field for name, field in field_matches if name == label]
             if not candidates:
-                errors.append(f"Step {index} missing required field: {label}")
+                if label in REQUIRED_STEP_FIELDS:
+                    errors.append(f"Step {index} missing required field: {label}")
                 continue
             field = candidates[0]
             content_end = min(

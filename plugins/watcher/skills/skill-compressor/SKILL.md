@@ -9,7 +9,7 @@ Use this skill for behavior-preserving instruction reduction. Use `workflow:prom
 
 ## Core Rule
 
-Compare the candidate with a recoverable baseline and a scoped inventory of affected meanings. A smaller file is not equivalent when trigger coverage, permissions, stop or failure behavior, validators, or unique edge cases drift.
+Compare the candidate with the inspected baseline and a scoped inventory of affected meanings. A smaller file is not equivalent when trigger coverage, permissions, stop or failure behavior, validators, or unique edge cases drift.
 
 When the inventory identifies an intentional meaning change, stop this behavior-preserving workflow and route the candidate through `workflow:prompt-strategy-loop`. Its Core Rule is the single owner of proportional review decisions. If that skill is unavailable or its required evaluation cannot run, keep the candidate explicitly unverified.
 
@@ -18,7 +18,7 @@ Invoking this skill authorizes only the read-only semantic comparison needed for
 ## Workflow
 
 1. Bound the editable skill metadata, body, references, templates, and helper surfaces. Preserve unrelated dirty work.
-2. Establish a recoverable baseline through Git history or diff. If dirty, untracked, or non-Git inputs otherwise lack recovery, create a bounded copy only when writes are authorized; in read-only mode, stop and report that equivalence is unverified because no recoverable baseline exists.
+2. Identify the exact input being compared. Before mutation, ensure a recoverable baseline through Git history, diff, or an authorized bounded copy. Read-only analysis of dirty, untracked, or non-Git inputs may continue without creating a backup; describe the inspected input and leave any untested candidate explicitly unverified.
 3. Inventory the affected trigger/routing branches, permissions, stops, failure handling, validators, and unique edge cases; freeze this affected-meaning inventory as the equivalence oracle.
 4. Compress attention, not meaning:
    - keep common execution steps and non-default invariants inline;

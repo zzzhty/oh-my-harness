@@ -43,27 +43,9 @@ plugins/workflow/skills/orchestrate-subagents/SKILL.md
 
 The skill owns branch routing, slicing, assignment contracts, disjoint write ownership, waiting, partial coverage, and consolidation. `agents/global-instructions.md` remains the authority for whether delegation or mutation is allowed and for how failures affect integration.
 
-## Assignments And Permissions
+Assignments inherit the active delegation authority. The invoked orchestration skill owns prompt contents and write isolation; `task_name` is an assignment identifier, not a role or permission.
 
-Use one unique `task_name` per assignment. The assignment prompt carries the task, context, permission, expected output, stop condition, and boundaries.
-
-- A read-only assignment names the bounded inspection surface and explicitly forbids edits and commits.
-- An implementation assignment names every disjoint writable path and keeps shared files, generated artifacts, integration, and cross-slice validation parent-owned.
-- `task_name` identifies the assignment; it does not grant a role, capability, mutation authority, or a persistent agent identity.
-
-The parent accounts for every selected assignment and independently reviews its evidence before integration.
-
-## Custom-Agent Boundary
-
-This repository does not maintain or install custom-agent preset TOML. Add one only through a separate active plan that records:
-
-- the repeated workflow that `task_name` assignments plus prompt-declared permissions cannot express;
-- model, sandbox, fallback, and availability behavior;
-- ownership and parent-integration boundaries;
-- sync validation and rollback;
-- conflict handling for write-capable agents.
-
-Custom-agent work must not broaden read-only review authorization into implicit mutation.
+Custom-agent presets are not installed. Future requirements belong in `docs/todo/subagent-orchestration-follow-up.md` in the source repository.
 
 ## Scheduling And Monitoring Boundary
 

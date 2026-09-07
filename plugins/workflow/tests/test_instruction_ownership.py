@@ -12,14 +12,6 @@ SUPPORT = REPO_ROOT / "agents" / "operating-principles.md"
 IDENTIFIER_POLICY = REPO_ROOT / "docs" / "agents" / "internal-identifier-evolution.md"
 ORCHESTRATE = WORKFLOW_ROOT / "skills" / "orchestrate-subagents" / "SKILL.md"
 ORCHESTRATE_REFERENCES = ORCHESTRATE.parent / "references"
-BRANCH_REFERENCES = {
-    "pr-branch-review.md",
-    "debugging-triage.md",
-    "implementation-planning.md",
-    "parallel-implementation.md",
-    "api-schema-inspection.md",
-    "documentation-alignment.md",
-}
 
 
 class InstructionOwnershipTests(unittest.TestCase):
@@ -73,71 +65,17 @@ class InstructionOwnershipTests(unittest.TestCase):
                 with self.subTest(path=path, stale=stale):
                     self.assertNotIn(stale, text)
 
-    def test_orchestrate_skill_is_a_deep_interface_with_one_level_disclosure(self) -> None:
+    def test_orchestrate_routes_to_one_task_pattern_owner(self) -> None:
         skill = ORCHESTRATE.read_text(encoding="utf-8")
-        references = {
-            path.name: path.read_text(encoding="utf-8")
-            for path in ORCHESTRATE_REFERENCES.glob("*.md")
-        }
-
-        self.assertIn("name: orchestrate-subagents", skill)
-        self.assertIn("## Assignment Contract", skill)
-        self.assertEqual(set(references), BRANCH_REFERENCES)
-        for name in BRANCH_REFERENCES:
-            self.assertIn(f"references/{name}", skill)
-            self.assertNotIn("references/", references[name])
-
-        for required_entry_semantic in (
-            "minimum useful set",
-            "parent agent responsible",
-            "task_name",
-            "assignment prompt",
-            "disjoint",
-            "partial",
-            "parent independently reviewed",
-        ):
-            self.assertIn(required_entry_semantic, skill)
-
-        for assignment_field in (
-            "task_name:",
-            "Assignment prompt:",
-            "Task:",
-            "Context:",
-            "Permission:",
-            "Expected output:",
-            "Stop condition:",
-            "Boundaries:",
-        ):
-            self.assertIn(assignment_field, skill)
-
-        for name, reference in references.items():
-            self.assertIn("## Completion Criterion", reference)
-            if name == "parallel-implementation.md":
-                self.assertIn("Permission: exact disjoint write scope", reference)
-            else:
-                self.assertIn("Permission: read-only", reference)
-
-    def test_orchestrate_selects_one_primary_before_an_independent_secondary(self) -> None:
-        skill = ORCHESTRATE.read_text(encoding="utf-8")
-        routing = skill.split("## Branch Routing", 1)[1].split("## Workflow", 1)[0]
-        workflow = skill.split("## Workflow", 1)[1].split("## Completion", 1)[0]
-
-        for routing_semantic in (
-            "Select exactly one primary reference",
-            "dominant outcome",
-            "two genuinely independent assignment families",
-            "distinct outcome",
-            "non-overlapping scope",
-            "own stop condition",
-            "at most one secondary reference",
-            "at most two branch references",
-        ):
-            self.assertIn(routing_semantic, routing)
-
-        primary_step = workflow.index("Select exactly one primary reference")
-        secondary_step = workflow.index("secondary reference")
-        self.assertLess(primary_step, secondary_step)
-        self.assertNotIn("each matching", skill.lower())
+        references = list(ORCHESTRATE_REFERENCES.glob("*.md"))
+        self.assertEqual([path.name for path in references], ["task-patterns.md"])
+        self.assertIn("references/task-patterns.md", skill)
+        patterns = references[0].read_text(encoding="utf-8")
+        for task in ("PR or branch review", "Debugging triage", "Implementation planning", "Parallel implementation", "API/schema inspection", "Documentation alignment"):
+            self.assertIn(task, patterns)
+        for boundary in ("ban on edits and commits", "exact disjoint write scope", "shared and forbidden paths", "stopping condition", "parent independently reviewed", "partial"):
+            self.assertIn(boundary, skill)
+        self.assertNotIn("exactly one primary reference", skill)
 
     def test_global_authority_and_local_workflow_delta_are_both_reachable(self) -> None:
         global_instructions = GLOBAL_INSTRUCTIONS.read_text(encoding="utf-8")
@@ -147,7 +85,6 @@ class InstructionOwnershipTests(unittest.TestCase):
         self.assertIn("explicitly asks", skill)
         self.assertIn("active instruction chain or an approved plan", skill)
         self.assertNotIn("root instructions or an approved plan", skill)
-        self.assertIn("one primary verb", skill)
         self.assertIn("exact disjoint write scope", skill)
         self.assertIn("Surface missing tools", skill)
 

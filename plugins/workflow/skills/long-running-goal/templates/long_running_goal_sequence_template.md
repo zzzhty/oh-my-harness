@@ -28,7 +28,7 @@ Planning preflight marker: `preflight:<sequence_slug>:<yyyymmdd>-<short-id>`
 
 Planning preflight status: `Done`
 
-Preflight source: `grill-with-docs`
+Preflight source: `existing decisions`
 
 Resolved decisions: `<summary or ADR / context paths covering every child boundary and the sequence order>`
 
@@ -38,21 +38,13 @@ Docs written: `<CONTEXT.md / ADR paths / Not applicable with reason>`
 
 ## Preflight Time Assessment
 
-Assessment target: `<Ready-to-Closed / current-milestone-to-Closed>`
-
-Assessment mode: `<Rough range / Distribution only>`
-
-Rough elapsed-time estimate: `<low-high with unit / Not quickly estimable>`
-
-Basis or blocker: `<YYYY-MM-DD evidence or blocker, external-wait scope, and serial roll-up assumptions>`
-
-Critical-path time-cost distribution: `<Not required: rough range recorded. / at least two rows shaped: - child or parent driver — Dominant/Material/Minor/Unknown — reason>`
+Optional: record a useful remaining range and basis, or the concrete reason it is unknown. Distinguish known child costs, unknown costs, and parent overhead. Remove this section when unnecessary; it does not affect readiness.
 
 ## Task Temporary Cache / Housekeeping
 
-Close housekeeping policy: `<Enabled / Disabled / Not applicable>`
+Close housekeeping policy: `Disabled`
 
-Housekeeping decision source: `<explicit user confirmation with date or turn context>`
+Only for Enabled, add Housekeeping decision source with explicit user confirmation and context.
 
 Task temporary cache root strategy: `<Enabled/Disabled: resolve the host platform/runtime standard temporary root, allocate a sequence-owned namespace beneath it, and record the exact owner root before first use; Not applicable: no parent task temporary cache root will be created.>`
 
@@ -62,22 +54,22 @@ Housekeeping boundary: `<Enabled uses watcher:housekeeping only for inventoried 
 
 ## Template Use
 
-1. Create each child from `long_running_goal_template.md`, complete its own `grill-with-docs` preflight and time assessment, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries.
+1. Create each child from `long_running_goal_template.md`, complete its own preflight using existing decisions or necessary questions, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries.
 2. Keep every child overall `Draft` with every atomic row `Not Started / Pending / Pending` until M0 or a predecessor handoff promotes it.
 3. Use relative Markdown links. Replace each backticked `Live goal` link example with an actual relative Markdown link when instantiating this template. A Closed row moves its complete atomic child goal from `Live goal` to the `Closeout evidence` archive link; do not replace it with a summary.
-4. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes preflight or its time assessment.
+4. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes frozen child preflight boundaries.
 5. Create only one active harness system goal for this parent. Never create nested system goals for children.
 6. Record a separate parent housekeeping choice only for sequence-owned orchestration/integration caches. Never add housekeeping columns to the child registers or use the parent policy to override a child policy.
-7. Apply the timing roll-up in `references/sequence-child-goals.md`; keep the scaffold fields in the parent and linked children, never in either canonical register.
+7. Use `references/sequence-child-goals.md` for serial state mapping and optional timing guidance.
 
 ## Child Preflight Register
 
 | Child ID | Marker | Status | Source |
 |---|---|---|---|
-| `<child-a>` | `preflight:<child-a>:<yyyymmdd>-<short-id>` | `Done` | `grill-with-docs` |
-| `<child-b>` | `preflight:<child-b>:<yyyymmdd>-<short-id>` | `Done` | `grill-with-docs` |
+| `<child-a>` | `preflight:<child-a>:<yyyymmdd>-<short-id>` | `Done` | `existing decisions` |
+| `<child-b>` | `preflight:<child-b>:<yyyymmdd>-<short-id>` | `Done` | `existing decisions` |
 
-Every marker must exactly match the linked child. Missing fields, `:skip:` markers, explicit-skip statuses, and non-`grill-with-docs` sources are forbidden.
+Every marker, status, and source must exactly match the linked child. Existing decisions and explicit user skips follow the atomic preflight rules; missing or inconsistent preflights are invalid.
 
 ## Child Execution Register
 
@@ -110,7 +102,7 @@ Frozen sequence boundaries:
 2. `<Child-b scope, owner, compatibility, dependency, permissions, and non-goals.>`
 3. Strict child order is fixed by the Execution Register; v1 has no parallel, DAG, per-child authorization, or alternate promotion mode.
 4. Parent authorization permits automatic handoff only inside child-frozen boundaries and never expands release, deploy, destructive, privacy-sensitive, external-write, externally visible, or child task-temporary-cache housekeeping permission.
-5. Semantic changes to scope, owner, compatibility, dependency order, behavior, or external authorization invalidate affected markers and require `grill-with-docs`; path, command, tool-version, or non-semantic baseline updates only rebaseline evidence.
+5. Semantic changes to scope, owner, compatibility, dependency order, behavior, or external authorization invalidate affected markers and require revalidation of affected decisions; path, command, tool-version, or non-semantic baseline updates only rebaseline evidence.
 
 ## Loop Blueprint / Harness
 
@@ -123,25 +115,25 @@ Execution mode: `Loop-shaped execution`
 5. Skills and context: `<workflow:long-running-goal, sequence-child-goals.md, child-required skills, runbooks, and specs.>`
 6. Connector read/write boundaries: `<Exact child-by-child external read/write permissions; unapproved writes keep the sequence Draft or hard-stop execution.>`
 7. Independent verification: `<check_goal_sequence.py plus project-specific tests or reviewer gates.>`
-8. Runtime hard stops: `<Only repeated technical impossibility, unavailable facts/credentials, destructive/irreversible/privacy-sensitive/unapproved external action, semantic drift, or required verifier failure with no in-scope next step.>`
+8. Runtime hard stops: `<Only repeated technical impossibility, unavailable facts/credentials, destructive/irreversible/privacy-sensitive/external action beyond recorded authorization, semantic drift, or required verifier failure with no in-scope next step.>`
 9. Durable learning: `<Parent/child evidence, current docs, validation logs, closeouts, and any reusable strategy update.>`
 
 ## Pre-Approval / YOLO
 
 1. Pre-approved YOLO local operations: `<Only planned non-destructive local code/docs edits, tests, lint, formatting, rebuilds, refreshes, reinstalls, link checks, plugin/cache refreshes, and project-owned generated-artifact cleanup inside each child boundary; task temporary cache housekeeping remains separately governed.>`
 2. Pre-approved external reads/writes: `<Exact union of already-approved child-specific surfaces, or Not applicable; the parent grants no additional permission.>`
-3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, unavailable required facts/credentials, destructive/irreversible/privacy-sensitive/externally visible or unapproved external writes, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
+3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, unavailable required facts/credentials, destructive/irreversible/privacy-sensitive/externally visible/external writes beyond recorded authorization, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
 4. Non-stops: `<M0, child handoff after passed gates, review/checkpoint boundaries, timing rebaseline after a range overrun, evidence recording, rebuild/refresh/reinstall, docs sync, and locally repairable validation failures.>`
 
 ## Sequence Execution Contract
 
-1. The parent and every child must retain `Planning preflight status: Done`, exact source `grill-with-docs`, and a marker without `:skip:`. `--allow-draft` relaxes lifecycle only.
+1. Parent and child preflight tuples must be complete, consistent, and match the register. `--allow-draft` relaxes lifecycle only.
 2. The Execution Register is the only child current-state source. Closed children form a prefix, at most one child is `Ready` or `In Progress`, and every later child remains `Draft / n/a`.
 3. Parent mapping is fixed: Draft child -> `Not Started`; Ready -> `In Progress`; In Progress -> `In Progress`; In Progress with a Blocked atomic milestone -> `Blocked`; Closed -> `Done`.
 4. Promotion-drift exception: a parent child stage may be `Blocked` while its child remains `Draft / n/a`, but that exact section must record real section-local runtime hard-stop evidence and no later child may start.
 5. In the all-Draft snapshot all parent milestones are Not Started. After every preflight and check passes, set only parent Overall status and M0 to Ready for the one authorization. When M0 starts, set parent Overall status to In Progress and keep it there until Closed; M0 Done promotes the first child, and promoted Ready children map to In Progress parent stages. Each `M<Order>` owns one child. Integration remains Not Started until all children are Closed; Close remains Not Started until integration is Done.
 6. After a predecessor Close, verify its archived atomic closeout and revision, parent review/checkpoint and milestone-scope exit gate, next-child preflight/boundaries, handoff inputs, and sequence checker; then promote automatically without another authorization.
-7. A child hard stop remains at the owning child. Keep its overall state `In Progress`, mark its atomic current milestone and mapped parent stage `Blocked`, and put `Runtime hard-stop evidence:` in both owning sections with a date, child ID, and breakpoint or attempted diagnostics. Promotion drift additionally names semantic drift/failed handoff and the required re-grill/external decision. Parent-only M0, Integration, or Close evidence uses the same date and diagnostics rule plus the stage owner token `sequence`, `integration`, or `close`. Do not skip or reorder children.
+7. A child hard stop remains at the owning child. Keep its overall state `In Progress`, mark its atomic current milestone and mapped parent stage `Blocked`, and put `Runtime hard-stop evidence:` in both owning sections with a date, child ID, and breakpoint or attempted diagnostics. Promotion drift additionally names semantic drift/failed handoff and the required decision revalidation/external decision. Parent-only M0, Integration, or Close evidence uses the same date and diagnostics rule plus the stage owner token `sequence`, `integration`, or `close`. Do not skip or reorder children.
 8. Apply `components/checkpoint.md` before every parent milestone or Close becomes Done. Record commands, behavior, docs, rollback, risks, harness evidence, revision, and out-of-scope dirt; after a parent milestone records checkpoint evidence, confirm `components/milestone-scope-gate.md` before marking it Done or promoting the next child.
 9. Do not widen gates, hide failure, use fallback or alternate backends, report partial work as success, or convert a permission boundary into a non-stop.
 10. Only an explicit `Enabled` policy may invoke `watcher:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If watcher is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent.
@@ -160,14 +152,12 @@ Add one row per promoted non-Draft child in child order, use an RFC3339 timestam
 
 ### M0 - Sequence Baseline And First Promotion
 
-Status: `Not Started`
-
 Scope: `<Verify parent/child preflights and boundaries, freeze canonical registers and authorization, then promote child order 1.>`
 
 Review gate:
 
 1. Both registers have matching unique IDs and contiguous order.
-2. Parent and every child pass mandatory `Done / grill-with-docs / no-skip` preflight checks.
+2. Parent and every child pass the shared atomic preflight checks.
 3. Sequence permissions do not exceed any child boundary, and `check_goal_sequence.py` passes.
 
 Validation evidence: `<commands and actual results>`
@@ -179,8 +169,6 @@ Runtime hard-stop evidence: `n/a while this stage is not Blocked`
 Checkpoint evidence: `<components/checkpoint.md result, revision, changed files, validation, and excluded dirt>`
 
 ### M1 - Child <child-a>
-
-Status: `Not Started`
 
 Scope: `<Execute only the registered live child-a contract through its Close gate.>`
 
@@ -200,8 +188,6 @@ Checkpoint evidence: `<components/checkpoint.md result, revision, changed files,
 
 ### M2 - Child <child-b>
 
-Status: `Not Started`
-
 Scope: `<After automatic promotion, execute only the registered live child-b contract through its Close gate.>`
 
 Review gate:
@@ -219,8 +205,6 @@ Runtime hard-stop evidence: `n/a while this stage is not Blocked`
 Checkpoint evidence: `<components/checkpoint.md result, revision, changed files, validation, and excluded dirt>`
 
 ### M3 - Integration Acceptance
-
-Status: `Not Started`
 
 Scope: `<Validate the composed outcome only after every child is Closed; do not reopen or widen child scope.>`
 

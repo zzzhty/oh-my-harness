@@ -284,461 +284,29 @@ class ReadyCheckerTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assert_goal_error(text, message, *args)
 
-    def test_preflight_time_assessment_branch_matrix(self) -> None:
-        ready = self.ready
-
-        def with_time_section(text: str, body: str) -> str:
-            updated, count = re.subn(
-                r"(?ms)^## Preflight Time Assessment\n.*?(?=^## Task Temporary Cache)",
-                body.rstrip() + "\n\n",
-                text,
-            )
-            self.assertEqual(count, 1)
-            return updated
-
-        distribution_only = with_time_section(
-            ready,
-            """## Preflight Time Assessment
-
-Assessment target: Ready-to-Closed
-
-Assessment mode: Distribution only
-
-Rough elapsed-time estimate: Not quickly estimable
-
-Basis or blocker: 2026-07-20 no representative integration or CI elapsed-time evidence exists for a defensible serial range, and external CI wait is unknown.
-
-Critical-path time-cost distribution:
-- implementation — Dominant — The bounded implementation owns most currently visible work.
-- validation — Unknown — CI queue and integration duration lack representative evidence.
-""",
-        )
-        legacy_without_assessment = remove_between(
-            ready,
-            "## Preflight Time Assessment",
-            "## Task Temporary Cache / Housekeeping",
-        )
-        for name, text in {
-            "rough_range": ready,
-            "rough_range_chinese_unit": ready.replace("2-4 hours", "2-4 小时"),
-            "rough_range_chinese_business_days": ready.replace(
-                "2-4 hours", "2至4个工作日"
-            ),
-            "rough_range_chinese_wave_separator": ready.replace(
-                "2-4 hours", "2～4小时"
-            ),
-            "rough_range_months": ready.replace("2-4 hours", "2-4 months"),
-            "iso_timestamp_basis": ready.replace(
-                "2026-07-20 range", "2026-07-20T12:00:00+08:00 range"
-            ),
-            "chinese_adjacent_date": ready.replace(
-                "Basis or blocker: 2026-07-20 range",
-                "Basis or blocker: 截至2026-07-20，根据当前证据，range",
-            ),
-            "resume_target": ready.replace(
-                "Assessment target: Ready-to-Closed",
-                "Assessment target: current-milestone-to-Closed",
-            ),
-            "unrelated_generic_assessment_target": ready.replace(
-                "## Loop Blueprint / Harness",
-                "Assessment target: generic review target.\n\n## Loop Blueprint / Harness",
-            ),
-            "distribution_only": distribution_only,
-            "measured_percentage_reason": distribution_only.replace(
-                "CI queue and integration duration lack representative evidence.",
-                "Three measured dry runs attribute 70% of elapsed time to validation.",
-            ),
-            "legacy_absent": legacy_without_assessment,
-            "legacy_generic_assessment_target": legacy_without_assessment.replace(
-                "## Loop Blueprint / Harness",
-                "Assessment target: generic review target.\n\n## Loop Blueprint / Harness",
-            ),
-            "placeholder_example_before_visible_assessment": ready.replace(
-                "## Preflight Time Assessment",
-                "```text placeholder-example\n<div\n>\n```\n\n"
-                "## Preflight Time Assessment",
-                1,
-            ),
-            "placeholder_example_with_concrete_assessment": (
-                "```text placeholder-example\n"
-                + "## Preflight Time Assessment"
-                + ready.split("## Preflight Time Assessment", 1)[1].split(
-                    "## Task Temporary Cache / Housekeeping", 1
-                )[0]
-                + "```\n\n"
-                + legacy_without_assessment
-            ),
-        }.items():
-            with self.subTest(name=name):
-                completed = self.run_goal(text, name=f"{name}.md")
-                self.assertEqual(completed.returncode, 0, completed.stderr)
-
-        missing_basis = re.sub(
-            r"\nBasis or blocker:.*\n",
-            "\n",
-            ready,
-            count=1,
-        )
-        fenced_basis = re.sub(
-            r"\nBasis or blocker:.*\n",
-            "\n```text\nBasis or blocker: 2026-07-20 hidden evidence.\n```\n",
-            ready,
-            count=1,
-        )
-        commented_basis = re.sub(
-            r"\nBasis or blocker:.*\n",
-            "\n<!-- Basis or blocker: 2026-07-20 hidden evidence. -->\n",
-            ready,
-            count=1,
-        )
-        misplaced_fields = ready.replace("## Preflight Time Assessment\n\n", "", 1)
-        duplicate_mode = ready.replace(
-            "Assessment mode: Rough range",
-            "Assessment mode: Rough range\nAssessment mode: Distribution only",
-            1,
-        )
-        outside_mode = ready.replace(
-            "## Loop Blueprint / Harness",
-            "Assessment mode: Distribution only\n\n"
-            "## Loop Blueprint / Harness",
-            1,
-        )
-        empty_code_spans = replace_all(
-            ready,
-            ("Assessment target: Ready-to-Closed", "Assessment target: ``"),
-            ("Assessment mode: Rough range", "Assessment mode: ``"),
-            ("Rough elapsed-time estimate: 2-4 hours", "Rough elapsed-time estimate: ``"),
-            (
-                "Critical-path time-cost distribution: Not required: rough range recorded.",
-                "Critical-path time-cost distribution: ``",
-            ),
-        )
-        indented_hidden_fields = with_time_section(
-            ready,
-            """## Preflight Time Assessment
-
-    Assessment target: Ready-to-Closed
-
-    Assessment mode: Rough range
-
-    Rough elapsed-time estimate: 2-4 hours
-
-    Basis or blocker: 2026-07-20 hidden in indented Markdown code.
-
-    Critical-path time-cost distribution: Not required: rough range recorded.
-""",
-        )
-        indented_values = with_time_section(
-            ready,
-            """## Preflight Time Assessment
-
-Assessment target:
-
-    Ready-to-Closed
-
-Assessment mode:
-
-    Rough range
-
-Rough elapsed-time estimate:
-
-    2-4 hours
-
-Basis or blocker:
-
-    2026-07-20 hidden in indented Markdown code.
-
-Critical-path time-cost distribution:
-
-    Not required: rough range recorded.
-""",
-        )
-        html_hidden_fields = with_time_section(
-            ready,
-            """## Preflight Time Assessment
-
-<div
-hidden>
-Assessment target: Ready-to-Closed
-
-Assessment mode: Rough range
-
-Rough elapsed-time estimate: 2-4 hours
-
-Basis or blocker: 2026-07-20 hidden HTML content assumes serial execution and no external waits.
-</div
->
-
-Critical-path time-cost distribution: Not required: rough range recorded.
-""",
-        )
-        timing_body = ready.split("## Preflight Time Assessment", 1)[1].split(
-            "## Task Temporary Cache / Housekeeping", 1
-        )[0]
-        timing_section = "## Preflight Time Assessment" + timing_body
-        fenced_entire_section = ready.replace(
-            timing_section,
-            "```text\n" + timing_section + "```\n\n",
-            1,
-        )
-        commented_entire_section = ready.replace(
-            timing_section,
-            "<!--\n" + timing_section + "-->\n\n",
-            1,
-        )
-        details_wrapped_section = ready.replace(
-            timing_section,
-            "<details\n>\n" + timing_section + "</details\n>\n\n",
-            1,
-        )
-        fieldset_hidden_section = ready.replace(
-            timing_section,
-            "<fieldset\n hidden>\n" + timing_section + "</fieldset\n>\n\n",
-            1,
-        )
-        nested_hidden_section = ready.replace(
-            timing_section,
-            "<div\n hidden>\n<div\n></div\n>\n"
-            + timing_section
-            + "</div\n>\n\n",
-            1,
-        )
-        one_driver = distribution_only.replace(
-            "- validation — Unknown — CI queue and integration duration lack representative evidence.\n",
+    def test_preflight_reuses_decisions_and_timing_is_optional(self) -> None:
+        ready = self.ready.replace("Preflight source: grill-with-docs", "Preflight source: existing decisions")
+        for note in (
             "",
+            "## Preflight Time Assessment\n\nAbout 2-4 hours, based on the local validation run; excludes CI queue time.\n\n",
+            "## Preflight Time Assessment\n\nUnknown: CI queue duration is unavailable.\n\n",
+        ):
+            with self.subTest(note=note):
+                text = re.sub(
+                    r"(?ms)^## Preflight Time Assessment\n.*?(?=^## Task Temporary Cache)", note, ready
+                )
+                result = self.run_goal(text)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_disabled_housekeeping_needs_no_user_confirmation(self) -> None:
+        text = self.ready.replace("Close housekeeping policy: Enabled", "Close housekeeping policy: Disabled")
+        text = re.sub(r"(?m)^Housekeeping decision source:.*\n", "", text)
+        text = re.sub(
+            r"(?ms)^Housekeeping boundary:.*?(?=^## Loop Blueprint)",
+            "Housekeeping boundary: Preserve and report all recorded task-owned roots; no cleanup.\n\n", text,
         )
-        markdown_duplicate_driver = distribution_only.replace(
-            "- implementation — Dominant — The bounded implementation owns most currently visible work.",
-            "- **validation** — Dominant — The bounded implementation owns most currently visible work.",
-        )
-        reference_link_duplicate_driver = distribution_only.replace(
-            "- implementation — Dominant — The bounded implementation owns most currently visible work.",
-            "- [validation][validation-doc] — Dominant — The bounded implementation owns most currently visible work.",
-        ).replace(
-            "## Task Temporary Cache / Housekeeping",
-            "[validation-doc]: https://example.invalid/validation\n\n"
-            "## Task Temporary Cache / Housekeeping",
-            1,
-        )
-        nested_link_duplicate_driver = distribution_only.replace(
-            "- implementation — Dominant — The bounded implementation owns most currently visible work.",
-            "- [validation](https://example.invalid/a_(b)) — Dominant — The bounded implementation owns most currently visible work.",
-        )
-        markdown_placeholder_reasons = replace_all(
-            distribution_only,
-            (
-                "The bounded implementation owns most currently visible work.",
-                "**TBD**",
-            ),
-            (
-                "CI queue and integration duration lack representative evidence.",
-                "`pending`",
-            ),
-        )
-        nested_link_placeholder_reasons = replace_all(
-            distribution_only,
-            (
-                "The bounded implementation owns most currently visible work.",
-                "[TBD](https://example.invalid/a_(b))",
-            ),
-            (
-                "CI queue and integration duration lack representative evidence.",
-                "[pending](https://example.invalid/c_(d))",
-            ),
-        )
-        punctuation_drivers = replace_all(
-            distribution_only,
-            (
-                "- implementation — Dominant — The bounded implementation owns most currently visible work.",
-                "- . — Dominant — .",
-            ),
-            (
-                "- validation — Unknown — CI queue and integration duration lack representative evidence.",
-                "- ! — Unknown — ?",
-            ),
-        )
-        duplicate_section = ready.replace(
-            "## Task Temporary Cache / Housekeeping",
-            "## Preflight Time Assessment"
-            + timing_body
-            + "## Task Temporary Cache / Housekeeping",
-            1,
-        )
-        invalid_cases = [
-            (
-                "missing_basis",
-                missing_basis,
-                "missing Preflight Time Assessment field: Basis or blocker",
-            ),
-            (
-                "invalid_target",
-                ready.replace("Assessment target: Ready-to-Closed", "Assessment target: someday"),
-                "Assessment target must be Ready-to-Closed or current-milestone-to-Closed",
-            ),
-            (
-                "invalid_mode",
-                ready.replace("Assessment mode: Rough range", "Assessment mode: Exact ETA"),
-                "Assessment mode must be Rough range or Distribution only",
-            ),
-            (
-                "single_point",
-                ready.replace("2-4 hours", "3 hours"),
-                "Rough range mode requires a low-high elapsed-time range with one unit",
-            ),
-            (
-                "reversed_range",
-                ready.replace("2-4 hours", "4-2 hours"),
-                "Rough elapsed-time range must increase from low to high",
-            ),
-            (
-                "invalid_date",
-                ready.replace("2026-07-20", "2026-19-40"),
-                "Basis or blocker must include a valid YYYY-MM-DD as-of date",
-            ),
-            (
-                "generic_basis",
-                re.sub(
-                    r"Basis or blocker:.*",
-                    "Basis or blocker: 2026-07-20 TBD",
-                    ready,
-                    count=1,
-                ),
-                "Basis or blocker must record concrete evidence or a blocker",
-            ),
-            (
-                "markdown_placeholder_basis",
-                re.sub(
-                    r"Basis or blocker:.*",
-                    "Basis or blocker: 2026-07-20 **TBD**",
-                    ready,
-                    count=1,
-                ),
-                "Basis or blocker must record concrete evidence or a blocker",
-            ),
-            (
-                "distribution_with_range",
-                distribution_only.replace("Not quickly estimable", "3-5 hours"),
-                "Distribution only mode requires estimate: Not quickly estimable",
-            ),
-            (
-                "one_driver",
-                one_driver,
-                "Distribution only mode requires at least two concrete critical-path drivers",
-            ),
-            (
-                "percentage_distribution",
-                distribution_only.replace("Dominant", "60%"),
-                "Distribution only mode requires relative bands, not unmeasured percentages",
-            ),
-            (
-                "duplicate_section",
-                duplicate_section,
-                "Preflight Time Assessment must appear exactly once",
-            ),
-            (
-                "fenced_basis",
-                fenced_basis,
-                "missing Preflight Time Assessment field: Basis or blocker",
-            ),
-            (
-                "commented_basis",
-                commented_basis,
-                "missing Preflight Time Assessment field: Basis or blocker",
-            ),
-            (
-                "misplaced_fields",
-                misplaced_fields,
-                "Preflight Time Assessment fields must be inside exactly one",
-            ),
-            (
-                "duplicate_mode",
-                duplicate_mode,
-                "duplicate Preflight Time Assessment field: Assessment mode",
-            ),
-            (
-                "outside_mode",
-                outside_mode,
-                "Preflight Time Assessment field appears outside its section: Assessment mode",
-            ),
-            (
-                "empty_code_spans",
-                empty_code_spans,
-                "missing Preflight Time Assessment field: Assessment target",
-            ),
-            (
-                "indented_hidden_fields",
-                indented_hidden_fields,
-                "missing Preflight Time Assessment field: Assessment target",
-            ),
-            (
-                "indented_values",
-                indented_values,
-                "missing Preflight Time Assessment field: Assessment target",
-            ),
-            (
-                "html_hidden_fields",
-                html_hidden_fields,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "fenced_entire_section",
-                fenced_entire_section,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "commented_entire_section",
-                commented_entire_section,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "details_wrapped_section",
-                details_wrapped_section,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "fieldset_hidden_section",
-                fieldset_hidden_section,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "nested_hidden_section",
-                nested_hidden_section,
-                "Preflight Time Assessment must be visible Markdown",
-            ),
-            (
-                "markdown_duplicate_driver",
-                markdown_duplicate_driver,
-                "Distribution only mode requires at least two concrete critical-path drivers",
-            ),
-            (
-                "reference_link_duplicate_driver",
-                reference_link_duplicate_driver,
-                "Distribution only mode requires at least two concrete critical-path drivers",
-            ),
-            (
-                "nested_link_duplicate_driver",
-                nested_link_duplicate_driver,
-                "Distribution only mode requires at least two concrete critical-path drivers",
-            ),
-            (
-                "markdown_placeholder_reasons",
-                markdown_placeholder_reasons,
-                "Critical-path distribution rows must use",
-            ),
-            (
-                "nested_link_placeholder_reasons",
-                nested_link_placeholder_reasons,
-                "Critical-path distribution rows must use",
-            ),
-            (
-                "punctuation_drivers",
-                punctuation_drivers,
-                "Critical-path distribution rows must use",
-            ),
-        ]
-        for name, text, message in invalid_cases:
-            with self.subTest(name=name):
-                self.assert_goal_error(text, message)
+        result = self.run_goal(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_temporary_cache_housekeeping_rejection_matrix(self) -> None:
         ready = self.ready
@@ -1782,11 +1350,28 @@ Checkpoint evidence：close revision recorded.
         )
         self.assertEqual(empty_shell.returncode, 1)
         self.assertIn("required section has no substantive content: summary", empty_shell.stderr)
-        self.assertEqual(missing_completion.returncode, 1)
-        self.assertIn("Step 1 missing required field: completion criterion", missing_completion.stderr)
+        self.assertEqual(missing_completion.returncode, 0, missing_completion.stderr)
         self.assertEqual(fenced_step.returncode, 1)
         self.assertIn("steps section must include at least one `### Step` entry", fenced_step.stderr)
         self.assertEqual(fenced_values.returncode, 0, fenced_values.stderr)
+
+    def test_compact_sop_retains_permissions_and_observable_steps(self) -> None:
+        ready = (FIXTURES / "ready_sop.md").read_text(encoding="utf-8")
+        for heading in ("Summary", "Preconditions", "Working Directory", "Forbidden Actions", "Update Rules", "Reuse Prompt"):
+            ready = re.sub(rf"(?ms)^## {heading}\n.*?(?=^## |\Z)", "", ready)
+        ready = re.sub(r"(?ms)^Failure Handling:\n.*?(?=^## Validation)", "", ready)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "compact.md"
+            for variant, expected in (
+                (ready, 0),
+                (re.sub(r"(?ms)^## Allowed Actions\n.*?(?=^## )", "", ready), 1),
+                (re.sub(r"(?ms)^## Stop Conditions\n.*?(?=^## |\Z)", "", ready), 1),
+                (re.sub(r"(?ms)^Expected Output:\n.*?(?=^## Validation)", "", ready), 1),
+            ):
+                with self.subTest(variant=variant):
+                    path.write_text(variant, encoding="utf-8")
+                    result = self.run_checker(SOP_CHECKER, path)
+                    self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_goal_draft_requires_all_milestones_not_started(self) -> None:
         ready = self.ready
@@ -1815,15 +1400,19 @@ Checkpoint evidence：close revision recorded.
             / "long_running_goal_template.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("```bash placeholder-example\ncp <skill-folder>", template)
         self.assertIn(
             "```text placeholder-example\nCheckpoint component: <Pending / Done>",
             template,
         )
-        self.assertEqual(template.count("placeholder-example"), 2)
-        self.assertIn("状态：`Not Started`", template)
+        self.assertEqual(template.count("placeholder-example"), 1)
+        self.assertNotIn("状态：`Not Started`", template)
         self.assertIn("| M0 `<阶段名称>` | Not Started | Pending | Pending |", template)
         self.assertNotIn("状态：`Ready`", template)
+        headings = re.findall(r"(?m)^#{2,3}\s+(M\d+)\b", template)
+        self.assertEqual(len(headings), len(set(headings)), "template must not define a milestone twice")
+        overall = re.findall(r"(?m)^(?:整体状态|目标状态|Overall status|Goal status)[:：]", template)
+        self.assertEqual(len(overall), 1, "atomic template must also work as a sequence child")
+
 
 
 if __name__ == "__main__":

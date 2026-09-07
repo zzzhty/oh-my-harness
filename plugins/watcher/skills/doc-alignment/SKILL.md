@@ -10,7 +10,7 @@ Keep current guidance, names, references, ownership, navigation, and validation 
 ## Contract
 
 1. Identify current truth before proposing or making changes: root instructions, current overview and architecture docs, active plans, runtime guides, scripts, package commands, CI, configs, tests, or Watcher reports.
-2. Re-read the newest request and use it to freeze mode and scope. Older goals and implementation threads are background unless the request explicitly continues them.
+2. Use the current task and accepted constraints to determine mode and scope. New messages refine that task unless they explicitly pause, replace, or redirect it; do not import unrelated older goals.
 3. Keep current guidance separate from history. Preserve real compatibility identifiers and historical terms only where their role is explicit.
 4. In implementation mode, update every active path people or tools follow, including hidden configuration, resolved repository skill roots, wrappers, package commands, indexes, READMEs, and runbooks.
 5. In report-only and scheduled modes, inventory drift, collect evidence, propose bounded fixes, and write only to a Watcher-owned report under `$CODEX_HOME/watcher/doc/` or an explicit output path; target repositories remain read-only.
@@ -34,4 +34,4 @@ Use implementation mode when the user asks to align, update, reorganize, prune, 
 
 Report the mode, scope, current truth, entry points reviewed, evidence, changed or proposed semantics, moved or preserved history, validation commands and results, unresolved conflicts, and preserved legacy identifiers.
 
-Completion requires the common workflow and every triggered reference completion criterion to pass; report-only work must leave target repositories unchanged.
+Report-only completion requires the scoped inventory, evidence-backed findings, recommendations, and disclosed coverage gaps; unresolved target drift does not prevent completing the audit. Leave target repositories unchanged. Implementation completes when the affected guidance is aligned and its required checks pass.

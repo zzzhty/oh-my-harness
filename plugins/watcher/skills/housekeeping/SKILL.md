@@ -22,7 +22,7 @@ Archive content remains protected. Hand active-navigation or current-summary dri
 ## Workflow
 
 1. Read current truth: root instructions, relevant cleanup guidance, `.gitignore`, manifests, hook configuration, and artifact ownership rules.
-2. Inventory the target and ignored state. The executable block below is for POSIX Bash; on Windows, use native PowerShell commands with the same absolute-path, Git-worktree, read-only, exclusion, and symlink-boundary gates instead of passing native Windows paths through Bash:
+2. Inventory the target. Use the default `git` target kind for a worktree; set `HOUSEKEEPING_TARGET_KIND=cache` only for an already identified non-Git cache root. Git inventory failures remain failures, not evidence of a non-Git target. The executable block below is for POSIX Bash; on Windows, use native PowerShell commands with the same absolute-path, read-only, exclusion, and symlink-boundary gates:
 
 ```bash
 set -euo pipefail
@@ -32,12 +32,14 @@ housekeeping_target=$HOUSEKEEPING_TARGET
   printf 'invalid housekeeping target: %s\n' "$housekeeping_target" >&2
   exit 2
 }
-git -C "$housekeeping_target" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
-  printf 'housekeeping target is not a Git worktree: %s\n' "$housekeeping_target" >&2
-  exit 2
-}
-git -C "$housekeeping_target" status --short -- .
-git -C "$housekeeping_target" status --ignored --short -- .
+case "${HOUSEKEEPING_TARGET_KIND:-git}" in
+  git)
+    git -C "$housekeeping_target" status --short -- .
+    git -C "$housekeeping_target" status --ignored --short -- .
+    ;;
+  cache) ;;
+  *) printf 'unknown housekeeping target kind\n' >&2; exit 2 ;;
+esac
 find "$housekeeping_target" \
   \( -type d \( -name .git -o -name node_modules -o -name .venv \) -prune \) -o \
   \( -type d \( -name __pycache__ -o -name .pytest_cache \) -print \)

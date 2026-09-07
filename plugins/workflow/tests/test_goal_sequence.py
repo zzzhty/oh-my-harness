@@ -359,6 +359,13 @@ class GoalSequenceCheckerTests(unittest.TestCase):
             self.set_overall(parent, "Draft")
             self.set_milestone(parent, "M0", "Not Started")
 
+        def promotion_revalidation(workspace: Path) -> None:
+            self.promotion_drift_blocked(workspace)
+            self.replace_once(
+                workspace / "sequence.md", "require a fresh grill-with-docs marker before promotion",
+                "require decision revalidation and a fresh marker before promotion",
+            )
+
         cases: list[tuple[str, Callable[[Path], None], tuple[str, ...]]] = [
             ("all_draft", all_draft, ("--allow-draft",)),
             ("umbrella_ready_m0", lambda workspace: None, ()),
@@ -369,6 +376,7 @@ class GoalSequenceCheckerTests(unittest.TestCase):
             ("successor_auto_promoted", self.successor_executing, ()),
             ("executing_child_hard_stop", self.executing_child_blocked, ()),
             ("promotion_drift_hard_stop", self.promotion_drift_blocked, ()),
+            ("promotion_decision_revalidation", promotion_revalidation, ()),
             ("all_children_closed_integration", self.integration_in_progress, ()),
             ("final_closed", self.final_closed, ()),
         ]
@@ -392,7 +400,7 @@ class GoalSequenceCheckerTests(unittest.TestCase):
             completed = self.run_sequence(workspace)
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
-    def test_parent_range_requires_every_child_to_have_a_range(self) -> None:
+    def test_parent_timing_does_not_gate_child_readiness(self) -> None:
         with self.sequence_workspace() as workspace:
             parent = workspace / "sequence.md"
             self.regex_replace_once(
@@ -413,12 +421,7 @@ Critical-path time-cost distribution: Not required: rough range recorded.
 """,
             )
             completed = self.run_sequence(workspace)
-            self.assertEqual(completed.returncode, 1, completed.stdout)
-            self.assertIn(
-                "sequence parent Rough range requires Rough range from every child; "
-                "incompatible: child-b (distribution only)",
-                completed.stderr,
-            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_parent_and_children_keep_independent_housekeeping_policies(self) -> None:
         def section(owner: str, policy: str, roots: str, boundary: str) -> str:
@@ -518,16 +521,6 @@ Critical-path time-cost distribution: Not required: rough range recorded.
                 widening = variant
 
     def test_sequence_rejection_matrix(self) -> None:
-        def parent_skip(workspace: Path) -> None:
-            parent = workspace / "sequence.md"
-            self.replace_once(
-                parent,
-                "preflight:demo-sequence:20260713-parent",
-                "preflight:demo-sequence:skip:20260713-parent",
-            )
-            self.replace_once(parent, "Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction")
-            self.replace_once(parent, "Preflight source: grill-with-docs", "Preflight source: user skip")
-
         def marker_mismatch(workspace: Path) -> None:
             self.replace_once(
                 workspace / "sequence.md",
@@ -860,7 +853,6 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             )
 
         cases: list[tuple[str, Callable[[Path], None], str]] = [
-            ("parent_skip", parent_skip, "sequence preflight cannot use a :skip: marker"),
             ("marker_mismatch", marker_mismatch, "preflight marker disagrees"),
             ("too_few_children", too_few_children, "requires at least two child goals"),
             ("duplicate_order", duplicate_order, "duplicate Order values"),
@@ -902,7 +894,7 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             with self.subTest(name=name):
                 self.assert_sequence_error(mutation, message)
 
-    def test_standalone_skip_is_accepted_but_sequence_rejects_it(self) -> None:
+    def test_atomic_and_sequence_accept_consistent_explicit_skip(self) -> None:
         with self.sequence_workspace() as workspace:
             child = workspace / "children" / "child-a.md"
             parent = workspace / "sequence.md"
@@ -922,8 +914,26 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             atomic = self.run_checker(GOAL_CHECKER, child, "--allow-draft")
             self.assertEqual(atomic.returncode, 0, atomic.stderr)
             sequence = self.run_sequence(workspace)
-            self.assertEqual(sequence.returncode, 1, sequence.stdout)
-            self.assertIn("sequence preflight cannot use a :skip: marker", sequence.stderr)
+            self.assertEqual(sequence.returncode, 0, sequence.stderr)
+
+    def test_sequence_preflight_register_matches_full_child_tuple(self) -> None:
+        with self.sequence_workspace() as workspace:
+            parent = workspace / "sequence.md"
+            child = workspace / "children" / "child-a.md"
+            self.replace_once(parent, "preflight:demo-sequence:20260713-parent", "preflight:demo-sequence:skip:20260713-parent")
+            self.replace_once(parent, "Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction")
+            self.replace_once(parent, "Preflight source: grill-with-docs", "Preflight source: user skip (explicit instruction)")
+            self.replace_once(child, "Preflight source: grill-with-docs", "Preflight source: existing decisions")
+            mismatch = self.run_sequence(workspace)
+            self.assertEqual(mismatch.returncode, 1)
+            self.assertIn("preflight source disagrees with Child Preflight Register", mismatch.stderr)
+            self.replace_once(parent, "| child-a | preflight:demo-child-a:20260713-a | Done | grill-with-docs |", "| child-a | preflight:demo-child-a:20260713-a | Done | existing decisions |")
+            valid = self.run_sequence(workspace)
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+            self.replace_once(parent, "| Done | existing decisions |", "| Skipped by explicit user instruction | existing decisions |")
+            invalid = self.run_sequence(workspace)
+            self.assertEqual(invalid.returncode, 1)
+            self.assertIn("preflight status disagrees with Child Preflight Register", invalid.stderr)
 
     def test_sequence_requires_preflight_even_when_atomic_draft_omits_it(self) -> None:
         with self.sequence_workspace() as workspace:

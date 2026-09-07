@@ -7,8 +7,8 @@ Use the matching sections after `../SKILL.md` routes a creation, upgrade, or Loo
 Here, `upgrade` means converting or reshaping an existing TODO, PRD, issue, checklist, or rough plan into a long-running-goal contract. It does not mean ordinary runtime evolution during milestone execution.
 
 1. Read current truth before drafting: root instructions, README/area overviews, active TODO or goal indexes, current guides, status/boundary registers, validation logs, runtime audits, architecture/contract docs, and existing goal/archive docs.
-2. Apply `../components/planning-preflight.md` before freezing the goal. Inside the component, skip only the grill when the user explicitly requests it; still complete timing and housekeeping.
-3. Create or reshape the goal file as a continuation contract, preserve useful findings from existing TODOs, and record the planning-preflight marker or skip marker, the completed time assessment, and the user's explicit task-temporary-cache housekeeping choice.
+2. Apply `../components/planning-preflight.md` before freezing the goal. Reuse settled decisions and ask only material unresolved questions.
+3. Create or reshape the goal file as a continuation contract, preserve useful findings from existing TODOs, and record the planning-preflight marker or skip marker, an optional time estimate, and the task-temporary-cache policy (default `Disabled`).
 4. Freeze the contract before implementation:
    - product semantics, owner boundaries, compatibility surface, future/non-goals
    - sequential milestones, usually `M0 Contract Review / Design Freeze`, implementation milestones, docs/release closeout, then `Close`
@@ -17,10 +17,10 @@ Here, `upgrade` means converting or reshaping an existing TODO, PRD, issue, chec
    - pre-approved YOLO local operations, pre-approved external reads/writes, runtime hard stops
    - policy-specific temporary-cache root-or-no-root strategy and `Enabled / Disabled / Not applicable` Close housekeeping policy; `Enabled` records the user's cleanup intent and the `watcher:housekeeping` dependency, not a guarantee that the dependency will still be available at Close
    - Loop harness fields when applicable: trigger, inputs, triage/orchestration, isolation, connector boundaries, independent verifier, durable learning
-5. Keep foreseeable approval out of runtime execution. Human approval gates, external-write permission, destructive-action permission, connector permission, temporary-cache housekeeping choice, and unresolved design approval must be settled before `Ready`; otherwise keep the goal `Draft`.
-6. Add close criteria and a reusable continuation prompt that names the exact goal path and repeats the sequential milestone, YOLO boundary, Loop harness, temporary-cache housekeeping policy, evidence, hard-stop, and close-gate rules.
+5. Keep foreseeable approval out of runtime execution. Human approval gates, external-write permission, destructive-action permission, connector permission, permission for planned cleanup, and unresolved design approval must be settled before `Ready`; otherwise keep the goal `Draft`.
+6. Add close criteria and a reusable continuation prompt that names the exact goal path and directs the next agent to its frozen authority, required gates, current state, and close handling.
 
-Completion criterion: the goal contains the current baseline, frozen contract, ordered milestones and gates, settled approval boundaries, a time assessment satisfying `../components/planning-preflight.md`, explicit task-temporary-cache housekeeping choice, close criteria, reusable prompt, and a completed or explicitly skipped planning-preflight marker; otherwise it remains `Draft`. Legacy goals without the housekeeping section remain compatible but grant no cleanup authorization.
+Completion criterion: the goal contains the current baseline, frozen contract, ordered milestones and gates, settled approval boundaries, a task-temporary-cache policy with explicit authorization if `Enabled`, close criteria, reusable prompt, and a completed or explicitly skipped planning-preflight marker; otherwise it remains `Draft`. Legacy goals without the housekeeping section remain compatible but grant no cleanup authorization.
 
 ## Loop Blueprint Harness
 

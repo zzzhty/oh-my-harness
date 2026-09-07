@@ -20,14 +20,11 @@ from markdown_contract import render_errors, strip_fenced_blocks  # noqa: E402
 from check_goal_ready import (  # noqa: E402
     MilestoneState,
     milestone_states,
-    preflight_time_assessment_mode,
+    preflight_contract_errors,
 )
 
 
 ATOMIC_CHECKER = Path(__file__).with_name("check_goal_ready.py")
-PREFLIGHT_MARKER_RE = re.compile(
-    r"^preflight:[A-Za-z0-9_.-]+:[0-9]{8}-[A-Za-z0-9_.-]+$"
-)
 OVERALL_STATUS_RE = re.compile(
     r"(?im)^(?:overall status|整体状态|goal status|目标状态)"
     r"\s*[:：]\s*`?([^`\n]+)`?\s*$"
@@ -222,30 +219,25 @@ def _strict_preflight(
     subject: str,
     errors: list[str],
     *,
-    expected_marker: str | None = None,
+    expected: PreflightRow | None = None,
 ) -> str | None:
     marker = _single_field(text, "Planning preflight marker", subject, errors)
     status = _single_field(text, "Planning preflight status", subject, errors)
     source = _single_field(text, "Preflight source", subject, errors)
 
-    if marker is not None:
-        if ":skip:" in marker.casefold():
-            errors.append(f"{subject} sequence preflight cannot use a :skip: marker")
-        elif not PREFLIGHT_MARKER_RE.fullmatch(marker):
-            errors.append(f"{subject} has an invalid completed preflight marker: {marker}")
-        if expected_marker is not None and marker != expected_marker:
-            errors.append(
-                f"{subject} preflight marker disagrees with Child Preflight Register: "
-                f"{marker} != {expected_marker}"
-            )
-    if status is not None and status != "Done":
-        errors.append(
-            f"{subject} sequence preflight status must be Done; found {status}"
-        )
-    if source is not None and source != "grill-with-docs":
-        errors.append(
-            f"{subject} sequence preflight source must be grill-with-docs; found {source}"
-        )
+    if marker is not None and status is not None and source is not None:
+        errors.extend(f"{subject}: {error}" for error in preflight_contract_errors(marker, status, source))
+        if expected is not None:
+            for label, actual, registered in (
+                ("marker", marker, expected.marker),
+                ("status", status, expected.status),
+                ("source", source, expected.source),
+            ):
+                if actual != registered:
+                    errors.append(
+                        f"{subject} preflight {label} disagrees with Child Preflight Register: "
+                        f"{actual} != {registered}"
+                    )
     return marker
 
 
@@ -356,23 +348,22 @@ def _canonical_current_value(state: MilestoneState) -> str:
 def _validate_child_document(
     path: Path,
     row: ExecutionRow,
-    registered_marker: str | None,
+    registered: PreflightRow | None,
     errors: list[str],
-) -> tuple[str | None, str | None]:
+) -> str | None:
     subject = f"child {row.child_id}"
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         errors.append(f"{subject} cannot read {path}: {exc}")
-        return None, None
+        return None
     visible = _visible_contract(text)
-    time_assessment_mode = preflight_time_assessment_mode(visible)
     actual_overall = _overall_status(visible, subject, errors)
     _strict_preflight(
         visible,
         subject,
         errors,
-        expected_marker=registered_marker,
+        expected=registered,
     )
     _strict_open_decisions(visible, subject, errors)
     _atomic_check(
@@ -415,7 +406,7 @@ def _validate_child_document(
                 f"{subject} Draft requires every atomic milestone and Close row "
                 "Not Started/Pending/Pending; changed: " + ", ".join(executed)
             )
-        return None, time_assessment_mode
+        return None
 
     if row.state == "Closed":
         close_rows = [item for item in states if item.name == "Close"]
@@ -431,14 +422,14 @@ def _validate_child_document(
                 f"{subject} Closed Current milestone must be Close Done; "
                 f"found {row.current_milestone}"
             )
-        return None, time_assessment_mode
+        return None
 
     if len(currents) != 1:
         errors.append(
             f"{subject} {row.state} requires exactly one current milestone; "
             f"found {len(currents)}"
         )
-        return None, time_assessment_mode
+        return None
     if currents[0].status.casefold() == "blocked":
         child_sections = _milestone_contract_sections(visible)
         body_groups = child_sections.get(currents[0].name, [])
@@ -456,7 +447,7 @@ def _validate_child_document(
             f"{subject} Current milestone disagrees with atomic goal: "
             f"{row.current_milestone} != {expected}"
         )
-    return currents[0].status.casefold(), time_assessment_mode
+    return currents[0].status.casefold()
 
 
 def _parse_preflight_rows(raw_rows: list[list[str]], errors: list[str]) -> list[PreflightRow]:
@@ -468,19 +459,10 @@ def _parse_preflight_rows(raw_rows: list[list[str]], errors: list[str]) -> list[
         if row.child_id in seen:
             errors.append(f"Child Preflight Register has duplicate Child ID: {row.child_id}")
         seen.add(row.child_id)
-        if ":skip:" in row.marker.casefold():
-            errors.append(f"child {row.child_id} sequence preflight cannot use a :skip: marker")
-        elif not PREFLIGHT_MARKER_RE.fullmatch(row.marker):
-            errors.append(f"child {row.child_id} has invalid registered preflight marker: {row.marker}")
-        if row.status != "Done":
-            errors.append(
-                f"child {row.child_id} registered preflight status must be Done; found {row.status}"
-            )
-        if row.source != "grill-with-docs":
-            errors.append(
-                f"child {row.child_id} registered preflight source must be grill-with-docs; "
-                f"found {row.source}"
-            )
+        errors.extend(
+            f"child {row.child_id}: {error}"
+            for error in preflight_contract_errors(row.marker, row.status, row.source)
+        )
     return rows
 
 
@@ -680,9 +662,9 @@ def _validate_promotion_drift_evidence(
     ):
         missing.append("semantic drift or failed handoff")
     if not re.search(
-        r"(?i)grill-with-docs|re-?grill|external decision|approval", evidence
+        r"(?i)revalidat(?:e|ion)|grill-with-docs|re-?grill|external decision|approval", evidence
     ):
-        missing.append("required re-grill or external decision")
+        missing.append("required decision revalidation or external decision")
     if missing:
         errors.append(f"{subject} evidence is missing: " + ", ".join(missing))
 
@@ -1056,21 +1038,18 @@ def main() -> int:
     _validate_register_shape(preflight_rows, execution_rows, errors)
     _validate_transition_rows(transition_rows, execution_rows, errors)
 
-    markers = {row.child_id: row.marker for row in preflight_rows}
-    if parent_marker is not None and parent_marker in markers.values():
+    registered = {row.child_id: row for row in preflight_rows}
+    if parent_marker is not None and parent_marker in {row.marker for row in preflight_rows}:
         errors.append(
             "sequence parent and child goals must not share a planning preflight marker"
         )
-    parent_time_mode = preflight_time_assessment_mode(visible)
     child_current_statuses: dict[str, str | None] = {}
-    child_time_modes: dict[str, str | None] = {}
     resolved_parent = path.resolve()
     child_targets: dict[Path, str] = {}
     for row in execution_rows:
         normalized_state = row.state.casefold()
         if normalized_state not in CHILD_STATES:
             child_current_statuses[row.child_id] = None
-            child_time_modes[row.child_id] = None
             continue
 
         source_path: Path | None = None
@@ -1125,29 +1104,14 @@ def main() -> int:
                 child_targets[source_path] = row.child_id
 
         if source_path is not None:
-            (
-                child_current_statuses[row.child_id],
-                child_time_modes[row.child_id],
-            ) = _validate_child_document(
+            child_current_statuses[row.child_id] = _validate_child_document(
                 source_path,
                 row,
-                markers.get(row.child_id),
+                registered.get(row.child_id),
                 errors,
             )
         else:
             child_current_statuses[row.child_id] = None
-            child_time_modes[row.child_id] = None
-
-    children_without_ranges = sorted(
-        f"{child_id} ({mode or 'missing or invalid'})"
-        for child_id, mode in child_time_modes.items()
-        if mode != "rough range"
-    )
-    if parent_time_mode == "rough range" and children_without_ranges:
-        errors.append(
-            "sequence parent Rough range requires Rough range from every child; "
-            "incompatible: " + ", ".join(children_without_ranges)
-        )
 
     _validate_parent_mapping(
         visible,

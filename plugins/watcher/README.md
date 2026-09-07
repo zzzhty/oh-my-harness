@@ -44,8 +44,11 @@ export OH_MY_HARNESS_ROOT="$(git rev-parse --show-toplevel)"
 omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
 "$omh_tooling_python" -B scripts/watcher doc report --config config/repos.example.json --print-report
 "$omh_tooling_python" -B scripts/watcher skill report --since 7d
+"$omh_tooling_python" -B scripts/watcher skill propose --skill watcher:doc-alignment --skill-dir skills/doc-alignment --since 7d
 "$omh_tooling_python" -B scripts/watcher migrate-state --dry-run
 ```
+
+`skill propose` requires the exact log identity in `--skill`; a directory basename cannot identify a namespaced skill. It includes a report for the same identity and window, or reuses `--report <path>` when that report matches both. The generated worksheet preserves the source and snapshot and names a separate candidate file. Materialize the proposed edit there before running the printed validation command; worksheet generation itself performs no candidate validation. A no-change decision needs no candidate.
 
 `config/repos.example.json` resolves the audited checkout from
 `OH_MY_HARNESS_ROOT`. Keep that variable bound to the canonical Git worktree so

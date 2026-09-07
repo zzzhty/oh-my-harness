@@ -30,12 +30,12 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         for semantic in (
             "A `Ready` goal",
             "Keep the goal `Draft`",
-            "complete `Draft` or `Ready` contract",
+            "non-executable `Draft`",
             "only when the user explicitly requests a long-running goal",
             "is not itself a trigger",
             "Use system planning for ordinary complex work",
             "wait for the user's confirmation before creating or converting",
-            "Never invent or infer a missing decision",
+            "Never invent missing design or permission",
             "An explicit pause, stop, redirect, or change-scope request overrides",
             "without running milestone commands, editing goal evidence, or updating native goal-tool status",
             "Only a `Ready` goal pre-approves",
@@ -92,7 +92,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("Long-Running Goal Sequence", reference)
         self.assertIn("one active harness system goal", reference)
         self.assertIn("Completion criterion:", reference)
-        self.assertIn("Done / grill-with-docs", reference)
+        self.assertIn("exact marker, status, and source", reference)
         self.assertIn("never returns to `Ready` for a per-child authorization", reference)
 
         self.assertIn("Promotion policy: `automatic-after-close`", template)
@@ -143,7 +143,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("Task temporary cache housekeeping is separate", skill)
         self.assertIn("Close housekeeping policy", preflight)
         self.assertIn("host platform or runtime's standard temporary-directory resolver", preflight)
-        self.assertIn("Skipping `grill-with-docs` does not skip this choice", preflight)
+        self.assertIn("Default to `Disabled`", preflight)
         self.assertIn("not unconditional recursive deletion", preflight)
         self.assertIn("If `watcher:housekeeping` is unavailable", execute)
         self.assertIn("Before any command may write task-temporary data", execute)
@@ -163,55 +163,17 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("every child records and honors its own policy", sequence_template)
         self.assertNotIn("| Housekeeping |", sequence_template)
 
-    def test_planning_preflight_inherits_grilling_frontier_rounds(self) -> None:
+    def test_preflight_reuses_decisions_and_keeps_estimates_optional(self) -> None:
         preflight = PREFLIGHT.read_text(encoding="utf-8")
-
-        self.assertIn("rounds/frontier cadence owned by `grilling`", preflight)
-        self.assertIn("whole currently unblocked frontier", preflight)
-        self.assertIn("number every question", preflight)
-        self.assertIn("recommended answer for each", preflight)
-        self.assertIn("Wait for the user's batch answers, then recompute the frontier", preflight)
-        self.assertIn("depend on unresolved answers belong to a later round", preflight)
-        self.assertNotIn("Ask one unresolved design question at a time", preflight)
-
-    def test_preflight_time_assessment_is_timeboxed_and_disclosed(self) -> None:
-        skill = SKILL.read_text(encoding="utf-8")
-        preflight = PREFLIGHT.read_text(encoding="utf-8")
-        create = REFERENCES["create"].read_text(encoding="utf-8")
-        sequence = REFERENCES["sequence"].read_text(encoding="utf-8")
-        execute = REFERENCES["execute"].read_text(encoding="utf-8")
-        templates = (
-            ATOMIC_TEMPLATE.read_text(encoding="utf-8"),
-            SEQUENCE_TEMPLATE.read_text(encoding="utf-8"),
-        )
-
-        self.assertIn("timeboxed execution-time assessment", skill)
-        self.assertIn("rough remaining elapsed-time range", skill)
-        self.assertIn("apply `components/planning-preflight.md`", skill)
-        self.assertIn("## Preflight Time Assessment", preflight)
-        self.assertIn("Timebox the assessment", preflight)
-        self.assertIn("Not quickly estimable", preflight)
-        self.assertIn("Completion criterion:", preflight)
-        self.assertIn("reported to the user", preflight)
-        self.assertIn("external-wait and serial/parallel assumptions", preflight)
-        self.assertIn("time assessment satisfying", create)
-        self.assertIn("evidence rebaseline without rerunning the grill", execute)
-        self.assertIn("when resuming after an interruption or milestone transition", execute)
-        self.assertIn("range overrun is a timing rebaseline and non-stop", execute)
-        self.assertIn("never in either canonical register", sequence)
-        self.assertIn("only when every child has one", sequence)
-
-        for template in templates:
-            self.assertIn("## Preflight Time Assessment", template)
-            self.assertIn("Assessment target", template)
-            self.assertIn("Assessment mode", template)
-            self.assertIn("Rough elapsed-time estimate", template)
-            self.assertIn("Basis or blocker", template)
-            self.assertIn("Critical-path time-cost distribution", template)
-
-        sequence_template = templates[1]
-        self.assertIn("never in either canonical register", sequence_template)
-        self.assertNotIn("| Timing |", sequence_template)
+        self.assertIn("Reuse answers already settled", preflight)
+        self.assertIn("no distribution, fixed sentinel, or driver count is required", preflight)
+        self.assertIn("Skip never supplies missing authority", preflight)
+        for template in (ATOMIC_TEMPLATE, SEQUENCE_TEMPLATE):
+            text = template.read_text(encoding="utf-8")
+            self.assertIn("existing decisions", text)
+            self.assertNotIn("Assessment mode", text)
+            self.assertNotIn("Critical-path time-cost distribution", text)
+        self.assertIn("Change a reusable skill or template only when source mutation is authorized", REFERENCES["execute"].read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

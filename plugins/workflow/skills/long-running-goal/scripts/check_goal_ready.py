@@ -4,13 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import html
 import ntpath
 import posixpath
 import re
 import sys
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 
 SHARED = Path(__file__).resolve().parents[3] / "scripts"
@@ -21,7 +19,6 @@ from markdown_contract import (  # noqa: E402
     placeholder_errors,
     render_errors,
     strip_fenced_blocks,
-    strip_placeholder_example_blocks,
 )
 
 
@@ -79,14 +76,6 @@ def h2_section(markdown_text: str, heading_pattern: str) -> str | None:
     return sections[0] if sections else None
 
 
-def without_h2_sections(markdown_text: str, heading_pattern: str) -> str:
-    return re.sub(
-        rf"(?ims)^##\s+(?:{heading_pattern})\s*$\n.*?(?=^##\s+|\Z)",
-        "",
-        markdown_text,
-    )
-
-
 def _named_contract_field(
     line: str,
     labels: dict[str, str],
@@ -122,419 +111,26 @@ def named_contract_fields(
     return {label: "\n".join(lines).strip() for label, lines in collected.items()}
 
 
-def named_contract_field_counts(
-    section_text: str,
-    labels: dict[str, str],
-) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for line in section_text.splitlines():
-        matched = _named_contract_field(line, labels)
-        if matched:
-            label, _ = matched
-            counts[label] = counts.get(label, 0) + 1
-    return counts
-
-
-TIME_ASSESSMENT_HEADING = r"Preflight\s+Time\s+Assessment|执行前耗时评估"
-TIME_ASSESSMENT_LABELS = {
-    "Assessment target": r"Assessment\s+target|评估目标",
-    "Assessment mode": r"Assessment\s+mode|评估模式",
-    "Rough elapsed-time estimate": r"Rough\s+elapsed-time\s+estimate|粗略耗时估算",
-    "Basis or blocker": r"Basis\s+or\s+blocker|依据或阻碍",
-    "Critical-path time-cost distribution": (
-        r"Critical-path\s+time-cost\s+distribution|关键路径耗时分布"
-    ),
-}
-
-
-def _scalar_contract_value(value: str) -> str:
-    return value.strip().strip("`").strip()
-
-
-def _first_contract_line(value: str) -> str:
-    return value.splitlines()[0].strip() if value.splitlines() else ""
-
-
-def _has_valid_iso_date(value: str) -> bool:
-    for candidate in re.findall(r"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", value):
-        try:
-            date.fromisoformat(candidate)
-        except ValueError:
-            continue
-        return True
-    return False
-
-
-def _rough_elapsed_range(value: str) -> tuple[float, float] | None:
-    match = re.fullmatch(
-        r"(?ix)\s*(?:about|approximately|roughly|approx\.?|约|大约|≈|~)?\s*"
-        r"(?P<low>\d+(?:\.\d+)?)\s*(?:-|–|—|~|～|to|至|到)\s*"
-        r"(?P<high>\d+(?:\.\d+)?)\s*"
-        r"(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?|"
-        r"business\s+days?|working\s+days?|"
-        r"(?:个)?(?:工作日|工作天|秒|分钟|小时|天|周|月|年))\s*",
-        _scalar_contract_value(value),
-    )
-    if not match:
-        return None
-    return float(match.group("low")), float(match.group("high"))
-
-
-def _replace_inline_markdown_links(value: str) -> str:
-    opening = re.compile(r"!?\[([^\]\n]+)\]\(")
-    cursor = 0
-    while match := opening.search(value, cursor):
-        depth = 1
-        index = match.end()
-        while index < len(value) and depth:
-            if value[index] == "\\":
-                index += 2
-                continue
-            if value[index] == "(":
-                depth += 1
-            elif value[index] == ")":
-                depth -= 1
-            index += 1
-        if depth:
-            cursor = match.end()
-            continue
-        label = match.group(1)
-        value = value[: match.start()] + label + value[index:]
-        cursor = match.start() + len(label)
-    return value
-
-
-def _rendered_contract_fragment(value: str) -> str:
-    value = html.unescape(value)
-    value = re.sub(r"\[([^\]]+)\]\s*\[[^\]]*\]", r"\1", value)
-    value = _replace_inline_markdown_links(value)
-    value = re.sub(r"!?(?:\[([^\]]+)\])\([^)]*\)", r"\1", value)
-    value = re.sub(r"(?s)<[^>]*>", "", value)
-    value = re.sub(r"[`*_~\[\]]", "", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def _has_content_character(value: str) -> bool:
-    return bool(re.search(r"[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff]", value))
-
-
-def _distribution_rows(value: str) -> tuple[list[str], list[str]]:
-    valid: list[str] = []
-    invalid: list[str] = []
-    row_pattern = re.compile(
-        r"(?i)^\s*[-*]\s*(?P<driver>\S.*?)\s+(?:—|–)\s+"
-        r"(?P<band>Dominant|Material|Minor|Unknown|主导|显著|次要|未知)\s+"
-        r"(?:—|–)\s+(?P<reason>\S.*?)\s*$"
-    )
-    for raw_line in value.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        match = row_pattern.fullmatch(line)
-        if not match:
-            invalid.append(line)
-            continue
-        driver = _rendered_contract_fragment(match.group("driver")).casefold()
-        reason = _rendered_contract_fragment(match.group("reason"))
-        if (
-            not _has_content_character(driver)
-            or not _has_content_character(reason)
-            or re.fullmatch(
-                r"(?i)(?:tbd|unknown|n/?a|none|pending|待定|未知|无)",
-                reason,
-            )
-        ):
-            invalid.append(line)
-            continue
-        valid.append(driver)
-    return valid, invalid
-
-
-def _resolved_time_assessment_signal_count(value: str) -> int:
-    fields = named_contract_fields(
-        value,
-        TIME_ASSESSMENT_LABELS,
-        allow_indented_continuations=False,
-    )
-    count = sum(
-        label in fields
-        for label in (
-            "Rough elapsed-time estimate",
-            "Critical-path time-cost distribution",
-        )
-    )
-    target = _scalar_contract_value(
-        _first_contract_line(fields.get("Assessment target", ""))
-    ).casefold()
-    mode = _scalar_contract_value(
-        _first_contract_line(fields.get("Assessment mode", ""))
-    ).casefold()
-    basis = _first_contract_line(fields.get("Basis or blocker", ""))
-    return count + (target in {"ready-to-closed", "current-milestone-to-closed"}) + (
-        mode in {"rough range", "distribution only"}
-    ) + _has_valid_iso_date(basis)
-
-
-def _matching_html_container_end(
-    markdown_text: str,
-    start: int,
-    tag: str,
-) -> int | None:
-    token = re.compile(
-        rf"(?is)<\s*(?P<closing>/)?\s*{re.escape(tag)}\b(?P<attrs>[^>]*)>"
-    )
-    depth = 1
-    for match in token.finditer(markdown_text, start):
-        if match.group("closing"):
-            depth -= 1
-            if depth == 0:
-                return match.end()
-        elif not re.search(r"/\s*$", match.group("attrs")):
-            depth += 1
-    return None
-
-
-def _html_wrapped_time_assessment(markdown_text: str) -> bool:
-    container_tags = {
-        "article",
-        "aside",
-        "blockquote",
-        "details",
-        "dialog",
-        "div",
-        "fieldset",
-        "figure",
-        "footer",
-        "form",
-        "header",
-        "li",
-        "main",
-        "nav",
-        "ol",
-        "p",
-        "pre",
-        "script",
-        "section",
-        "span",
-        "style",
-        "table",
-        "tbody",
-        "td",
-        "template",
-        "tfoot",
-        "th",
-        "thead",
-        "tr",
-        "ul",
-    }
-    void_tags = {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-    opening = re.compile(
-        r"(?is)<\s*(?P<tag>[A-Za-z][\w:-]*)\b(?P<attrs>[^>]*)>"
-    )
-    for match in opening.finditer(markdown_text):
-        tag = match.group("tag")
-        attrs = match.group("attrs")
-        explicitly_hidden = bool(
-            re.search(r"(?i)(?:^|\s)hidden(?:\s|=|$)", attrs)
-            or re.search(r"(?i)aria-hidden\s*=\s*['\"]?true\b", attrs)
-            or re.search(
-                r"(?i)style\s*=\s*['\"][^'\"]*"
-                r"(?:display\s*:\s*none|visibility\s*:\s*hidden)",
-                attrs,
-            )
-        )
-        if tag.casefold() in void_tags or re.search(r"/\s*$", attrs):
-            continue
-        closing_end = _matching_html_container_end(markdown_text, match.end(), tag)
-        if closing_end is None and not (
-            explicitly_hidden or tag.casefold() in container_tags
-        ):
-            continue
-        end = closing_end if closing_end is not None else len(markdown_text)
-        block = markdown_text[match.start() : end]
-        if re.search(rf"(?im)^##\s+(?:{TIME_ASSESSMENT_HEADING})\s*$", block) or (
-            _resolved_time_assessment_signal_count(block) >= 3
-        ):
-            return True
-    return False
-
-
-def preflight_time_assessment_mode(markdown_text: str) -> str | None:
-    sections = h2_sections(markdown_text, TIME_ASSESSMENT_HEADING)
-    if len(sections) != 1:
-        return None
-    fields = named_contract_fields(
-        sections[0],
-        TIME_ASSESSMENT_LABELS,
-        allow_indented_continuations=False,
-    )
-    mode = _scalar_contract_value(fields.get("Assessment mode", "")).casefold()
-    return mode if mode in {"rough range", "distribution only"} else None
-
-
-def _time_assessment_signal_labels(markdown_text: str) -> set[str]:
-    fields = named_contract_fields(
-        markdown_text,
-        TIME_ASSESSMENT_LABELS,
-        allow_indented_continuations=False,
-    )
-    signals = {
-        label
-        for label in (
-            "Rough elapsed-time estimate",
-            "Critical-path time-cost distribution",
-        )
-        if label in fields
-    }
-    target = _scalar_contract_value(
-        _first_contract_line(fields.get("Assessment target", ""))
-    ).casefold()
-    if target in {"ready-to-closed", "current-milestone-to-closed"}:
-        signals.add("Assessment target")
-    mode = _scalar_contract_value(
-        _first_contract_line(fields.get("Assessment mode", ""))
-    ).casefold()
-    if mode in {"rough range", "distribution only"}:
-        signals.add("Assessment mode")
-    basis = _first_contract_line(fields.get("Basis or blocker", ""))
-    if _has_valid_iso_date(basis):
-        signals.add("Basis or blocker")
-    return signals
-
-
-def preflight_time_assessment_errors(
-    markdown_text: str,
-    *,
-    raw_markdown_text: str | None = None,
-) -> list[str]:
-    hidden_errors: list[str] = []
-    if raw_markdown_text is not None:
-        contract_raw = strip_placeholder_example_blocks(raw_markdown_text)
-        raw_sections = h2_sections(contract_raw, TIME_ASSESSMENT_HEADING)
-        visible_sections = h2_sections(markdown_text, TIME_ASSESSMENT_HEADING)
-        resolved_hidden_section = any(
-            _resolved_time_assessment_signal_count(section) >= 3
-            for section in raw_sections
-        ) and len(raw_sections) > len(visible_sections)
-        html_scan_text = re.sub(
-            r"(?s)<!--.*?(?:-->|\Z)",
-            "",
-            strip_fenced_blocks(contract_raw),
-        )
-        if resolved_hidden_section or _html_wrapped_time_assessment(html_scan_text):
-            hidden_errors.append(
-                "Preflight Time Assessment must be visible Markdown, not hidden in "
-                "a fence, comment, or HTML element"
-            )
-
-    sections = h2_sections(markdown_text, TIME_ASSESSMENT_HEADING)
-    if not sections:
-        if _time_assessment_signal_labels(markdown_text):
-            return hidden_errors + [
-                "Preflight Time Assessment fields must be inside exactly one "
-                "Preflight Time Assessment section"
-            ]
-        return hidden_errors
-
-    errors: list[str] = hidden_errors
-    if len(sections) != 1:
-        errors.append("Preflight Time Assessment must appear exactly once")
-    field_counts = named_contract_field_counts(sections[0], TIME_ASSESSMENT_LABELS)
-    for label, count in field_counts.items():
-        if count > 1:
-            errors.append(f"duplicate Preflight Time Assessment field: {label}")
-    outside_signals = _time_assessment_signal_labels(
-        without_h2_sections(markdown_text, TIME_ASSESSMENT_HEADING)
-    )
-    for label in sorted(outside_signals):
-        errors.append(
-            f"Preflight Time Assessment field appears outside its section: {label}"
-        )
-    fields = named_contract_fields(
-        sections[0],
-        TIME_ASSESSMENT_LABELS,
-        allow_indented_continuations=False,
-    )
-    for label in TIME_ASSESSMENT_LABELS:
-        if not _scalar_contract_value(fields.get(label, "")):
-            errors.append(f"missing Preflight Time Assessment field: {label}")
-
-    target = _scalar_contract_value(fields.get("Assessment target", "")).casefold()
-    if target and target not in {"ready-to-closed", "current-milestone-to-closed"}:
-        errors.append(
-            "Assessment target must be Ready-to-Closed or current-milestone-to-Closed"
-        )
-
-    mode = _scalar_contract_value(fields.get("Assessment mode", "")).casefold()
-    if mode and mode not in {"rough range", "distribution only"}:
-        errors.append("Assessment mode must be Rough range or Distribution only")
-
-    basis = _scalar_contract_value(fields.get("Basis or blocker", ""))
-    if basis:
-        if not _has_valid_iso_date(basis):
-            errors.append("Basis or blocker must include a valid YYYY-MM-DD as-of date")
-        basis_detail = _rendered_contract_fragment(re.sub(
-            r"(?<!\d)20\d{2}-\d{2}-\d{2}(?!\d)", "", basis
-        )).strip(
-            " \t\r\n:;,.—-"
-        )
-        if not _has_content_character(basis_detail) or re.fullmatch(
-            r"(?i)(?:tbd|unknown|n/?a|none|pending|待定|未知|无)", basis_detail
-        ):
-            errors.append("Basis or blocker must record concrete evidence or a blocker")
-
-    estimate = _scalar_contract_value(
-        fields.get("Rough elapsed-time estimate", "")
-    )
-    distribution = fields.get("Critical-path time-cost distribution", "").strip()
-    if mode == "rough range":
-        parsed_range = _rough_elapsed_range(estimate)
-        if parsed_range is None:
-            errors.append(
-                "Rough range mode requires a low-high elapsed-time range with one unit"
-            )
-        elif parsed_range[0] >= parsed_range[1]:
-            errors.append("Rough elapsed-time range must increase from low to high")
-        normalized_distribution = _scalar_contract_value(distribution).rstrip(".").casefold()
-        if normalized_distribution != "not required: rough range recorded":
-            errors.append(
-                "Rough range mode requires distribution: Not required: rough range recorded."
-            )
-    elif mode == "distribution only":
-        if estimate.casefold() != "not quickly estimable":
-            errors.append(
-                "Distribution only mode requires estimate: Not quickly estimable"
-            )
-        if re.search(r"(?:—|–)\s*\d+(?:\.\d+)?%\s*(?:—|–)", distribution):
-            errors.append(
-                "Distribution only mode requires relative bands, not unmeasured percentages"
-            )
-        rows, invalid_rows = _distribution_rows(distribution)
-        if invalid_rows:
-            errors.append(
-                "Critical-path distribution rows must use: "
-                "- driver — Dominant/Material/Minor/Unknown — reason"
-            )
-        if len(set(rows)) < 2:
-            errors.append(
-                "Distribution only mode requires at least two concrete critical-path drivers"
-            )
-
+def preflight_contract_errors(marker: str, status: str, source: str) -> list[str]:
+    """Validate the shared atomic/sequence preflight tuple, not its interview method."""
+    errors: list[str] = []
+    if not re.fullmatch(
+        r"preflight:[A-Za-z0-9_.-]+:(?:skip:)?[0-9]{8}-[A-Za-z0-9_.-]+", marker
+    ):
+        errors.append("planning preflight marker must be a non-placeholder id")
+    status = status.casefold()
+    source = source.casefold()
+    skipped = ":skip:" in marker
+    if status not in {"done", "skipped by explicit user instruction"}:
+        errors.append("planning preflight status must be Done or Skipped by explicit user instruction")
+    if skipped and status != "skipped by explicit user instruction":
+        errors.append("preflight skip marker requires status Skipped by explicit user instruction")
+    elif not skipped and status == "skipped by explicit user instruction":
+        errors.append("skipped preflight status requires a :skip: marker")
+    if skipped and not source.startswith("user skip"):
+        errors.append("skipped preflight requires source user skip")
+    elif not skipped and source not in {"grill-with-docs", "existing decisions"}:
+        errors.append("completed preflight requires source grill-with-docs or existing decisions")
     return errors
 
 
@@ -1092,85 +688,26 @@ def main() -> int:
                 + ", ".join(incomplete_milestones)
             )
 
-    marker: str | None = None
-    marker_match = re.search(
-        r"(?im)^Planning preflight marker\s*[:：]\s*`?([^`\n]+)`?\s*$",
-        visible_text,
-    )
-    if not marker_match:
-        if not args.allow_draft:
-            errors.append("missing planning preflight marker field")
-    else:
-        marker = marker_match.group(1).strip()
-        marker_pattern = re.compile(
-            r"^preflight:[A-Za-z0-9_.-]+:(?:skip:)?[0-9]{8}-[A-Za-z0-9_.-]+$"
+    preflight_fields: dict[str, str] = {}
+    for label in ("Planning preflight marker", "Planning preflight status", "Preflight source"):
+        values = re.findall(
+            rf"(?im)^{label}\s*[:：]\s*`?([^`\n]+)`?\s*$", visible_text
         )
-        if not marker_pattern.match(marker):
-            errors.append(
-                "planning preflight marker must be a non-placeholder id like "
-                "preflight:<goal_slug>:<yyyymmdd>-<short-id> or "
-                "preflight:<goal_slug>:skip:<yyyymmdd>-<short-id>"
-            )
-
-    preflight_status: str | None = None
-    status_match = re.search(
-        r"(?im)^Planning preflight status\s*[:：]\s*`?([^`\n]+)`?\s*$",
-        visible_text,
-    )
-    if not status_match:
-        if not args.allow_draft:
-            errors.append("missing planning preflight status field")
-    else:
-        preflight_status = status_match.group(1).strip().lower()
-        valid_statuses = {
-            "done",
-            "skipped by explicit user instruction",
-        }
-        if preflight_status not in valid_statuses:
-            errors.append(
-                "planning preflight status must be Done or Skipped by explicit user instruction"
-            )
-
-    if marker and preflight_status:
-        marker_is_skip = ":skip:" in marker
-        status_is_skip = preflight_status == "skipped by explicit user instruction"
-        if marker_is_skip and not status_is_skip:
-            errors.append(
-                "preflight skip marker requires status Skipped by explicit user instruction"
-            )
-        elif status_is_skip and not marker_is_skip:
-            errors.append("skipped preflight status requires a :skip: marker")
-
-    source_match = re.search(
-        r"(?im)^Preflight source\s*[:：]\s*`?([^`\n]+)`?\s*$",
-        visible_text,
-    )
-    preflight_source = source_match.group(1).strip().casefold() if source_match else None
-    if not preflight_source:
-        if not args.allow_draft:
-            errors.append("missing planning preflight source field")
-    elif marker and preflight_status:
-        if ":skip:" in marker and not preflight_source.startswith("user skip"):
-            errors.append("skipped preflight requires source user skip")
-        elif ":skip:" not in marker and preflight_source != "grill-with-docs":
-            errors.append("completed preflight requires source grill-with-docs")
-
-    if args.allow_draft and any((marker_match, status_match, source_match)) and not all(
-        (marker_match, status_match, source_match)
-    ):
-        if not marker_match:
-            errors.append("missing planning preflight marker field")
-        if not status_match:
-            errors.append("missing planning preflight status field")
-        if not source_match:
-            errors.append("missing planning preflight source field")
-
-    errors.extend(
-        preflight_time_assessment_errors(
-            visible_text,
-            raw_markdown_text=text,
-        )
-    )
+        if len(values) > 1:
+            errors.append(f"duplicate {label} field")
+        if values:
+            preflight_fields[label] = values[0].strip()
+    if preflight_fields or not args.allow_draft:
+        for label in ("Planning preflight marker", "Planning preflight status", "Preflight source"):
+            if label not in preflight_fields:
+                field = label.removeprefix("Planning preflight ").removeprefix("Preflight ")
+                errors.append(f"missing planning preflight {field} field")
+        if len(preflight_fields) == 3:
+            errors.extend(preflight_contract_errors(
+                preflight_fields["Planning preflight marker"],
+                preflight_fields["Planning preflight status"],
+                preflight_fields["Preflight source"],
+            ))
 
     temporary_cache_section = h2_section(
         visible_text,
@@ -1197,6 +734,8 @@ def main() -> int:
             temporary_cache_labels,
         )
         for label in temporary_cache_labels:
+            if label == "Housekeeping decision source":
+                continue
             if not temporary_cache_fields.get(label):
                 errors.append(f"missing Task Temporary Cache / Housekeeping field: {label}")
 
@@ -1241,7 +780,9 @@ def main() -> int:
             r"用户(?:显式|明确)(?:确认|选择)",
             decision_source,
         )
-        if decision_source and (negated_or_inferred_decision or not positive_decision):
+        if temporary_cache_policy == "enabled" and (
+            not decision_source or negated_or_inferred_decision or not positive_decision
+        ):
             errors.append(
                 "Housekeeping decision source must record non-negated explicit user confirmation"
             )
