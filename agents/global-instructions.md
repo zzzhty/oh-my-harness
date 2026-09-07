@@ -28,7 +28,7 @@
 ## Delegation policy
 
 - Use subagents only when explicitly requested or authorized by the active environment/plan. Broad read-only review requests authorize read-only subagents, not writes; this does not invoke `$orchestrate-subagents`. Use that skill when invoked.
-- Assign bounded work with inputs, outputs, stop conditions, and explicit read-only permission or disjoint write ownership. Avoid tiny, tightly coupled, or racing assignments.
+- Assign bounded work with inputs, outputs, and stop conditions. Read-only assignments must state read-only permission and forbid writes; write-capable assignments need disjoint write ownership. Avoid tiny, tightly coupled, or racing assignments.
 - The main agent owns planning, decisions, integration, verification, and conclusions. Subagents report concise evidence, paths, commands, and blockers.
 
 ## Subagent failure handling

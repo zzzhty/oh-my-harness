@@ -380,9 +380,11 @@ def codex_version(codex: str, *, env: dict[str, str]) -> str:
 def read_codex_plugin_rows(
     codex: str,
     *,
+    marketplace_name: str,
+    plugin_names: set[str],
     env: dict[str, str],
 ) -> dict[tuple[str, str], PluginListRow]:
-    command = [codex, "plugin", "list"]
+    command = [codex, "plugin", "list", "--json", "--available"]
     try:
         result = subprocess.run(command, env=env, capture_output=True, text=True)
     except FileNotFoundError as exc:
@@ -395,7 +397,11 @@ def read_codex_plugin_rows(
             f"failed to inspect active discovery state with `{command_text(command)}`: {output}"
         )
     try:
-        return codex_plugin_rows(result.stdout)
+        return codex_plugin_rows(
+            result.stdout,
+            marketplace_name=marketplace_name,
+            plugin_names=plugin_names,
+        )
     except ValueError as exc:
         raise SystemExit(f"failed to parse `{command_text(command)}` output: {exc}") from exc
 
@@ -666,8 +672,13 @@ def _enabled_catalog_plugin_selectors(
     env: dict[str, str],
     ignored_unclassified: set[str] | None = None,
 ) -> set[tuple[str, str]]:
-    rows = read_codex_plugin_rows(codex, env=env)
     expected = set(catalog.plugin_names)
+    rows = read_codex_plugin_rows(
+        codex,
+        marketplace_name=marketplace_name,
+        plugin_names=expected,
+        env=env,
+    )
     enabled = {
         (marketplace, plugin_name)
         for (marketplace, plugin_name), row in rows.items()
@@ -822,7 +833,12 @@ def apply_codex_harness(
     transition_selectors = all_selectors
 
     def current_rows() -> dict[tuple[str, str], PluginListRow]:
-        return read_codex_plugin_rows(codex, env=env)
+        return read_codex_plugin_rows(
+            codex,
+            marketplace_name=marketplace_name,
+            plugin_names=expected_names,
+            env=env,
+        )
 
     def current_enabled() -> set[str]:
         rows = current_rows()
@@ -2125,7 +2141,12 @@ def main() -> None:
                     marketplace_name=marketplace_name,
                     excluded_skill_roots=plan.excluded_skill_roots,
                     codex_home=plan.root,
-                    rows=read_codex_plugin_rows(codex, env=env),
+                    rows=read_codex_plugin_rows(
+                        codex,
+                        marketplace_name=marketplace_name,
+                        plugin_names=set(catalog.plugin_names),
+                        env=env,
+                    ),
                     plugin_sources=plugin_sources,
                 ),
             )
