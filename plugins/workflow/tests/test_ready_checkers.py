@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 GOAL_CHECKER = ROOT / "skills" / "long-running-goal" / "scripts" / "check_goal_ready.py"
 SOP_CHECKER = ROOT / "skills" / "sop" / "scripts" / "check_sop_ready.py"
+COMPLETED_PREFLIGHT = "Completed: 2026-09-09 user turn 1 confirmed design, documentation ownership, and action permissions through Close."
+REUSED_PREFLIGHT = "Reused: preflight:demo:20260709-prior; 2026-09-09 user turn 1 verified the completed preflight and its unchanged design and permissions."
+SKIPPED_PREFLIGHT = "User skip: 2026-09-09 user turn 1 explicitly skipped the interview while preserving the recorded decisions and permissions."
+DEFERRAL_BASIS = "User decision: 2026-09-09 user turn 1 reserved approval until the reviewed release is available."
+RELEASE_ACTION = "Publish the reviewed release to the demo production service"
 
 CLOSE_EVIDENCE = """
 ## Close Gate
@@ -121,6 +126,18 @@ class ReadyCheckerTests(unittest.TestCase):
                 f"Recorded task temporary cache roots: {recorded_roots}",
             ),
         ) + evidence
+
+    def with_release_gate(self) -> str:
+        return replace_all(
+            self.with_harness(self.ready, LOOP_HARNESS),
+            ("## Milestone status table", "## M1 milestone\n\nPublish the prepared release.\n\n## Milestone status table"),
+            ("| Close | Not Started", "| M1 | Not Started | Pending | Pending |\n| Close | Not Started"),
+        ) + (
+            "\n## Deferred approval gates\n\n"
+            "| Milestone | Action | Status | Approval evidence | Deferral basis |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            f"| M1 | {RELEASE_ACTION} | Pending | None | {DEFERRAL_BASIS} |\n"
+        )
 
     @property
     def ready(self) -> str:
@@ -285,7 +302,11 @@ class ReadyCheckerTests(unittest.TestCase):
                 self.assert_goal_error(text, message, *args)
 
     def test_preflight_reuses_decisions_and_timing_is_optional(self) -> None:
-        ready = self.ready.replace("Preflight source: grill-with-docs", "Preflight source: existing decisions")
+        ready = replace_all(
+            self.ready,
+            ("Preflight source: grill-with-docs", "Preflight source: existing decisions"),
+            (COMPLETED_PREFLIGHT, REUSED_PREFLIGHT),
+        )
         for note in (
             "",
             "## Preflight Time Assessment\n\nAbout 2-4 hours, based on the local validation run; excludes CI queue time.\n\n",
@@ -306,6 +327,134 @@ class ReadyCheckerTests(unittest.TestCase):
             "Housekeeping boundary: Preserve and report all recorded task-owned roots; no cleanup.\n\n", text,
         )
         result = self.run_goal(text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_preflight_sources_require_matching_traceable_decision_evidence(self) -> None:
+        variants = {
+            "explicit_wrapper": self.ready,
+            "composed_workflow": self.ready.replace(
+                "Preflight source: grill-with-docs", "Preflight source: grilling + domain-modeling"
+            ),
+            "completed_reuse": replace_all(
+                self.ready,
+                ("Preflight source: grill-with-docs", "Preflight source: existing decisions"),
+                (COMPLETED_PREFLIGHT, REUSED_PREFLIGHT),
+            ),
+            "explicit_skip": replace_all(
+                self.ready,
+                ("preflight:demo:20260710-ready", "preflight:demo:skip:20260710-ready"),
+                ("Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction"),
+                ("Preflight source: grill-with-docs", "Preflight source: user skip"),
+                (COMPLETED_PREFLIGHT, SKIPPED_PREFLIGHT),
+            ),
+            "conversation_reference": self.ready.replace(
+                "2026-09-09 user turn 1", "conversation:demo-session turn:42"
+            ),
+        }
+        for name, document in variants.items():
+            with self.subTest(name=name):
+                result = self.run_goal(document)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+        invalid = {
+            "marker_only": (
+                re.sub(r"(?m)^Preflight evidence:.*\n", "", self.ready), "Preflight evidence"
+            ),
+            "untraceable_completion": (
+                self.ready.replace(COMPLETED_PREFLIGHT, "Completed: the plan looks complete."), "Preflight evidence"
+            ),
+            "reuse_without_completed_source": (
+                variants["completed_reuse"].replace(REUSED_PREFLIGHT, "Reused: all answers were settled."), "Preflight evidence"
+            ),
+            "skip_without_user_source": (
+                variants["explicit_skip"].replace(SKIPPED_PREFLIGHT, "User skip: urgent work."), "Preflight evidence"
+            ),
+            "completed_source_claims_reuse": (
+                self.ready.replace(COMPLETED_PREFLIGHT, REUSED_PREFLIGHT), "Preflight evidence"
+            ),
+            "reuse_source_claims_completed": (
+                variants["completed_reuse"].replace(REUSED_PREFLIGHT, COMPLETED_PREFLIGHT), "Preflight evidence"
+            ),
+            "skip_source_claims_completed": (
+                variants["explicit_skip"].replace(SKIPPED_PREFLIGHT, COMPLETED_PREFLIGHT), "Preflight evidence"
+            ),
+            "hidden_preflight_evidence": (
+                self.ready.replace(f"Preflight evidence: {COMPLETED_PREFLIGHT}", f"<!-- Preflight evidence: {COMPLETED_PREFLIGHT} -->"), "Preflight evidence"
+            ),
+            "empty_resolved_decisions": (
+                re.sub(r"(?m)^Resolved decisions:.*$", "Resolved decisions: None", self.ready), "Resolved decisions"
+            ),
+            "unresolved_required_decisions": (
+                self.ready.replace("Open decisions: None.", "Open decisions: TBD"), "Open decisions"
+            ),
+            "unexplained_no_docs": (
+                re.sub(r"(?m)^Docs written:.*$", "Docs written: Not applicable", self.ready), "Docs written"
+            ),
+        }
+        for field in ("Resolved decisions", "Open decisions", "Docs written", "Authorization evidence"):
+            invalid[f"missing_{field}"] = (
+                re.sub(rf"(?m)^{re.escape(field)}:.*\n", "", self.ready), field
+            )
+        for name, (document, diagnostic) in invalid.items():
+            with self.subTest(name=name):
+                self.assert_goal_error(document, diagnostic)
+
+    def test_preflight_links_are_resolved_relative_to_the_goal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            source = directory / "decisions.md"
+            source.write_text("# Confirmed decisions\n\nThe user confirmed the demo scope and permissions.\n", encoding="utf-8")
+            document = directory / "goal.md"
+            link = "[confirmed decisions](decisions.md)"
+            variants = {"plain": self.ready.replace("2026-09-09 user turn 1", link)}
+            for field in ("Preflight evidence", "Authorization evidence"):
+                variants[f"wrapped_{field}"] = re.sub(
+                    rf"(?m)^{re.escape(field)}: (.+)$",
+                    lambda match: f"{field}: `" + match.group(1).replace("2026-09-09 user turn 1", link) + "`",
+                    self.ready,
+                )
+            variants["wrapped_deferral_basis"] = self.with_release_gate().replace(
+                DEFERRAL_BASIS, "`" + DEFERRAL_BASIS.replace("2026-09-09 user turn 1", link) + "`"
+            )
+            variants["wrapped_approval_evidence"] = self.with_release_gate().replace(
+                "| Pending | None |", f"| Approved | `{link} records user approval of the reviewed release` |"
+            )
+            for source_exists in (True, False):
+                if not source_exists:
+                    source.unlink()
+                for name, text in variants.items():
+                    with self.subTest(name=name, source_exists=source_exists):
+                        document.write_text(text, encoding="utf-8")
+                        result = self.run_checker(GOAL_CHECKER, document)
+                        self.assertEqual(result.returncode, 0 if source_exists else 1, result.stderr)
+                        if not source_exists:
+                            self.assertIn("decisions.md", result.stderr)
+
+    def test_only_uncompleted_draft_and_historical_closed_allow_absent_new_evidence(self) -> None:
+        legacy = re.sub(
+            r"(?m)^(?:Preflight evidence|Authorization evidence|Resolved decisions|Open decisions|Docs written):.*\n",
+            "", self.ready,
+        )
+        self.assert_goal_error(legacy, "Preflight evidence")
+        closed = self.close_goal(
+            legacy, recorded_roots="goal-owned: /tmp/demo-goal-cache", evidence=CLOSE_EVIDENCE
+        )
+        result = self.run_goal(closed)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        partial_closed = closed.replace(
+            "Preflight source: grill-with-docs", f"Preflight source: grill-with-docs\n\nPreflight evidence: {COMPLETED_PREFLIGHT}"
+        )
+        self.assert_goal_error(partial_closed, "Authorization evidence")
+        draft = replace_all(
+            legacy,
+            ("Overall status: Ready", "Overall status: Draft"),
+            ("| M0 | Ready |", "| M0 | Not Started |"),
+        )
+        self.assert_goal_error(draft, "Preflight evidence", "--allow-draft")
+        draft = re.sub(
+            r"(?m)^(?:Planning preflight marker|Planning preflight status|Preflight source):.*\n", "", draft
+        )
+        result = self.run_goal(draft, "--allow-draft")
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_temporary_cache_housekeeping_rejection_matrix(self) -> None:
@@ -1147,18 +1296,8 @@ Checkpoint evidence：close revision recorded.
                 self.assert_goal_error(text, message)
 
     def test_deferred_approval_allows_preparation_but_gates_execution_and_close(self) -> None:
-        gate = """
-## Deferred approval gates
-
-| Milestone | Action | Status | Approval evidence |
-| --- | --- | --- | --- |
-| M1 | Publish the reviewed release to the demo production service | Pending | None |
-"""
-        ready = replace_all(
-            self.with_harness(self.ready, LOOP_HARNESS),
-            ("## Milestone status table", "## M1 milestone\n\nPublish the prepared release.\n\n## Milestone status table"),
-            ("| Close | Not Started", "| M1 | Not Started | Pending | Pending |\n| Close | Not Started"),
-        ) + gate
+        ready = self.with_release_gate()
+        gate = "\n## Deferred approval gates" + ready.split("## Deferred approval gates", 1)[1]
         preparing = replace_all(
             ready,
             ("Overall status: Ready", "Overall status: In Progress"),
@@ -1222,6 +1361,100 @@ Checkpoint evidence：close revision recorded.
             ready.replace("Not applicable: this demo does not access external systems.", "Release write: pending approval."),
             "unresolved external write approval keeps the goal Draft",
         )
+
+    def test_deferred_gates_require_a_reason_and_do_not_reask_recorded_approval(self) -> None:
+        ready = self.with_release_gate()
+        for reason in (
+            DEFERRAL_BASIS,
+            "Required review: 2026-09-09 user turn 1 requires final release artifact review before production publication.",
+        ):
+            result = self.run_goal(ready.replace(DEFERRAL_BASIS, reason))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+        active_four_column = replace_all(
+            ready,
+            ("| Approval evidence | Deferral basis |", "| Approval evidence |"),
+            ("| --- | --- | --- | --- | --- |", "| --- | --- | --- | --- |"),
+            (f"| {DEFERRAL_BASIS} |", "|"),
+        )
+        cases = {
+            "old_active_gate": (active_four_column, "Deferral basis"),
+            "no_reason": (ready.replace(DEFERRAL_BASIS, ""), "Deferral basis"),
+            "agent_deferred": (ready.replace(DEFERRAL_BASIS, "User decision: ask later because release is in a future milestone."), "Deferral basis"),
+            "approved_without_traceable_source": (
+                ready.replace("| Pending | None |", "| Approved | User approved |"), "approval evidence"
+            ),
+            "duplicate_action": (
+                ready + f"| M1 | {RELEASE_ACTION} | Approved | 2026-09-09 user turn 2 approved the release | {DEFERRAL_BASIS} |\n",
+                "duplicate",
+            ),
+            "normalized_duplicate_action": (
+                ready + f"| M1 | {RELEASE_ACTION.upper().replace(' ', '  ')} | Approved | 2026-09-09 user turn 2 approved the release | {DEFERRAL_BASIS} |\n",
+                "duplicate",
+            ),
+            "approved_in_prior_milestone": (
+                ready + f"| M0 | {RELEASE_ACTION} | Approved | 2026-09-09 user turn 2 approved the release | {DEFERRAL_BASIS} |\n",
+                "duplicate",
+            ),
+            "pending_but_already_preapproved": (
+                ready.replace("Not applicable: this demo does not access external systems.", RELEASE_ACTION),
+                "Pending",
+            ),
+        }
+        for name, (document, message) in cases.items():
+            with self.subTest(name=name):
+                result = self.run_goal(document)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(message.casefold(), result.stderr.casefold())
+
+        action = "Publish reviewed release v1 to prod"
+        for approved_action, pending_action in (
+            (action + "-preview", action),
+            (action + " after preview validation", action + " after production review"),
+        ):
+            with self.subTest(approved_action=approved_action, pending_action=pending_action):
+                separate_authority = replace_all(
+                    ready,
+                    (RELEASE_ACTION, pending_action),
+                    ("Not applicable: this demo does not access external systems.", approved_action),
+                )
+                result = self.run_goal(separate_authority)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                distinct_gates = separate_authority + (
+                    f"| M0 | {approved_action} | Approved | 2026-09-09 user turn 2 approved this exact action | {DEFERRAL_BASIS} |\n"
+                )
+                result = self.run_goal(distinct_gates)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+        # A historical Closed four-column gate remains readable; it grants no new action.
+        historical = self.close_goal(
+            replace_all(
+                active_four_column,
+                ("| M1 | Not Started | Pending | Pending |", "| M1 | Done | Passed | Done |"),
+                ("| Pending | None |", "| Approved | User approved the reviewed release |"),
+            ),
+            recorded_roots="goal-owned: /tmp/demo-goal-cache", evidence=CLOSE_EVIDENCE,
+        )
+        historical = re.sub(r"(?m)^(?:Preflight evidence|Authorization evidence):.*\n", "", historical)
+        result = self.run_goal(historical)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_frozen_authorization_remains_valid_across_later_milestone_states(self) -> None:
+        prepared = replace_all(
+            self.ready,
+            ("Overall status: Ready", "Overall status: In Progress"),
+            ("## Milestone status table", "## M1 milestone\n\nComplete the authorized local documentation and validation.\n\n## Milestone status table"),
+            ("| M0 | Ready | Pending | Pending |", "| M0 | Done | Passed | Done |"),
+            ("| Close | Not Started", "| M1 | In Progress | Pending | Pending |\n| Close | Not Started"),
+        )
+        closing = replace_all(
+            prepared,
+            ("| M1 | In Progress | Pending | Pending |", "| M1 | Done | Passed | Done |"),
+            ("| Close | Not Started |", "| Close | In Progress |"),
+        )
+        for document in (self.ready, prepared, closing):
+            result = self.run_goal(document)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_hard_stop_resource_failures_are_not_keyword_stops(self) -> None:
         for reason in (
@@ -1290,6 +1523,7 @@ Checkpoint evidence：close revision recorded.
             ("preflight:demo:20260710-ready", "preflight:demo:skip:20260710-ready"),
             ("Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction"),
             ("Preflight source: grill-with-docs", "Preflight source: user skip"),
+            (COMPLETED_PREFLIGHT, SKIPPED_PREFLIGHT),
         )
         loop_shaped = self.with_harness(ready, LOOP_HARNESS)
         close_in_progress = replace_all(

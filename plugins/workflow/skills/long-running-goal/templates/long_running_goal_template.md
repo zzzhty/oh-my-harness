@@ -6,7 +6,7 @@
 
 ## 使用说明
 
-复制到现有 active goal directory，替换占位符，按实际工作增删阶段并同步状态表。应用 `components/planning-preflight.md`，先复用已决策事实，只补实质缺项；时间估算可选，清理默认 Disabled。执行进度只在目标文件中维护。
+复制到现有 active goal directory，替换占位符，按实际工作增删阶段并同步状态表。读取并完成 `components/planning-preflight.md` 的必经组合流程及直到 Close 的授权覆盖检查；复用答案不免除流程。记录完成、有效旧 preflight 复用或用户明确跳过的来源。时间估算可选，清理默认 Disabled。执行进度只在目标文件中维护。
 
 ## Goal 摘要
 
@@ -32,13 +32,15 @@ Planning preflight marker：`<preflight:<goal_slug>:<yyyymmdd>-<short-id> / pref
 
 Planning preflight status：`<Done / Skipped by explicit user instruction>`
 
-Preflight source：`<existing decisions / grill-with-docs / user skip>`
+Preflight source：`<grilling + domain-modeling / grill-with-docs / existing decisions / user skip>`
+
+Preflight evidence：`<Completed: 来源及实际检查结果 / Reused: 已完成 preflight id、来源及当前覆盖结果 / User skip: 用户明确跳过的来源；使用可定位 Markdown 链接或带日期的 user request/message/turn 引用>`
 
 Resolved decisions：`<summary or doc paths>`
 
 Open decisions：`<none or explicit runtime hard stops>`
 
-Docs written：`<CONTEXT.md / ADR paths / Not applicable>`
+Docs written：`<写入或复用的文档路径 / Not applicable: 原因>`
 
 ## Preflight Time Assessment
 
@@ -99,7 +101,9 @@ M0 设计冻结时的当前基线：
 
 ## Pre-Approval / YOLO 边界
 
-Ready 前必须冻结设计和权限边界。已明确的后续动作可以在 Deferred approval gates 中等待批准，先完成前面的已授权阶段；边界未明确时保持 `Draft`。
+Ready 前按阶段至 Close 盘点实际动作、目标、范围、条件及授权来源，复用既有授权，在 grilling 中解决未覆盖部分。仅用户明确保留或规则要求最终审阅的决定进入 Deferred approval gates；边界未明确时保持 `Draft`。
+
+Authorization evidence：`<可定位 Markdown 链接或带日期的 user request/message/turn 引用，逐项说明已批准动作、目标、范围、条件及适用阶段；清理引用独立 Housekeeping policy/source，不在此处扩大权限>`
 
 1. Pre-approved YOLO local operations / 预授权本地操作：
    - `<本 goal 范围内默认允许的非破坏性本地动作，例如 code/docs/source skill edits、rebuild、refresh、reinstall、dependency restore、tests、lint、formatting、link checks、plugin/cache refresh、project-owned generated-artifact cleanup；不要在此处推导任务临时缓存清理授权。>`
@@ -112,17 +116,18 @@ Ready 前必须冻结设计和权限边界。已明确的后续动作可以在 D
 
 ## Deferred approval gates
 
-没有延后批准的动作时删除本节。按 `components/planning-preflight.md` 记录具体动作和目标，将准备工作放在此前阶段。Pending 阻止所属阶段开工、In Progress/Done 和最终关闭；只有实际用户授权及其证据才能改为 Approved。
+没有延后批准的动作时删除本节。按 `components/planning-preflight.md` 记录具体动作、目标、范围、条件及有来源的延期依据，将准备工作放在此前阶段。Pending 阻止所属阶段开工、In Progress/Done 和最终关闭；先核实既有来源，已覆盖则直接记录 Approved，禁止仅因进入新阶段重问。保留真实最终审批 gate。
 
-| Milestone | Action | Status | Approval evidence |
-| --- | --- | --- | --- |
-| <已有的 M 编号或 Close> | <具体动作和目标> | Pending | None |
+| Milestone | Action | Status | Approval evidence | Deferral basis |
+| --- | --- | --- | --- | --- |
+| <已有的 M 编号或 Close> | <具体动作、目标、范围及条件> | Pending | None | <User decision: 来源及保留的决定 / Required review: 规则来源及待审阅材料> |
 
 ## Goal 执行合同
 
 1. 依据 `workflow:long-running-goal` 的执行与关闭流程推进，并保留本文件冻结的权限、验收和硬停止边界。Ready 之后仍需用户请求执行。
 2. 状态只维护整体状态和阶段状态表。阶段按顺序开始；完成记录必须包含行为、命令结果、文档、回滚和剩余风险。运行必需验证，通过 review gate 后应用 `components/checkpoint.md`，再确认 `components/milestone-scope-gate.md` 并推进。
 3. 只在已授权范围内更新当前 goal；修改 reusable skill/template 需要相应源码授权。不得静默放宽验收或掩盖失败。
+   - 阶段入口和上下文恢复后比对动作、目标、范围、条件及最新授权变更；已覆盖权限继续使用，只询问未覆盖增量或已记录最终审批。
 4. Close 使用本文件冻结的 housekeeping policy、当前文档同步与归档规则；缺少清理授权时保留缓存。
 
 Checkpoint evidence format：

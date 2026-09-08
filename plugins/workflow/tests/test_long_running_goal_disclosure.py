@@ -165,12 +165,14 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
 
     def test_preflight_reuses_decisions_and_keeps_estimates_optional(self) -> None:
         preflight = PREFLIGHT.read_text(encoding="utf-8")
-        self.assertIn("Reuse answers already settled", preflight)
+        self.assertIn("Reuse confirmed answers", preflight)
         self.assertIn("no distribution, fixed sentinel, or driver count is required", preflight)
         self.assertIn("Skip never supplies missing authority", preflight)
         for template in (ATOMIC_TEMPLATE, SEQUENCE_TEMPLATE):
             text = template.read_text(encoding="utf-8")
             self.assertIn("existing decisions", text)
+            for field in ("Preflight evidence", "Authorization evidence", "Deferral basis"):
+                self.assertIn(field, text)
             self.assertNotIn("Assessment mode", text)
             self.assertNotIn("Critical-path time-cost distribution", text)
         self.assertIn("Change a reusable skill or template only when source mutation is authorized", REFERENCES["execute"].read_text(encoding="utf-8"))

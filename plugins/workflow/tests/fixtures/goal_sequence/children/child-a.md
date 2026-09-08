@@ -8,9 +8,13 @@ Planning preflight status: Done
 
 Preflight source: grill-with-docs
 
+Preflight evidence: Completed: 2026-09-09 user turn 1 confirmed design, documentation ownership, and action permissions through Close.
+
 Resolved decisions: child-a owns one local demo outcome with no compatibility migration, external write, release/deploy, destructive, privacy, or cross-child scope.
 
 Open decisions: None.
+
+Docs written: Not applicable: this goal records its owner-specific durable decisions.
 
 ## M0 milestone
 
@@ -75,6 +79,8 @@ Report the failed command and exact child-a breakpoint.
 Continue from the first incomplete child-a milestone.
 
 ## Pre-Approval / YOLO
+
+Authorization evidence: 2026-09-09 user turn 1 authorized the child-a bounded local edits, tests, validation, and continuation through Close within the recorded owner scope; housekeeping remains governed by its independent policy and decision source.
 
 Pre-approved YOLO local operations:
 

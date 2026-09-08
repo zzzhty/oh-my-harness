@@ -370,9 +370,13 @@ def _line_links(line: str, definitions: dict[str, str]) -> list[str]:
     return targets
 
 
-def relative_markdown_links(file_path: Path) -> list[RelativeMarkdownLink]:
+def relative_markdown_links(
+    file_path: Path, *, markdown_text: str | None = None
+) -> list[RelativeMarkdownLink]:
     links: list[RelativeMarkdownLink] = []
-    lines = _navigable_lines(file_path.read_text(encoding="utf-8"))
+    lines = _navigable_lines(
+        file_path.read_text(encoding="utf-8") if markdown_text is None else markdown_text
+    )
     definitions = _reference_definitions(lines)
     for line_number, line in lines:
         for target in _line_links(line, definitions):

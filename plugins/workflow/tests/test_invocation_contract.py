@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,29 @@ def skill_description(skill_file: Path) -> str:
 
 
 class InvocationContractTests(unittest.TestCase):
+    def test_preflight_composition_preserves_explicit_wrapper_invocation_policy(self) -> None:
+        mattpocock = REPO_ROOT / "plugins" / "mattpocock-skills" / "skills"
+        wrapper = mattpocock / "grill-with-docs"
+        frontmatter = (wrapper / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+        fields = dict(
+            line.split(":", 1) for line in frontmatter.splitlines() if ":" in line
+        )
+        self.assertEqual(fields["disable-model-invocation"].strip(), "true")
+        metadata = (wrapper / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        policy = re.search(r"(?m)^policy:\n((?:[ \t]+[^\n]+\n?)*)", metadata)
+        self.assertIsNotNone(policy)
+        assert policy is not None
+        self.assertRegex(policy.group(1), r"(?m)^\s+allow_implicit_invocation:\s+false\s*$")
+
+        preflight = (LONG_RUNNING_ROOT / "components" / "planning-preflight.md").read_text(encoding="utf-8")
+        for method in ("grilling", "domain-modeling"):
+            with self.subTest(method=method):
+                source = mattpocock / method / "SKILL.md"
+                method_frontmatter = source.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertNotRegex(method_frontmatter, r"(?m)^disable-model-invocation:\s*true\s*$")
+                self.assertIn(f"mattpocock-skills:{method}", preflight)
+        self.assertIn("without implicitly invoking its explicit-only entrypoint", preflight)
+
     def test_summary_trigger_covers_reference_and_source_walkthrough_modes(self) -> None:
         description = skill_description(SUMMARY_ROOT / "SKILL.md")
         metadata = (SUMMARY_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")

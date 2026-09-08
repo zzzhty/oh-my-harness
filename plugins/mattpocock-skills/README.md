@@ -21,6 +21,8 @@ Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
 
 Core/specialized labels in the selection proposal are maintenance priorities, not additional activation modes. Skills and their referenced resources live under `skills/`; `agents/openai.yaml` retains native Codex metadata, and existing frontmatter flags support the other harnesses that consume them.
 
+`grill-with-docs` remains an explicit user entrypoint. A workflow with its own planning trigger, such as long-running-goal preflight, directly composes `grilling` and `domain-modeling`; it does not implicitly invoke the wrapper or obtain implementation authority from planning. Both methods must be available, and document creation follows domain-modeling's existing ownership and value rules.
+
 The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder and wizard. They are no longer callable in this distribution; their source remains in Git history and upstream. Existing user artifacts and historical logs are preserved.
 
 ## Maintenance

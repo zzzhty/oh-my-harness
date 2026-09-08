@@ -8,6 +8,14 @@ Planning preflight status: Done
 
 Preflight source: grill-with-docs
 
+Preflight evidence: Completed: 2026-09-09 user turn 1 confirmed design, documentation ownership, and action permissions through Close.
+
+Resolved decisions: The demo owns bounded local code and documentation edits, validation, and rollback through Close.
+
+Open decisions: None.
+
+Docs written: Not applicable: the goal records all durable decisions for this fixture.
+
 ## M0 milestone
 
 Baseline recorded.
@@ -83,6 +91,8 @@ Report the failed command and breakpoint.
 Continue from the first incomplete milestone.
 
 ## Pre-Approval / YOLO
+
+Authorization evidence: 2026-09-09 user turn 1 authorized the demo bounded local edits, tests, validation, and continuation through Close within the recorded owner scope; housekeeping remains governed by its independent policy and decision source.
 
 Pre-approved YOLO local operations:
 

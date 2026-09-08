@@ -13,7 +13,7 @@ A `Ready` goal records current truth, ordered work, the next milestone, gates, v
 
 Use `templates/long_running_goal_template.md` for one goal and `templates/long_running_goal_sequence_template.md` for a strict sequence unless the repository has a stronger local convention. Prefer the user-specified path, then an existing active goal/TODO directory or index, and use `docs/todo/<goal_slug>_long_running_goal_plan.md` only as a fallback. Do not create a parallel planning tree or append `/todo` to a directory that already serves as the goal directory. Templates and readiness checkers own field shape and structural completeness.
 
-Before goal creation or conversion, or first implementation without a completed marker, apply `components/planning-preflight.md`. Reuse settled decisions, resolve material gaps, and record the marker. Time estimates are optional. Task temporary cache cleanup defaults to `Disabled`; only `Enabled` requires explicit cleanup authorization.
+Before goal creation or conversion, or first implementation without a supported completed marker, read and apply `components/planning-preflight.md`. Its required grilling and domain-modeling composition includes authorization coverage through Close; a complete-looking plan cannot skip it. Reuse confirmed answers and valid completed preflights, and record sourced completion, reuse or explicit user-skip evidence. The `grill-with-docs` wrapper remains an explicit-only entrypoint. Time estimates are optional. Task temporary cache cleanup defaults to `Disabled`; only `Enabled` requires explicit cleanup authorization.
 
 Creation may produce a non-executable `Draft` with unresolved decisions or a complete `Ready` contract. Validate Draft with `check_goal_ready.py --allow-draft`. Never invent missing design or permission to satisfy a checker.
 
@@ -51,6 +51,8 @@ Before `Ready`, freeze:
 1. allowed local operations needed by the plan;
 2. allowed connector, API, issue, PR, CI, automation, hook, messaging, and other external reads or writes;
 3. runtime hard stops, rollback, and the explicit task-temporary-cache policy.
+
+Record the source, action, target, scope and conditions of approval under the preflight's existing authority owners. On execution or resume, read those sources and any later changes before asking: still-covered authority survives milestone boundaries and context transitions. Satisfying an approval's validation condition does not require another approval. Ask only for an uncovered increment or a sourced final-review gate; readiness and action pre-approval do not themselves start execution.
 
 Milestone boundaries, reviews, checkpoints, rebuilds, refreshes, dependency restores, code or documentation edits, tests, formatting, link checks, and other planned non-destructive local operations are non-stops. Run them and continue when their gates pass.
 

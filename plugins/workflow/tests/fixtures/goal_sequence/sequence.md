@@ -8,11 +8,15 @@ Planning preflight status: Done
 
 Preflight source: grill-with-docs
 
+Preflight evidence: Completed: 2026-09-09 user turn 1 confirmed design, documentation ownership, and action permissions through Close.
+
 Resolved decisions: Both child scopes, owners, compatibility, order, rollback, permissions, release/deploy, privacy, and non-goal boundaries are frozen for this fixture.
 
 Promotion policy: automatic-after-close
 
 Open decisions: None.
+
+Docs written: Not applicable: this goal records its owner-specific durable decisions.
 
 ## Preflight Time Assessment
 
@@ -129,6 +133,8 @@ Keep a hard stop at its owning child and record the exact breakpoint without pro
 Treat the Child Execution Register as the sole current-state authority and follow the first legal transition.
 
 ## Pre-Approval / YOLO
+
+Authorization evidence: 2026-09-09 user turn 1 authorized the sequence parent bounded local edits, tests, validation, and continuation through Close within the recorded owner scope; housekeeping remains governed by its independent policy and decision source.
 
 Pre-approved YOLO local operations:
 

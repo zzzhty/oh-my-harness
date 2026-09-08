@@ -17,6 +17,7 @@ sys.path.insert(0, str(SHARED))
 from markdown_contract import (  # noqa: E402
     missing_required_pattern_errors,
     placeholder_errors,
+    relative_markdown_links,
     render_errors,
     strip_fenced_blocks,
 )
@@ -77,7 +78,7 @@ def h2_section(markdown_text: str, heading_pattern: str) -> str | None:
 
 
 def deferred_approval_errors(
-    markdown_text: str, states: list[MilestoneState]
+    markdown_text: str, states: list[MilestoneState], *, legacy_closed: bool = False
 ) -> list[str]:
     sections = h2_sections(markdown_text, r"Deferred approval gates")
     if not sections:
@@ -89,22 +90,46 @@ def deferred_approval_errors(
         for line in sections[0].splitlines()
         if line.lstrip().startswith("|")
     ]
-    header = ["milestone", "action", "status", "approval evidence"]
+    header = ["milestone", "action", "status", "approval evidence", "deferral basis"]
+    if legacy_closed and rows and len(rows[0]) == 4:
+        header = header[:4]
     if (
         len(rows) < 3
         or [cell.casefold() for cell in rows[0]] != header
-        or len(rows[1]) != 4
+        or len(rows[1]) != len(header)
         or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in rows[1])
     ):
-        return ["Deferred approval gates requires a Milestone / Action / Status / Approval evidence table"]
+        return ["Deferred approval gates requires a Milestone / Action / Status / Approval evidence / Deferral basis table"]
 
     errors: list[str] = []
     by_name = {state.name.casefold(): state for state in states}
+    seen: set[str] = set()
+    approval = h2_section(markdown_text, r"Pre-Approval\s*/\s*YOLO(?:\s+边界)?") or ""
+    approved_fields = named_contract_fields(approval, {
+        "local": r"Pre-approved\s+YOLO\s+local\s+operations",
+        "external": r"Pre-approved\s+external\s+reads/writes",
+        "evidence": r"Authorization\s+evidence",
+        "stops": r"Runtime\s+hard\s+stops",
+        "nonstops": r"Non-stops",
+    })
+    approved_actions = {
+        normalize_action(re.sub(r"^\s*(?:[-*+]\s+|\d+\.\s+)", "", line))
+        for line in (approved_fields.get("local", "") + "\n" + approved_fields.get("external", "")).splitlines()
+        if line.strip()
+    }
     for cells in rows[2:]:
-        if len(cells) != 4:
-            errors.append("deferred approval gate requires four cells")
+        if len(cells) != len(header):
+            errors.append("deferred approval gate requires five cells including Deferral basis")
             continue
-        milestone, action, status, evidence = cells
+        milestone, action, status, evidence = cells[:4]
+        key = normalize_action(action)
+        if key in seen:
+            errors.append(f"duplicate deferred approval gate for {milestone}: {action}")
+        seen.add(key)
+        if len(cells) == 5:
+            basis = cells[4]
+            if not re.match(r"(?i)^(?:User decision|Required review):\s*\S", basis) or not evidence_has_source(basis):
+                errors.append("Deferral basis requires a sourced User decision or Required review")
         state = by_name.get(milestone.casefold())
         if state is None:
             errors.append(f"deferred approval gate names unknown milestone: {milestone}")
@@ -113,6 +138,8 @@ def deferred_approval_errors(
         if status.casefold() not in {"pending", "approved"}:
             errors.append("deferred approval gate status must be Pending or Approved")
         elif status.casefold() == "pending":
+            if key and key in approved_actions:
+                errors.append(f"Pending approval gate conflicts with pre-approved action: {action}")
             if state and state.status.casefold() in {"in progress", "done"}:
                 errors.append(
                     f"{state.name} cannot be {state.status} with a Pending approval gate"
@@ -127,6 +154,8 @@ def deferred_approval_errors(
             normalize_contractions(evidence),
         ):
             errors.append("Approved deferred gate requires actual user approval evidence")
+        elif not legacy_closed and not evidence_has_source(evidence):
+            errors.append("Approved deferred gate requires sourced Approval evidence")
     return errors
 
 
@@ -183,9 +212,96 @@ def preflight_contract_errors(marker: str, status: str, source: str) -> list[str
         errors.append("skipped preflight status requires a :skip: marker")
     if skipped and not source.startswith("user skip"):
         errors.append("skipped preflight requires source user skip")
-    elif not skipped and source not in {"grill-with-docs", "existing decisions"}:
-        errors.append("completed preflight requires source grill-with-docs or existing decisions")
+    elif not skipped and source not in {"grilling + domain-modeling", "grill-with-docs", "existing decisions"}:
+        errors.append("completed preflight requires source grilling + domain-modeling, grill-with-docs or existing decisions")
     return errors
+
+
+def normalize_action(value: str) -> str:
+    """Compare explicitly repeated action text, not inferred semantic equivalents."""
+    return " ".join(value.replace("`", "").replace("**", "").casefold().split()).strip(" .")
+
+
+def evidence_has_source(value: str) -> bool:
+    """Recognize locators, not the truth or authority of the cited content."""
+    navigable = re.sub(r"`+[^`]*`+", "", value)
+    return bool(
+        re.search(r"\[[^\]\n]+\]\(\s*[^)\s]+(?:\s+[^)]*)?\)", navigable)
+        or (
+            re.search(r"\b\d{4}-\d{2}-\d{2}\b", value)
+            and re.search(r"(?i)\b(?:user|request|message|turn)\b", value)
+        )
+        or re.search(r"(?i)\bconversation:\S+\s+turn:\S+", value)
+    )
+
+
+def single_evidence_field(text: str, label: str, errors: list[str]) -> str:
+    values = re.findall(rf"(?im)^{re.escape(label)}\s*[:：]\s*([^\n]*)$", text)
+    if len(values) != 1:
+        errors.append(f"{label} requires one visible field")
+        return ""
+    value = values[0].strip().strip("`").strip()
+    if not value or re.fullmatch(r"(?i)none\.?|n/a|tbd|unknown|pending", value):
+        errors.append(f"{label} requires concrete evidence")
+    return value
+
+
+def preflight_evidence_errors(text: str, source: str) -> list[str]:
+    errors: list[str] = []
+    evidence = single_evidence_field(text, "Preflight evidence", errors)
+    source = source.casefold()
+    prefix = "User skip" if source.startswith("user skip") else "Reused" if source == "existing decisions" else "Completed"
+    if not re.match(rf"(?i)^{prefix}:\s*\S", evidence) or not evidence_has_source(evidence):
+        errors.append(f"Preflight evidence requires sourced {prefix}: evidence matching Preflight source")
+    if prefix == "Reused" and not re.search(r"preflight:[A-Za-z0-9_.-]+:(?:skip:)?\d{8}-[A-Za-z0-9_.-]+", evidence):
+        errors.append("Preflight evidence reuse requires a completed preflight id and source")
+    for label in ("Resolved decisions", "Open decisions", "Docs written"):
+        # None is meaningful only for open decisions, not missing decisions/evidence.
+        if label == "Open decisions":
+            values = re.findall(r"(?im)^Open decisions\s*[:：]\s*([^\n]*)$", text)
+            if len(values) != 1 or not values[0].strip().strip("`").strip():
+                errors.append("Open decisions requires one visible field")
+            else:
+                value = values[0].strip().strip("`").strip().rstrip(".")
+                if value.casefold() not in {"none", "n/a", "not applicable"} and (
+                    not re.search(r"(?i)\bruntime hard[- ]stop", value)
+                    or re.search(r"(?i)\b(?:tbd|pending|unresolved|unknown|to be decided|needs? approval|awaiting approval)\b", value)
+                ):
+                    errors.append("Open decisions may contain only bounded runtime hard stops")
+        else:
+            value = single_evidence_field(text, label, errors)
+            if label == "Docs written" and re.fullmatch(r"(?i)Not applicable[.:]?", value):
+                errors.append("Docs written requires document paths or Not applicable: reason")
+    approval = h2_section(text, r"Pre-Approval\s*/\s*YOLO(?:\s+边界)?") or ""
+    authority = single_evidence_field(approval, "Authorization evidence", errors)
+    if not evidence_has_source(authority):
+        errors.append("Authorization evidence requires a source covering the pre-approved actions")
+    return errors
+
+
+def evidence_link_errors(path: Path) -> list[str]:
+    """Check local destinations cited by the new evidence owners only."""
+    relevant_lines: set[int] = set()
+    normalized_lines: list[str] = []
+    deferred = False
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.startswith("## "):
+            deferred = line.strip().casefold() == "## deferred approval gates"
+        if re.match(r"(?i)^(?:Preflight evidence|Authorization evidence)\s*[:：]", line) or (deferred and line.lstrip().startswith("|")):
+            relevant_lines.add(number)
+            # Templates permit a code-styled entire value; its claimed evidence
+            # still needs destination validation, unlike an ordinary code example.
+            if line.lstrip().startswith("|"):
+                line = "| " + " | ".join(_table_cells(line)) + " |"
+            else:
+                field, separator, value = re.split(r"([:：])", line, maxsplit=1)
+                line = field + separator + " " + value.strip().strip("`")
+        normalized_lines.append(line)
+    return [
+        f"missing evidence source: {link.target}"
+        for link in relative_markdown_links(path, markdown_text="\n".join(normalized_lines))
+        if link.line in relevant_lines and not link.resolved.exists()
+    ]
 
 
 def normalize_contractions(value: str) -> str:
@@ -429,6 +545,11 @@ def main() -> int:
         visible_text,
     )
     normalized_overall_statuses = [status.strip().lower() for status in overall_statuses]
+    document_is_draft = set(normalized_overall_statuses) == {"draft"}
+    has_new_evidence = bool(re.search(
+        r"(?im)^(?:Preflight evidence|Authorization evidence)\s*[:：]", visible_text
+    ))
+    legacy_closed = set(normalized_overall_statuses) == {"closed"} and not has_new_evidence
 
     errors.extend(placeholder_errors(text))
 
@@ -539,6 +660,9 @@ def main() -> int:
             "Runtime hard stops": r"Runtime\s+hard\s+stops",
             "Non-stops": r"Non-stops",
         }
+        # Delimit authority evidence so it is not consumed as an operation/non-stop.
+        if has_new_evidence:
+            approval_labels["Authorization evidence"] = r"Authorization\s+evidence"
         approval_fields = named_contract_fields(approval, approval_labels)
         for label in approval_labels:
             if not approval_fields.get(label):
@@ -565,9 +689,6 @@ def main() -> int:
         external_approvals = approval_fields.get(
             "Pre-approved external reads/writes", ""
         )
-        document_is_draft = bool(normalized_overall_statuses) and set(
-            normalized_overall_statuses
-        ) == {"draft"}
         if re.search(
             r"(?i)\b(?:pending approval|approval pending|TBD|to be decided|"
             r"unapproved|needs? approval|awaiting (?:user )?approval)\b",
@@ -613,7 +734,7 @@ def main() -> int:
             break
 
     states = milestone_states(visible_text)
-    errors.extend(deferred_approval_errors(visible_text, states))
+    errors.extend(deferred_approval_errors(visible_text, states, legacy_closed=legacy_closed))
     if not states:
         errors.append("missing milestone status table")
     close_rows = [state for state in states if state.name.casefold() == "close"]
@@ -763,7 +884,7 @@ def main() -> int:
             errors.append(f"duplicate {label} field")
         if values:
             preflight_fields[label] = values[0].strip()
-    if preflight_fields or not args.allow_draft:
+    if preflight_fields or has_new_evidence or not (args.allow_draft and document_is_draft):
         for label in ("Planning preflight marker", "Planning preflight status", "Preflight source"):
             if label not in preflight_fields:
                 field = label.removeprefix("Planning preflight ").removeprefix("Preflight ")
@@ -774,6 +895,9 @@ def main() -> int:
                 preflight_fields["Planning preflight status"],
                 preflight_fields["Preflight source"],
             ))
+        if not legacy_closed:
+            errors.extend(preflight_evidence_errors(visible_text, preflight_fields.get("Preflight source", "")))
+            errors.extend(evidence_link_errors(path))
 
     temporary_cache_section = h2_section(
         visible_text,

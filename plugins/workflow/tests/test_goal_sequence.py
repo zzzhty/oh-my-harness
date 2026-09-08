@@ -390,9 +390,9 @@ class GoalSequenceCheckerTests(unittest.TestCase):
         gate = """
 ## Deferred approval gates
 
-| Milestone | Action | Status | Approval evidence |
-| --- | --- | --- | --- |
-| M0 | Apply the reviewed release to the demo service | Pending | None |
+| Milestone | Action | Status | Approval evidence | Deferral basis |
+| --- | --- | --- | --- | --- |
+| M0 | Apply the reviewed release to the demo service | Pending | None | User decision: 2026-09-09 user turn 1 reserved child release approval until the artifact review. |
 """
         for stage in (None, self.first_child_executing, self.successor_executing):
             with self.subTest(stage=stage), self.sequence_workspace() as workspace:
@@ -930,6 +930,10 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             )
             self.replace_once(child, "Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction")
             self.replace_once(child, "Preflight source: grill-with-docs", "Preflight source: user skip")
+            self.regex_replace_once(
+                child, r"^Preflight evidence:.*$",
+                "Preflight evidence: User skip: 2026-09-09 user turn 1 explicitly skipped child-a's interview while retaining its decisions and permissions.",
+            )
             self.replace_once(
                 parent,
                 "| child-a | preflight:demo-child-a:20260713-a | Done | grill-with-docs |",
@@ -948,7 +952,15 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             self.replace_once(parent, "preflight:demo-sequence:20260713-parent", "preflight:demo-sequence:skip:20260713-parent")
             self.replace_once(parent, "Planning preflight status: Done", "Planning preflight status: Skipped by explicit user instruction")
             self.replace_once(parent, "Preflight source: grill-with-docs", "Preflight source: user skip (explicit instruction)")
+            self.regex_replace_once(
+                parent, r"^Preflight evidence:.*$",
+                "Preflight evidence: User skip: 2026-09-09 user turn 1 explicitly skipped the parent interview while retaining frozen child boundaries.",
+            )
             self.replace_once(child, "Preflight source: grill-with-docs", "Preflight source: existing decisions")
+            self.regex_replace_once(
+                child, r"^Preflight evidence:.*$",
+                "Preflight evidence: Reused: preflight:demo-child-a:20260712-prior; 2026-09-09 user turn 1 verified the completed preflight and unchanged child-a permissions.",
+            )
             mismatch = self.run_sequence(workspace)
             self.assertEqual(mismatch.returncode, 1)
             self.assertIn("preflight source disagrees with Child Preflight Register", mismatch.stderr)
@@ -967,8 +979,10 @@ Critical-path time-cost distribution: Not required: rough range recorded.
                 "Planning preflight marker: preflight:demo-child-a:20260713-a\n\n",
                 "Planning preflight status: Done\n\n",
                 "Preflight source: grill-with-docs\n\n",
+                "Preflight evidence: Completed: 2026-09-09 user turn 1 confirmed design, documentation ownership, and action permissions through Close.\n\n",
             ):
                 self.replace_once(child, line, "")
+            self.regex_replace_once(child, r"^Authorization evidence:.*$", "")
 
             atomic = self.run_checker(GOAL_CHECKER, child, "--allow-draft")
             self.assertEqual(atomic.returncode, 0, atomic.stderr)
@@ -977,6 +991,47 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             self.assertIn("child child-a is missing Planning preflight marker", sequence.stderr)
             self.assertIn("child child-a is missing Planning preflight status", sequence.stderr)
             self.assertIn("child child-a is missing Preflight source", sequence.stderr)
+
+    def test_parent_authority_cannot_supply_missing_child_preflight_or_approval_evidence(self) -> None:
+        for field in ("Preflight evidence", "Authorization evidence"):
+            with self.subTest(field=field), self.sequence_workspace() as workspace:
+                child = workspace / "children" / "child-b.md"
+                self.regex_replace_once(child, rf"^{re.escape(field)}:.*$", "")
+                # Child-b remains Draft, but its declaration of completed preflight
+                # must have evidence even before the automatic serial handoff.
+                atomic = self.run_checker(GOAL_CHECKER, child, "--allow-draft")
+                self.assertEqual(atomic.returncode, 1, atomic.stdout)
+                self.assertIn(field, atomic.stderr)
+                result = self.run_sequence(workspace)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("child-b", result.stderr)
+                self.assertIn(field, result.stderr)
+
+    def test_composed_child_preflight_requires_matching_register_and_resolvable_evidence(self) -> None:
+        with self.sequence_workspace() as workspace:
+            child = workspace / "children" / "child-a.md"
+            parent = workspace / "sequence.md"
+            self.replace_once(child, "Preflight source: grill-with-docs", "Preflight source: grilling + domain-modeling")
+            mismatch = self.run_sequence(workspace)
+            self.assertEqual(mismatch.returncode, 1, mismatch.stdout)
+            self.assertIn("preflight source disagrees", mismatch.stderr)
+            self.replace_once(
+                parent,
+                "| child-a | preflight:demo-child-a:20260713-a | Done | grill-with-docs |",
+                "| child-a | preflight:demo-child-a:20260713-a | Done | grilling + domain-modeling |",
+            )
+            evidence = workspace / "children" / "child-a-decisions.md"
+            evidence.write_text("# Child-a decisions\n\nChild-a scope, documentation, and permissions were confirmed.\n", encoding="utf-8")
+            self.regex_replace_once(
+                child, r"^Preflight evidence:.*$",
+                "Preflight evidence: Completed: [child-a decisions](child-a-decisions.md) records design, documentation, and action permissions through Close.",
+            )
+            result = self.run_sequence(workspace)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            evidence.unlink()
+            result = self.run_sequence(workspace)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("child-a-decisions.md", result.stderr)
 
 
 if __name__ == "__main__":

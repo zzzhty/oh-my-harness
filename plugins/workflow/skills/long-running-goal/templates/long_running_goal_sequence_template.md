@@ -26,9 +26,11 @@ Continuation contract: `<Another agent can re-read this parent, validate both re
 
 Planning preflight marker: `preflight:<sequence_slug>:<yyyymmdd>-<short-id>`
 
-Planning preflight status: `Done`
+Planning preflight status: `<Done / Skipped by explicit user instruction>`
 
-Preflight source: `existing decisions`
+Preflight source: `<grilling + domain-modeling / grill-with-docs / existing decisions / user skip>`
+
+Preflight evidence: `<Completed: source and checked outcome / Reused: completed preflight id, source and current coverage / User skip: explicit user instruction source; use a Markdown link or a dated user request/message/turn reference>`
 
 Resolved decisions: `<summary or ADR / context paths covering every child boundary and the sequence order>`
 
@@ -54,7 +56,7 @@ Housekeeping boundary: `<Enabled uses watcher:housekeeping only for inventoried 
 
 ## Template Use
 
-1. Create each child from `long_running_goal_template.md`, complete its own preflight using existing decisions or necessary questions, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries.
+1. Create each child from `long_running_goal_template.md`, complete its required preflight methods and authorization coverage through Close while reusing confirmed answers, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries. Preserve sourced completion/reuse/explicit-skip evidence in each child; the register cannot replace it.
 2. Keep every child overall `Draft` with every atomic row `Not Started / Pending / Pending` until M0 or a predecessor handoff promotes it.
 3. Use relative Markdown links. Replace each backticked `Live goal` link example with an actual relative Markdown link when instantiating this template. A Closed row moves its complete atomic child goal from `Live goal` to the `Closeout evidence` archive link; do not replace it with a summary.
 4. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes frozen child preflight boundaries.
@@ -120,6 +122,8 @@ Execution mode: `Loop-shaped execution`
 
 ## Pre-Approval / YOLO
 
+Authorization evidence: `<Source references mapping actual actions, targets, scopes, conditions and milestones to existing approvals; use Markdown links or dated user request/message/turn references. Reference each child's authority and separate housekeeping policy/source; the parent adds no child permission.>`
+
 1. Pre-approved YOLO local operations: `<Only planned non-destructive local code/docs edits, tests, lint, formatting, rebuilds, refreshes, reinstalls, link checks, plugin/cache refreshes, and project-owned generated-artifact cleanup inside each child boundary; task temporary cache housekeeping remains separately governed.>`
 2. Pre-approved external reads/writes: `<Exact union of already-approved child-specific surfaces, or Not applicable; the parent grants no additional permission.>`
 3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, required inputs/tools that cannot be obtained or restored through authorized means, destructive/irreversible/privacy-sensitive/externally visible/external writes beyond recorded authorization, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
@@ -127,11 +131,11 @@ Execution mode: `Loop-shaped execution`
 
 ## Deferred approval gates
 
-Omit this section when no parent-owned actions await approval. Put child action gates in the owning child goal, using `components/planning-preflight.md`; the parent grants no additional permission. Preparation precedes the gated milestone. Pending blocks its work, In Progress/Done and Close; only actual user authorization with evidence changes it to Approved.
+Omit this section when no parent-owned actions await approval. Put child action gates in the owning child goal, using `components/planning-preflight.md`; the parent grants no additional permission. Record a sourced user-retained decision or required final review, not routine later-stage deferral. Preparation precedes the gated milestone. Pending blocks its work, In Progress/Done and Close; reconcile existing authority before asking, and record Approved when its source still covers the action. Preserve actual final-review gates.
 
-| Milestone | Action | Status | Approval evidence |
-| --- | --- | --- | --- |
-| <Existing parent milestone> | <Concrete action and target> | Pending | None |
+| Milestone | Action | Status | Approval evidence | Deferral basis |
+| --- | --- | --- | --- | --- |
+| <Existing parent milestone> | <Concrete action, target, scope and conditions> | Pending | None | <User decision: source and reserved decision / Required review: rule source and required review material> |
 
 ## Sequence Execution Contract
 

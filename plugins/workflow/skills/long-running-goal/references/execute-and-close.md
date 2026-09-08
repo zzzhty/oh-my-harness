@@ -6,7 +6,9 @@ Use the matching sections after `../SKILL.md` routes an execute, resume, continu
 
 Follow the goal file rather than improvising. After context transition, interruption, or compaction, re-read the newest user request and active goal document before resuming.
 
-Before the first implementation milestone, confirm the preflight marker under `../components/planning-preflight.md`. If absent, complete the preflight before implementation. Reuse existing decisions and valid markers. Refresh an optional estimate only when changed evidence matters to a decision; missing timing and overruns are not runtime hard stops.
+Before implementation or resumed work, verify the marker and sourced preflight evidence under `../components/planning-preflight.md`, then run the applicable readiness checker without `--allow-draft`. For Sequence promotion, follow its child-readiness procedure. If evidence is missing, recover it from inspectable sources or complete the affected preflight before implementation. Reuse valid evidence; never manufacture an old interview or approval. Refresh an optional estimate only when changed evidence matters to a decision; missing timing and overruns are not runtime hard stops.
+
+At milestone entry and after context transitions, resolve the action's target, scope and conditions against the recorded authorization sources and the newest request, including withdrawals. Use existing coverage directly; do not ask again because the milestone changed, a checkpoint passed or a condition was satisfied. A tool's access or sandbox permission is not task authorization, and recorded task approval does not override a tool's own execution restrictions.
 
 For an `Enabled` or `Disabled` policy, apply this rule: Before any command may write task-temporary data, resolve the platform/runtime temporary root once, create the recorded goal/sequence-owned child namespace beneath it, replace a deferred roots field with the fully resolved absolute owner path, and bind every task-temporary producer in this goal to that recorded namespace. Reuse the recorded value for the rest of execution and at Close; if no producer ever creates a root, record the runtime outcome `None created` instead. A sequence parent binds only its orchestration/integration producers and never routes child temporary data through the parent root. A `Not applicable` policy creates no root.
 
@@ -14,7 +16,7 @@ At each milestone entry, apply `../components/milestone-scope-gate.md` to derive
 
 For each milestone:
 
-1. Check any `Deferred approval gates` for this milestone before its work begins. Require actual authorization and record Approved evidence; otherwise stop at the gate and record section-local runtime hard-stop evidence. Mark the milestone `In Progress` only after its approval gates pass.
+1. Check any `Deferred approval gates` for this milestone before its work begins. Reconcile the row with sourced actual authorization first; when still covered, record Approved evidence and continue without another question. Otherwise ask only for the reserved final approval or uncovered increment, stop at the gate and record section-local runtime hard-stop evidence. Mark the milestone `In Progress` only after its approval gates pass. Do not remove a user-retained final gate on the strength of generic pre-approval.
 2. Apply `../components/milestone-scope-gate.md`, then implement only its recorded scope and necessary consequences.
 3. If a gate, validation rule, rollback path, milestone boundary, Loop field, or skill strategy is too weak for observed risk, pause mutation only long enough to update the contract; do not ask for permission unless a runtime hard stop applies.
 4. Run the milestone validation commands and complete its review gate.
