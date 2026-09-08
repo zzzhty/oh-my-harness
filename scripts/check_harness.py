@@ -360,27 +360,15 @@ class CheckRunner:
         validator: Path,
     ) -> None:
         plugin_names = [selector.split("@", 1)[0] for selector in plugins]
-        validator_plugin_names = [
-            plugin_name
-            for plugin_name in plugin_names
-            if plugin_name != "mattpocock-skills"
-        ]
-        if validator_plugin_names and not validator.is_file():
+        if plugin_names and not validator.is_file():
             self.fail(f"plugin validator missing: {validator}")
             return
         for plugin_name in plugin_names:
-            if plugin_name == "mattpocock-skills":
-                command = [
-                    str(tooling_python),
-                    str(REPO_ROOT / "scripts" / "update_mattpocock_skills.py"),
-                    "--validate-only",
-                ]
-            else:
-                command = [
-                    str(tooling_python),
-                    str(validator),
-                    str(REPO_ROOT / "plugins" / plugin_name),
-                ]
+            command = [
+                str(tooling_python),
+                str(validator),
+                str(REPO_ROOT / "plugins" / plugin_name),
+            ]
             result = self.run_command(command, env=env)
             if result.returncode == 0:
                 self.ok(f"plugin validation passed: {plugin_name}")

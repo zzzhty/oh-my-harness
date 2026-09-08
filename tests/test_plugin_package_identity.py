@@ -25,7 +25,7 @@ def write_json(path: Path, payload: object) -> None:
 
 
 class PluginPackageIdentityTests(unittest.TestCase):
-    def make_repo(self, root: Path, *, upstream: bool = False) -> tuple[Path, Path]:
+    def make_repo(self, root: Path) -> tuple[Path, Path]:
         repo = root / "repo"
         plugin = repo / "plugins" / "alpha"
         (plugin / "skills" / "one").mkdir(parents=True)
@@ -37,11 +37,6 @@ class PluginPackageIdentityTests(unittest.TestCase):
             plugin / ".codex-plugin" / "plugin.json",
             {"name": "alpha", "version": "0.1.0+codex.old", "skills": "./skills/"},
         )
-        if upstream:
-            write_json(
-                plugin / ".codex-plugin" / "upstream-lock.json",
-                {"upstream": {"tag": "v2.3.4"}},
-            )
         write_json(
             repo / ".agents" / "plugins" / "marketplace.json",
             {
@@ -68,15 +63,19 @@ class PluginPackageIdentityTests(unittest.TestCase):
             self.assertEqual(payload["releaseVersion"], "1.0.0")
             self.assertEqual(repository_identity_issues(repo), [])
 
-    def test_upstream_plugin_keeps_locked_base_version(self) -> None:
+    def test_release_authority_replaces_a_higher_previous_base_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            repo, plugin = self.make_repo(Path(tmp), upstream=True)
+            repo, plugin = self.make_repo(Path(tmp))
+            manifest = plugin / ".codex-plugin" / "plugin.json"
+            previous = json.loads(manifest.read_text(encoding="utf-8"))
+            previous["version"] = "1.2.3+codex.previous"
+            write_json(manifest, previous)
             update_repository_identity(repo)
-            version = json.loads(
-                (plugin / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
-            )["version"]
-            self.assertRegex(version, r"^2\.3\.4\+codex\.[0-9a-f]{16}$")
-            self.assertEqual(expected_plugin_identity(repo, plugin).version_authority, "upstream")
+            identity = expected_plugin_identity(repo, plugin)
+            self.assertEqual(json.loads(manifest.read_text(encoding="utf-8"))["version"], identity.version)
+            self.assertRegex(identity.version, r"^1\.0\.0\+codex\.[0-9a-f]{16}$")
+            self.assertEqual(identity.version_authority, "release")
+            self.assertEqual(repository_identity_issues(repo), [])
 
     def test_content_change_requires_a_new_generation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

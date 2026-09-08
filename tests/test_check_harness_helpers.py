@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -54,58 +55,44 @@ class PluginValidationCheckRunner(RecordingCheckRunner):
 
 
 class PluginValidationRoutingTests(unittest.TestCase):
-    def test_matt_package_uses_repo_owned_native_validator(self) -> None:
-        runner = PluginValidationCheckRunner()
-        tooling_python = Path(tempfile.gettempdir()).resolve() / "tooling" / "python"
-        runner.check_plugin_validation(
-            tooling_python,
-            ["mattpocock-skills@oh-my-harness"],
-            env={},
-            validator=Path("/missing/bundled-validator.py"),
-        )
-
-        self.assertEqual(runner.failures, 0)
-        self.assertEqual(
-            runner.commands,
-            [
-                [
-                    str(tooling_python),
-                    str(REPO_ROOT / "scripts" / "update_mattpocock_skills.py"),
-                    "--validate-only",
-                ]
-            ],
-        )
-
-    def test_other_plugins_use_selected_validator(self) -> None:
+    def test_all_plugins_use_selected_validator_and_missing_tool_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             validator = Path(tmp) / "validate_plugin.py"
             validator.write_text("# fixture\n", encoding="utf-8")
             tooling_python = Path(tmp) / "tooling" / "python"
+            names = ["watcher", "workflow", "mattpocock-skills"]
             runner = PluginValidationCheckRunner()
             runner.check_plugin_validation(
                 tooling_python,
-                ["watcher@oh-my-harness", "mattpocock-skills@oh-my-harness"],
+                [f"{name}@oh-my-harness" for name in names],
                 env={},
                 validator=validator,
             )
-
-        self.assertEqual(runner.failures, 0)
-        self.assertEqual(
-            runner.commands[0],
-            [
-                str(tooling_python),
-                str(validator),
-                str(REPO_ROOT / "plugins" / "watcher"),
-            ],
-        )
-        self.assertEqual(
-            runner.commands[1],
-            [
-                str(tooling_python),
-                str(REPO_ROOT / "scripts" / "update_mattpocock_skills.py"),
-                "--validate-only",
-            ],
-        )
+            self.assertEqual(runner.failures, 0)
+            self.assertEqual(runner.commands, [
+                [str(tooling_python), str(validator), str(REPO_ROOT / "plugins" / name)]
+                for name in names
+            ])
+            failing = PluginValidationCheckRunner()
+            with mock.patch.object(
+                failing, "run_command",
+                return_value=subprocess.CompletedProcess([], 17, "", "custom contract rejected"),
+            ) as invoke:
+                failing.check_plugin_validation(
+                    tooling_python, ["mattpocock-skills@oh-my-harness"], env={}, validator=validator
+                )
+            self.assertEqual(failing.failures, 1)
+            self.assertIn("custom contract rejected", "\n".join(failing.messages))
+            invoke.assert_called_once_with(
+                [str(tooling_python), str(validator), str(REPO_ROOT / "plugins" / "mattpocock-skills")], env={}
+            )
+            validator.unlink()
+            missing = PluginValidationCheckRunner()
+            missing.check_plugin_validation(
+                tooling_python, ["mattpocock-skills@oh-my-harness"], env={}, validator=validator
+            )
+            self.assertEqual(missing.failures, 1)
+            self.assertEqual(missing.commands, [])
 
 
 class MarketplaceCatalogIdentityTests(unittest.TestCase):

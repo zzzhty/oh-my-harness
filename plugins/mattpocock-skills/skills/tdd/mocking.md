@@ -1,17 +1,8 @@
 # When to Mock
 
-Mock at **system boundaries** only:
+Prefer real local collaborators and test doubles at external or nondeterministic interfaces: remote APIs, time, randomness, or expensive I/O. A local fake can be useful for a stable internal interface when it preserves the relevant contract; an integration check should cover behavior the fake cannot establish.
 
-- External APIs (payment, email, etc.)
-- Databases (sometimes - prefer test DB)
-- Time/randomness
-- File system (sometimes)
-
-Don't mock:
-
-- Your own classes/modules
-- Internal collaborators
-- Anything you control
+Choose doubles for a concrete isolation need, not simply because a class is easy to mock. Avoid tests that only confirm your own internal call graph. `/codebase-design` owns the choice of interface and seam.
 
 ## Designing for Mockability
 

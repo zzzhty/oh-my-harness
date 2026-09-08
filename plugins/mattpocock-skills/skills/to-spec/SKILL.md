@@ -4,72 +4,20 @@ description: Turn the current conversation into a spec and publish it to the pro
 disable-model-invocation: true
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user — just synthesize what you already know.
+# Write a Spec
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+Synthesize the current discussion and repository evidence into an implementable spec. Reuse confirmed requirements, domain terms, ADRs and test boundaries. Ask only about consequential gaps; do not restart an interview or require a long list of user stories.
 
-## Process
+Inspect the relevant code when the current implementation is not yet understood. Prefer existing interfaces and tests; `/codebase-design` owns seam principles. State any proposed interface change separately from an agreed decision.
 
-1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
+Include the sections that carry information:
 
-2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
+- **Problem and outcome:** the user's problem and observable resulting behavior.
+- **Requirements:** concrete scenarios and acceptance criteria, sized to the feature.
+- **Implementation decisions:** agreed interfaces, interactions, schema or architectural choices; include specific paths or concise prototype snippets when they clarify the decision.
+- **Verification:** behavior to protect, chosen interfaces and relevant existing checks. Reference shared testing guidance instead of reproducing it.
+- **Scope and open questions:** explicit exclusions and unresolved decisions that affect implementation.
 
-Check with the user that these seams match their expectations.
+Use the requested destination and existing tracker conventions. When publication is authorized, publish to that tracker and apply its established readiness label only if the spec is ready. A request to draft does not authorize posting an issue or creating configuration. If publication lacks necessary tracker details, complete the draft and report the missing destination/configuration rather than running setup automatically.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
-
-<spec-template>
-
-## Problem Statement
-
-The problem that the user is facing, from the user's perspective.
-
-## Solution
-
-The solution to the problem, from the user's perspective.
-
-## User Stories
-
-A LONG, numbered list of user stories. Each user story should be in the format of:
-
-1. As an <actor>, I want a <feature>, so that <benefit>
-
-<user-story-example>
-1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
-</user-story-example>
-
-This list of user stories should be extremely extensive and cover all aspects of the feature.
-
-## Implementation Decisions
-
-A list of implementation decisions that were made. This can include:
-
-- The modules that will be built/modified
-- The interfaces of those modules that will be modified
-- Technical clarifications from the developer
-- Architectural decisions
-- Schema changes
-- API contracts
-- Specific interactions
-
-Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
-
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
-
-## Testing Decisions
-
-A list of testing decisions that were made. Include:
-
-- A description of what makes a good test (only test external behavior, not implementation details)
-- Which modules will be tested
-- Prior art for the tests (i.e. similar types of tests in the codebase)
-
-## Out of Scope
-
-A description of the things that are out of scope for this spec.
-
-## Further Notes
-
-Any further notes about the feature.
-
-</spec-template>
+Report the artifact and remaining decisions; an incomplete requirement set is not ready for unattended implementation.

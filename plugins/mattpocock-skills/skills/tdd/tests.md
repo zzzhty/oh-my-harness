@@ -17,10 +17,10 @@ test("user can checkout with valid cart", async () => {
 Characteristics:
 
 - Tests behavior users/callers care about
-- Uses public API only
+- Uses a stable interface that exposes the behavior under test
 - Survives internal refactors
 - Describes WHAT, not HOW
-- One logical assertion per test
+- Keeps assertions for the same behavior together
 
 ## Bad Tests
 
@@ -38,21 +38,23 @@ test("checkout calls paymentService.process", async () => {
 Red flags:
 
 - Mocking internal collaborators
-- Testing private methods
-- Asserting on call counts/order
+- Testing private structure without an independent behavioral contract
+- Asserting on call counts/order when they are not part of the contract
 - Test breaks when refactoring without behavior change
 - Test name describes HOW not WHAT
-- Verifying through external means instead of interface
+- Checking storage details when they are not part of the behavior's contract
+
+For a retrieval contract, use the application interface. For an independent persistence or schema contract, inspect the real store as needed: an in-memory cache could make retrieval pass while the durable write is broken. These are different behaviors and neither check automatically replaces the other.
 
 ```typescript
-// BAD: Bypasses interface to verify
-test("createUser saves to database", async () => {
+// GOOD when durable storage is the contract: verify the real store
+test("createUser persists the user", async () => {
   await createUser({ name: "Alice" });
   const row = await db.query("SELECT * FROM users WHERE name = ?", ["Alice"]);
   expect(row).toBeDefined();
 });
 
-// GOOD: Verifies through interface
+// GOOD when retrieval is the contract: verify the application interface
 test("createUser makes user retrievable", async () => {
   const user = await createUser({ name: "Alice" });
   const retrieved = await getUser(user.id);

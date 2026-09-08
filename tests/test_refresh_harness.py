@@ -70,7 +70,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
         ):
             self.assertFalse(refresh.codex_executable_is_startable("codex"))
 
-    def test_build_env_prefers_complete_system_plugin_validator(self) -> None:
+    def test_build_env_uses_repository_contract_even_with_system_validator(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             codex_home = Path(tmp) / ".codex"
             scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
@@ -87,27 +87,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     tooling_python=Path("/tooling/python"),
                 )
 
-        self.assertEqual(env["PLUGIN_VALIDATOR"], str(validator))
-
-    def test_build_env_falls_back_when_system_plugin_validator_is_incomplete(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            codex_home = Path(tmp) / ".codex"
-            scripts = codex_home / "skills" / ".system" / "plugin-creator" / "scripts"
-            scripts.mkdir(parents=True)
-            (scripts / "validate_plugin.py").write_text(
-                "# validator fixture\n",
-                encoding="utf-8",
-            )
-            with mock.patch.dict(os.environ, {}, clear=True):
-                env = refresh.build_env(
-                    codex_home=codex_home,
-                    tooling_python=Path("/tooling/python"),
-                )
-
-        self.assertEqual(
-            env["PLUGIN_VALIDATOR"],
-            str(REPO_ROOT / "scripts" / "validate_plugin.py"),
-        )
+        self.assertEqual(env["PLUGIN_VALIDATOR"], str(refresh.REPOSITORY_PLUGIN_VALIDATOR))
 
     def test_build_env_preserves_explicit_plugin_validator(self) -> None:
         with (

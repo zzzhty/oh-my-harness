@@ -113,7 +113,7 @@ Execution mode: `Loop-shaped execution`
 3. Triage and orchestration: `<Strict serial selection from the Execution Register; at most one Ready or In Progress child.>`
 4. Worktree and isolation: `<Shared-checkout serialization or explicit child-scoped isolation and collision rules.>`
 5. Skills and context: `<workflow:long-running-goal, sequence-child-goals.md, child-required skills, runbooks, and specs.>`
-6. Connector read/write boundaries: `<Exact child-by-child external read/write permissions; unapproved writes keep the sequence Draft or hard-stop execution.>`
+6. Connector read/write boundaries: `<Exact child-by-child pre-approved external reads/writes and specified later actions in each owner's Deferred approval gates; undefined boundaries keep the sequence Draft.>`
 7. Independent verification: `<check_goal_sequence.py plus project-specific tests or reviewer gates.>`
 8. Runtime hard stops: `<Only repeated technical impossibility, unavailable facts/credentials, destructive/irreversible/privacy-sensitive/external action beyond recorded authorization, semantic drift, or required verifier failure with no in-scope next step.>`
 9. Durable learning: `<Parent/child evidence, current docs, validation logs, closeouts, and any reusable strategy update.>`
@@ -122,8 +122,16 @@ Execution mode: `Loop-shaped execution`
 
 1. Pre-approved YOLO local operations: `<Only planned non-destructive local code/docs edits, tests, lint, formatting, rebuilds, refreshes, reinstalls, link checks, plugin/cache refreshes, and project-owned generated-artifact cleanup inside each child boundary; task temporary cache housekeeping remains separately governed.>`
 2. Pre-approved external reads/writes: `<Exact union of already-approved child-specific surfaces, or Not applicable; the parent grants no additional permission.>`
-3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, unavailable required facts/credentials, destructive/irreversible/privacy-sensitive/externally visible/external writes beyond recorded authorization, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
+3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, required inputs/tools that cannot be obtained or restored through authorized means, destructive/irreversible/privacy-sensitive/externally visible/external writes beyond recorded authorization, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
 4. Non-stops: `<M0, child handoff after passed gates, review/checkpoint boundaries, timing rebaseline after a range overrun, evidence recording, rebuild/refresh/reinstall, docs sync, and locally repairable validation failures.>`
+
+## Deferred approval gates
+
+Omit this section when no parent-owned actions await approval. Put child action gates in the owning child goal, using `components/planning-preflight.md`; the parent grants no additional permission. Preparation precedes the gated milestone. Pending blocks its work, In Progress/Done and Close; only actual user authorization with evidence changes it to Approved.
+
+| Milestone | Action | Status | Approval evidence |
+| --- | --- | --- | --- |
+| <Existing parent milestone> | <Concrete action and target> | Pending | None |
 
 ## Sequence Execution Contract
 
@@ -234,7 +242,7 @@ Checkpoint evidence: `<components/checkpoint.md result, revision, changed files,
 
 ## Close Gate
 
-Close remains `Not Started` until M3 is Done. Then set Close and Overall status to `In Progress`, validate, record evidence, and only then set Close to `Done / Passed / Done` and Overall status to `Closed`.
+Close remains `Not Started` until M3 is Done. Pass any deferred approval gate for Close before its work begins. Then set Close and Overall status to `In Progress`, validate, record evidence, and only then set Close to `Done / Passed / Done` and Overall status to `Closed`.
 
 Close requirements:
 
@@ -242,7 +250,7 @@ Close requirements:
 2. M0 through Integration Acceptance are Done/Passed/Done.
 3. Final sequence, project-specific, link, and `git diff --check` validations have actual passing results.
 4. Current docs, status registers, validation logs, close/archive handling, and active navigation are synchronized.
-5. Every non-legacy child has honored its own housekeeping policy, every untouched legacy child has recorded a cleanup-unauthorized no-cleanup disposition, and the parent has handled only its own scope: when no parent root exists, it explicitly records that no task temporary cache roots were created; only for concrete sequence-owned roots does it record exact paths, actions, and removed / preserved / failed / residual sizes, with durable evidence outside those roots.
+5. Every non-legacy child has honored its own housekeeping policy, every untouched legacy child has recorded a cleanup-unauthorized no-cleanup disposition, and the parent has handled only its own scope: when no parent root exists, explicitly record that no task temporary cache roots were created; for concrete sequence-owned roots record exact paths and actions, with durable evidence outside those roots. Removed / preserved / failed / residual sizes are required only for Enabled; under Disabled omit them or record unknown with a diagnostic.
 6. Final rollback, residual risk, harness conclusion, and checkpoint revision are recorded.
 
 Close execution evidence: `<changed artifacts, final behavior, validation commands/results, docs sync, rollback, residual risk, archive outcome, and parent/child task temporary cache dispositions>`
@@ -253,10 +261,10 @@ Close execution evidence: `<changed artifacts, final behavior, validation comman
 - Exact parent roots / Roots outcome: `<repeat each sequence-owned absolute path / None created>`
 - Child dispositions: `<each non-legacy child policy or legacy no-cleanup disposition evidence link; never inherit or override it>`
 - Action: `<Enabled watcher:housekeeping action / Disabled retained action / no-roots disposition>`
-- Removed size: `<concrete parent roots only, for example 0 B>`
-- Preserved size: `<concrete parent roots only, for example 0 B>`
-- Failed size: `<concrete parent roots only, for example 0 B>`
-- Residual size: `<concrete parent roots only, for example 0 B>`
+- Removed size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
+- Preserved size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
+- Failed size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
+- Residual size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
 
 Checkpoint evidence: `<components/checkpoint.md close result, revision, changed files, validation, and excluded dirt>`
 

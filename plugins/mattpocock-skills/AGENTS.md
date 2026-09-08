@@ -1,9 +1,8 @@
-## Matt Pocock upstream mirror
+## Matt Pocock local edition
 
-- Treat every file under `skills/` as an unchanged, upstream-owned mirror. Do not edit, translate, compress, reformat, patch, or generate files inside that tree.
-- Generic requests to modify or improve local skills exclude this plugin's `skills/` tree. Apply them only to repository-owned skills unless the user explicitly requests an upstream sync.
-- Resolve a selected skill's relative Markdown links and referenced resource or script paths from `plugins/mattpocock-skills/skills/<selected-skill>/`. Verify the resolved file exists there before reading it; if it is absent, report the missing upstream resource instead of substituting a similarly named repository, plugin, or working-directory file. Paths the skill defines as task outputs still follow that skill's instructions.
-- Keep local Codex adaptation outside `skills/`: the `.codex-plugin` wrapper and Watcher metadata, version/distribution identity, this instruction file, the generated README, and repository-owned updater/checker/tests.
-- Update the mirror only through `scripts/update_mattpocock_skills.py`. Do not manually edit or rebaseline `.codex-plugin/upstream-lock.json`.
-- Before any upstream sync or mirror repair, inventory `git status --short -- plugins/mattpocock-skills` and inspect both `git diff -- plugins/mattpocock-skills` and `git diff --cached -- plugins/mattpocock-skills`. Preserve every pre-existing uncommitted change and proceed only after every changed path's owner and intended disposition are explicit; sync authority does not authorize discarding user work.
-- Treat upstream-lock drift as a path-by-path review gate. Report each drifted path, preserve user work, and obtain explicit approval before restoring its exact recorded-upstream bytes or routing an intentional behavior change upstream. Do not make validation pass by overwriting or rolling back unreviewed work, rebaselining the lock, or adding a shim, alias, fallback, or local source patch.
+This plugin is maintained by oh-my-harness. Its selected skills may be revised locally; README.md records the upstream baseline and attribution. [ADR 0012](../../docs/adr/0012-maintain-a-local-mattpocock-selection.md) owns the migration from the complete upstream mirror.
+
+- Edit the owning skill and its references together. Preserve existing invocation policies unless the task explicitly changes them.
+- Resolve skill-relative resources from the selected skill directory. If a required resource is missing, report its path rather than substituting another skill's resource.
+- For upstream updates, follow [README.md — Upstream updates](README.md#upstream-updates): compare upstream revisions against the local edition, select changes, and record decisions and deferred work. Preserve local adaptations and attribution; keep the complete-tree importer retired.
+- Follow the root validation and generation workflow. Installed caches and harness projections remain generated outputs.

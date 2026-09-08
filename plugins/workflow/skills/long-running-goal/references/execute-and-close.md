@@ -14,7 +14,7 @@ At each milestone entry, apply `../components/milestone-scope-gate.md` to derive
 
 For each milestone:
 
-1. Mark it `In Progress`.
+1. Check any `Deferred approval gates` for this milestone before its work begins. Require actual authorization and record Approved evidence; otherwise stop at the gate and record section-local runtime hard-stop evidence. Mark the milestone `In Progress` only after its approval gates pass.
 2. Apply `../components/milestone-scope-gate.md`, then implement only its recorded scope and necessary consequences.
 3. If a gate, validation rule, rollback path, milestone boundary, Loop field, or skill strategy is too weak for observed risk, pause mutation only long enough to update the contract; do not ask for permission unless a runtime hard stop applies.
 4. Run the milestone validation commands and complete its review gate.
@@ -24,7 +24,7 @@ For each milestone:
 8. Confirm the milestone-scope exit gate.
 9. Mark milestone `Done`, review `Passed`, and checkpoint `Done` only after evidence is recorded.
 
-When both the review gate and milestone-scope exit gate pass, enter the next milestone automatically. When either fails, keep fixing and diagnosing in scope while the next useful step is clear; stop only at the runtime-hard-stop boundary.
+When both the review gate and milestone-scope exit gate pass, advance to the next milestone and check its approval gates. When a review or scope gate fails, keep fixing and diagnosing in scope while the next useful step is clear; stop only at the runtime-hard-stop boundary.
 
 When execution exposes a weak gate, validation rule, rollback path, milestone boundary, Loop field, or skill strategy, state the gap and evidence, update the active goal within its existing authority, validate the affected contract, and resume the original milestone. Change a reusable skill or template only when source mutation is authorized; otherwise record a bounded improvement suggestion without blocking independent authorized work. If the evolved rule invalidates completed work, reopen affected milestone evidence or mark the gate failed and fix the issue. Do not silently weaken acceptance criteria after implementation, bypass gates with fallback/alternate backends/fake success/hidden partial success/silent degradation, or repackage deprecated surfaces as current semantics unless the goal explicitly requires it and docs are updated.
 
@@ -38,13 +38,13 @@ After creating, upgrading, or evolving a goal, update only the current docs that
 
 When all milestones are done:
 
-1. Mark the Close row `In Progress` and keep the overall goal `In Progress` while preparing close evidence.
+1. Apply any deferred approval gate for Close before entering its work. Then mark the Close row `In Progress` and keep the overall goal `In Progress` while preparing close evidence.
 2. Fill close execution evidence before removing or archiving the active goal.
 3. Sync durable outcomes into current docs, indexes, validation logs, and status/boundary registers.
 4. Apply the recorded task-temporary-cache outcome without re-resolving the platform temp root:
    - `None created` or `Not applicable`: record explicitly that no roots were created; do not invoke cleanup or invent size metrics.
    - concrete roots plus `Enabled`: confirm durable evidence is outside the recorded roots, then invoke `watcher:housekeeping` to inventory and clean only confirmed owner-specific disposable candidates. Do not replace it with raw recursive deletion, escalate privileges, cross symlink/junction/reparse-point boundaries, or delete dependencies, runtime state, logs, reports, unknown producers, or locked content. Record the policy, every exact root, the watcher action, and removed, preserved, failed, and residual sizes; safety-preserved residuals do not imply failure unless zero residue was separately confirmed in preflight.
-   - concrete roots plus `Disabled`: do not clean; record the policy, every retained exact root, the retained/preserved action, and removed, preserved, failed, and residual sizes.
+   - concrete roots plus `Disabled`: do not clean; record the policy, every retained exact root, and the retained/preserved action. Size metrics are optional; omit them or record `unknown` with a brief diagnostic when measurement is unavailable. Do not scan retained trees solely to satisfy Close.
    - missing legacy field/section: treat cleanup as unauthorized, preserve any discovered roots, and record the legacy disposition without rerunning the full grill.
    If `watcher:housekeeping` is unavailable for an enabled policy, keep Close and the overall goal `In Progress`, or use `Blocked` only when the normal runtime hard-stop contract is met. Report the missing capability and do not fall back to `rm -rf`, PowerShell recursive deletion, or another raw delete command. Continue as `Disabled` only after the user explicitly evolves the recorded preflight policy.
 5. Follow local archive conventions; do not invent dated archive trees or checked-in closed copies just to preserve history.

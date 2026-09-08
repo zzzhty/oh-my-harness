@@ -11,4 +11,4 @@
 
 - Before renaming, replacing, or migrating any repository-owned identifier, path, field, event, skill, or instruction identity, read `docs/agents/internal-identifier-evolution.md` and classify every scoped match before editing.
 - When changing a plugin's packaged content, finish all source edits first, run the owning tests, then run `scripts/update_plugin_generations.py` once and validate the resulting single current identity.
-- For anything under `plugins/mattpocock-skills/`, follow its scoped `AGENTS.md`. The published `skills/` mirror remains upstream-owned.
+- For anything under `plugins/mattpocock-skills/`, follow its scoped `AGENTS.md` for the locally maintained selection and upstream attribution.

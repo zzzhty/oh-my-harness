@@ -1,5 +1,7 @@
 # ADR Format
 
+Use the repository's existing ADR location, numbering and template first. The conventions below are defaults only when no owner exists; creating a decision record follows the main skill's write scope.
+
 ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
 
 Create the `docs/adr/` directory lazily — only when the first ADR is needed.

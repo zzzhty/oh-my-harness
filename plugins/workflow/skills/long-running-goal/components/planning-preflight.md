@@ -23,6 +23,20 @@ Docs written: <paths when needed / Not applicable>
 
 `Done` means the plan's required decisions were verified, not that a particular interview ran. When the user explicitly skips the interview, use a `preflight:<goal_slug>:skip:<yyyymmdd>-<short-id>` marker, status `Skipped by explicit user instruction`, and source `user skip (<date or turn context>)`. Do not infer skip from urgency. Skip never supplies missing authority or turns unresolved required design into `Ready`.
 
+## Deferred Approval Gates
+
+Settle design, action scope, and permission boundaries before `Ready`. A known later action may await user approval without blocking earlier authorized milestones. Record it outside the pre-approved operations in this optional section; omit the section when no gates are deferred:
+
+```markdown
+## Deferred approval gates
+
+| Milestone | Action | Status | Approval evidence |
+| --- | --- | --- | --- |
+| M2 | Publish the reviewed release to the named production target | Pending | None |
+```
+
+Each row must name an existing milestone (`M0` through `Close`) and a concrete action and target. Its status is `Pending` or `Approved`. Complete preparation in preceding milestones; before entering the gated milestone's work, require actual user authorization covering the action and record its source in `Approval evidence`. A pending gate can remain future/Ready or become `Blocked` with section-local evidence; it cannot be `In Progress`, `Done`, or bypassed at Close. Do not infer approval from `Ready`, a resume request, elapsed time, or checker success. Unspecified permission boundaries still keep the goal `Draft`; do not move an existing gate without authorization.
+
 ## Optional Time Assessment
 
 Estimate only when useful for a planning or scheduling decision. Use evidence already gathered plus at most one bounded inspection; do not launch builds, benchmarks, installs, CI waits, or external reads solely to estimate time.

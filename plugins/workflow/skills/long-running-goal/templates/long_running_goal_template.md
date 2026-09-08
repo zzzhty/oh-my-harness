@@ -89,7 +89,7 @@ M0 设计冻结时的当前基线：
 5. Skills and context / 必读上下文：
    - `<每个角色必须读取的 skill、runbook、project doc、spec 或历史决策。>`
 6. Connector read/write boundaries / 外部系统读写边界：
-   - `<可读/可写的 connector、API、ticket、PR、CI、Slack 等；哪些写入已预授权；哪些未预授权写入会让本 goal 保持 Draft。>`
+   - `<可读/可写的 connector、API、ticket、PR、CI、Slack 等；哪些写入已预授权；哪些具体后续动作在 Deferred approval gates 中等待批准；边界未明确时保持 Draft。>`
 7. Independent verification / 独立验收：
    - `<由哪个 sub-agent、脚本、测试、reviewer 或 gate 检查 producer 的输出；不得只信自评。>`
 8. Runtime hard stops / 运行时硬停止：
@@ -99,16 +99,24 @@ M0 设计冻结时的当前基线：
 
 ## Pre-Approval / YOLO 边界
 
-Ready 前必须冻结 approval 模型；若存在可预见但未确认的 approval 点，本 goal 保持 `Draft`，不得执行到中途再询问。
+Ready 前必须冻结设计和权限边界。已明确的后续动作可以在 Deferred approval gates 中等待批准，先完成前面的已授权阶段；边界未明确时保持 `Draft`。
 
 1. Pre-approved YOLO local operations / 预授权本地操作：
    - `<本 goal 范围内默认允许的非破坏性本地动作，例如 code/docs/source skill edits、rebuild、refresh、reinstall、dependency restore、tests、lint、formatting、link checks、plugin/cache refresh、project-owned generated-artifact cleanup；不要在此处推导任务临时缓存清理授权。>`
 2. Pre-approved external reads/writes / 预授权外部读写：
    - `<已允许读取或写入的 connector、API、issue、PR、CI、automation、hook、message surface；无外部写入时写 Not applicable。>`
 3. Runtime hard stops / 运行时硬停止：
-   - `<仅列真正会停止执行的条件：本地诊断/修复至少三次或三种方式后仍无法继续、缺少 agent 无法本地取得的凭据/文件/事实源、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。>`
+   - `<仅列真正会停止执行的条件：通常本地诊断/修复至少三次或三种方式后仍无法继续（已有决定性证据时可提前停止）、必需凭据/文件/工具/事实源无法通过已授权方式取得或恢复、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。>`
 4. Non-stops / 不应中断的事项：
    - `<普通阶段边界、checkpoint、耗时区间超出后的 rebaseline、可记录风险、rebuild、refresh、reinstall、失败但有明确本地下一步的验证、策略合同更新、docs sync 等。>`
+
+## Deferred approval gates
+
+没有延后批准的动作时删除本节。按 `components/planning-preflight.md` 记录具体动作和目标，将准备工作放在此前阶段。Pending 阻止所属阶段开工、In Progress/Done 和最终关闭；只有实际用户授权及其证据才能改为 Approved。
+
+| Milestone | Action | Status | Approval evidence |
+| --- | --- | --- | --- |
+| <已有的 M 编号或 Close> | <具体动作和目标> | Pending | None |
 
 ## Goal 执行合同
 
@@ -193,7 +201,7 @@ Checkpoint evidence：<按上述格式记录 M1 证据。>
 
 ## Close Gate
 
-所有 M 阶段完成后，先将 Close 行和整体状态设为 `In Progress` 并补齐以下证据；只有本 gate 全部通过后，才将 Close 行设为 `Done / Passed / Done`、整体状态设为 `Closed`。
+所有 M 阶段完成后，若 Close 有延后批准节点，先通过该节点；随后将 Close 行和整体状态设为 `In Progress` 并补齐以下证据。只有本 gate 全部通过后，才将 Close 行设为 `Done / Passed / Done`、整体状态设为 `Closed`。
 
 Close 前必须满足：
 
@@ -205,7 +213,7 @@ Close 前必须满足：
 6. `git diff --check -- <changed-paths>` 通过。
 7. Markdown 链接检查按需通过。
 8. 若存在 Loop Blueprint，所有触及 harness 的阶段都已记录对应证据。
-9. 已按显式 task temporary cache / housekeeping policy 处理：无 root 时明确记录“没有创建 task temporary cache roots”；只有 concrete roots 才记录每个 exact root、处置动作和移除 / 保留 / 失败 / residual size；durable evidence 位于缓存根目录之外。
+9. 已按显式 task temporary cache / housekeeping policy 处理：无 root 时明确记录“没有创建 task temporary cache roots”；concrete roots 记录每个 exact root 和处置动作；仅 Enabled 要求移除 / 保留 / 失败 / residual size，Disabled 的容量记录可省略或写 unknown 并说明原因；durable evidence 位于缓存根目录之外。
 10. 未解决风险已记录，并明确是否进入 Future。
 11. close checkpoint evidence 已记录；若项目已有 Git / version-control 工作流且要求 close commit，使用 `<goal_slug> close: <summary>` 或本项目约定格式。
 
@@ -229,10 +237,10 @@ Close 执行证据：
    - Recorded policy：`<Enabled / Disabled / Not applicable>`
    - Exact roots / Roots outcome：`<逐项重复 goal-owned absolute path / None created>`
    - Action：`<Enabled 的 watcher:housekeeping 有界动作 / Disabled 的 preserved or retained 动作 / no-roots disposition>`
-   - Removed size：`<concrete roots 时填写，例如 0 B>`
-   - Preserved size：`<concrete roots 时填写，例如 0 B>`
-   - Failed size：`<concrete roots 时填写，例如 0 B>`
-   - Residual size：`<concrete roots 时填写，例如 0 B>`
+   - Removed size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
+   - Preserved size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
+   - Failed size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
+   - Residual size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
 
 Checkpoint evidence：
 

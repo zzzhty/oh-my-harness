@@ -234,17 +234,7 @@ if (-not $ToolingPython) {
 $env:OH_MY_HARNESS_PYTHON = [System.IO.Path]::GetFullPath($ToolingPython)
 $env:OH_MY_HARNESS_TOOLING_PYTHON = $env:OH_MY_HARNESS_PYTHON
 if (-not $env:PLUGIN_VALIDATOR) {
-    $systemPluginValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\validate_plugin.py"
-    $systemIdentifierValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\identifier_validation.py"
-    if (
-        (Test-Path -LiteralPath $systemPluginValidator -PathType Leaf) -and
-        (Test-Path -LiteralPath $systemIdentifierValidator -PathType Leaf)
-    ) {
-        $env:PLUGIN_VALIDATOR = $systemPluginValidator
-    }
-    else {
-        $env:PLUGIN_VALIDATOR = Join-Path $env:OH_MY_HARNESS_ROOT "scripts\validate_plugin.py"
-    }
+    $env:PLUGIN_VALIDATOR = Join-Path $env:OH_MY_HARNESS_ROOT "scripts\validate_plugin.py"
 }
 
 $venvPath = Join-Path $env:OH_MY_HARNESS_HOME "venv"

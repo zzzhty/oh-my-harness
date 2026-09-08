@@ -225,13 +225,7 @@ export OH_MY_HARNESS_ROOT="$repo_root"
 export OH_MY_HARNESS_PYTHON="$tooling_python"
 export OH_MY_HARNESS_TOOLING_PYTHON="$tooling_python"
 if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
-    omh_system_plugin_validator="$CODEX_HOME/skills/.system/plugin-creator/scripts/validate_plugin.py"
-    omh_system_identifier_validator="$CODEX_HOME/skills/.system/plugin-creator/scripts/identifier_validation.py"
-    if [ -f "$omh_system_plugin_validator" ] && [ -f "$omh_system_identifier_validator" ]; then
-        PLUGIN_VALIDATOR="$omh_system_plugin_validator"
-    else
-        PLUGIN_VALIDATOR="$OH_MY_HARNESS_ROOT/scripts/validate_plugin.py"
-    fi
+    PLUGIN_VALIDATOR="$OH_MY_HARNESS_ROOT/scripts/validate_plugin.py"
 fi
 export PLUGIN_VALIDATOR
 

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import yaml
 
+from repo_skill_catalog import validate_skill_invocation
 
 TODO_MARKER = "[TODO:"
 PLUGIN_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -228,6 +229,10 @@ def validate_skill_root(skill_root: Path, errors: list[str]) -> None:
                 errors.append(
                     f"skill `{entry.name}` frontmatter field `{field}` must be non-empty"
                 )
+        try:
+            validate_skill_invocation(skill_file, frontmatter)
+        except SystemExit as exc:
+            errors.append(str(exc))
 
 
 def validate_hooks(plugin_root: Path, value: Any, errors: list[str]) -> None:

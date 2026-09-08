@@ -444,28 +444,6 @@
       ],
       "supporting_skills": []
     },
-    "mattpocock-skills:to-questionnaire": {
-      "role": "specialized",
-      "logical_group": "explicit-workflows",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:to-questionnaire",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "to-questionnaire",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "to questionnaire",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
     "mattpocock-skills:to-spec": {
       "role": "specialized",
       "logical_group": "explicit-workflows",
@@ -513,53 +491,6 @@
       ],
       "supporting_skills": []
     },
-    "mattpocock-skills:to-tickets": {
-      "role": "specialized",
-      "logical_group": "explicit-workflows",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:to-tickets",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "to-tickets",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "mattpocock-skills:to-issues",
-          "kind": "legacy",
-          "match": "phrase"
-        },
-        {
-          "value": "to-issues",
-          "kind": "legacy",
-          "match": "token"
-        },
-        {
-          "value": "to tickets",
-          "kind": "phrase",
-          "match": "phrase"
-        },
-        {
-          "value": "break into tickets",
-          "kind": "phrase",
-          "match": "phrase"
-        },
-        {
-          "value": "to issues",
-          "kind": "phrase",
-          "match": "phrase"
-        },
-        {
-          "value": "break into issues",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
     "mattpocock-skills:triage": {
       "role": "specialized",
       "logical_group": "explicit-workflows",
@@ -576,82 +507,6 @@
         },
         {
           "value": "triage issues",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
-    "mattpocock-skills:wait-what": {
-      "role": "specialized",
-      "logical_group": "explicit-workflows",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:wait-what",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "wait-what",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "wait what",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
-    "mattpocock-skills:wayfinder": {
-      "role": "specialized",
-      "logical_group": "explicit-workflows",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:wayfinder",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "wayfinder",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "wayfinding",
-          "kind": "phrase",
-          "match": "token"
-        },
-        {
-          "value": "huge foggy effort",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
-    "mattpocock-skills:wizard": {
-      "role": "specialized",
-      "logical_group": "implicit-primitives",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:wizard",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "wizard",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "setup wizard",
-          "kind": "phrase",
-          "match": "phrase"
-        },
-        {
-          "value": "interactive wizard",
           "kind": "phrase",
           "match": "phrase"
         }
@@ -703,7 +558,6 @@
   },
   "legacy_names": {
     "mattpocock-skills:diagnose": "mattpocock-skills:diagnosing-bugs",
-    "mattpocock-skills:to-issues": "mattpocock-skills:to-tickets",
     "mattpocock-skills:to-prd": "mattpocock-skills:to-spec",
     "mattpocock-skills:write-a-skill": "mattpocock-skills:writing-for-agents",
     "mattpocock-skills:writing-great-skills": "mattpocock-skills:writing-for-agents"

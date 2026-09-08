@@ -51,10 +51,10 @@ _Avoid_: Client, buyer, account
 - **Ordering ↔ Billing**: Shared types for `CustomerId` and `Money`
 ```
 
-The skill infers which structure applies:
+Use the repository's configured or existing glossary and context-map locations and format first. The structures above are defaults when there is no existing owner:
 
 - If `CONTEXT-MAP.md` exists, read it to find contexts
 - If only a root `CONTEXT.md` exists, single context
-- If neither exists, create a root `CONTEXT.md` lazily when the first term is resolved
+- If neither exists and no differently named glossary owns the topic, create a root `CONTEXT.md` lazily when a term is resolved and the write is in scope
 
 When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.

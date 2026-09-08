@@ -17,7 +17,7 @@ Here, `upgrade` means converting or reshaping an existing TODO, PRD, issue, chec
    - pre-approved YOLO local operations, pre-approved external reads/writes, runtime hard stops
    - policy-specific temporary-cache root-or-no-root strategy and `Enabled / Disabled / Not applicable` Close housekeeping policy; `Enabled` records the user's cleanup intent and the `watcher:housekeeping` dependency, not a guarantee that the dependency will still be available at Close
    - Loop harness fields when applicable: trigger, inputs, triage/orchestration, isolation, connector boundaries, independent verifier, durable learning
-5. Keep foreseeable approval out of runtime execution. Human approval gates, external-write permission, destructive-action permission, connector permission, permission for planned cleanup, and unresolved design approval must be settled before `Ready`; otherwise keep the goal `Draft`.
+5. Settle design and permission boundaries before `Ready`. Record actual pre-approvals separately from fully specified later actions awaiting approval in `Deferred approval gates` under `../components/planning-preflight.md`. Undefined boundaries keep the goal `Draft`; a Pending gate stops entry into its owning milestone, not earlier authorized preparation. Planned `Enabled` cleanup still requires explicit authorization at preflight.
 6. Add close criteria and a reusable continuation prompt that names the exact goal path and directs the next agent to its frozen authority, required gates, current state, and close handling.
 
 Completion criterion: the goal contains the current baseline, frozen contract, ordered milestones and gates, settled approval boundaries, a task-temporary-cache policy with explicit authorization if `Enabled`, close criteria, reusable prompt, and a completed or explicitly skipped planning-preflight marker; otherwise it remains `Draft`. Legacy goals without the housekeeping section remain compatible but grant no cleanup authorization.
@@ -33,7 +33,7 @@ When a goal uses recurring triggers, multiple agents, worktrees, connectors, ext
 3. Triage and orchestration: how findings become scoped tasks and who owns each step.
 4. Worktree and isolation: shared checkout, separate worktrees/branches, or serialized edits.
 5. Skills and context: mandatory skills, runbooks, docs, specs, or prior decisions.
-6. Connector read/write boundaries: readable/mutable systems, pre-approved writes, and writes that keep the goal `Draft` until approved.
+6. Connector read/write boundaries: readable/mutable systems, pre-approved writes, and specified later writes assigned to deferred approval gates. Undefined boundaries keep the goal `Draft`.
 7. Independent verification: subagent, script, test, reviewer, or gate that checks producer work without trusting self-evaluation.
 8. Runtime hard stops: exact technical breakpoints where execution stops and asks the user.
 9. Durable learning: where results are written back, such as a skill, TODO, report, validation log, runbook, automation memory, or current doc.

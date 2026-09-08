@@ -497,9 +497,9 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
 
         self.assertEqual(self.fixture.events, [])
 
-    def test_codex_apply_reinstalls_an_enabled_outdated_plugin(self) -> None:
+    def test_codex_apply_selects_exact_identity_after_base_version_decreases(self) -> None:
         self.fixture.enabled.add("alpha")
-        self.fixture.versions["alpha"] = "0.9.0"
+        self.fixture.versions["alpha"] = "1.2.3+codex.upstream"
         self.fixture.configure_plugins()
         rows_patch, run_patch = self.patches()
 

@@ -3,10 +3,8 @@ name: research
 description: Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.
 ---
 
-Spin up a **background agent** to do the research, so you keep working while it reads.
+Investigate the requested question against primary sources: official documentation, source code, specifications and first-party evidence. Trace substantive claims to the source that owns them and distinguish verified facts from inference or unresolved questions.
 
-Its job:
+Use a background agent when the investigation is independently useful and delegation is authorized; otherwise do it directly. Keep the assignment bounded and report missing access or incomplete coverage.
 
-1. Investigate the question against **primary sources** — official docs, source code, specs, first-party APIs — not a secondary write-up of them. Follow every claim back to the source that owns it.
-2. Write the findings to a single Markdown file, citing each claim's source.
-3. Save it where the repo already keeps such notes; match the existing convention, and if there is none, put it somewhere sensible and say where.
+Capture the findings and source links in one Markdown file at the repository's existing research location. If none exists, choose an appropriate local path and report it. Reuse an existing note when it owns the same question rather than generating duplicate reports.

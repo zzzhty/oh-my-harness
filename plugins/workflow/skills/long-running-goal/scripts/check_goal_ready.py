@@ -76,6 +76,60 @@ def h2_section(markdown_text: str, heading_pattern: str) -> str | None:
     return sections[0] if sections else None
 
 
+def deferred_approval_errors(
+    markdown_text: str, states: list[MilestoneState]
+) -> list[str]:
+    sections = h2_sections(markdown_text, r"Deferred approval gates")
+    if not sections:
+        return []
+    if len(sections) != 1:
+        return ["duplicate Deferred approval gates sections"]
+    rows = [
+        _table_cells(line)
+        for line in sections[0].splitlines()
+        if line.lstrip().startswith("|")
+    ]
+    header = ["milestone", "action", "status", "approval evidence"]
+    if (
+        len(rows) < 3
+        or [cell.casefold() for cell in rows[0]] != header
+        or len(rows[1]) != 4
+        or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in rows[1])
+    ):
+        return ["Deferred approval gates requires a Milestone / Action / Status / Approval evidence table"]
+
+    errors: list[str] = []
+    by_name = {state.name.casefold(): state for state in states}
+    for cells in rows[2:]:
+        if len(cells) != 4:
+            errors.append("deferred approval gate requires four cells")
+            continue
+        milestone, action, status, evidence = cells
+        state = by_name.get(milestone.casefold())
+        if state is None:
+            errors.append(f"deferred approval gate names unknown milestone: {milestone}")
+        if not action or action.casefold() in {"none", "n/a", "tbd", "pending", "unknown"}:
+            errors.append("deferred approval gate requires a concrete action and target")
+        if status.casefold() not in {"pending", "approved"}:
+            errors.append("deferred approval gate status must be Pending or Approved")
+        elif status.casefold() == "pending":
+            if state and state.status.casefold() in {"in progress", "done"}:
+                errors.append(
+                    f"{state.name} cannot be {state.status} with a Pending approval gate"
+                )
+        elif not evidence or re.fullmatch(
+            r"(?i)none|n/a|pending|tbd|unknown|not approved|awaiting (?:user )?approval",
+            evidence,
+        ) or re.search(
+            r"(?i)\b(?:not|never)\s+(?:(?:yet|been)\s+)?(?:approved|authorized|granted)\b|"
+            r"\b(?:approval|authorization)\s+(?:(?:is|was|has been)\s+)?(?:pending|denied|withheld)\b|"
+            r"\bawaiting (?:user )?approval\b",
+            normalize_contractions(evidence),
+        ):
+            errors.append("Approved deferred gate requires actual user approval evidence")
+    return errors
+
+
 def _named_contract_field(
     line: str,
     labels: dict[str, str],
@@ -531,16 +585,27 @@ def main() -> int:
                     r"(?i)\b(?:not|never|isn't|is not|do not)\b", clause
                 ):
                     continue
+                # Flag explicit unconditional stops, not a resource failure that
+                # happens to mention a checkpoint, rebuild, or review gate.
                 recoverable = re.search(
-                    r"(?i)\b(?:milestone boundary|checkpoint|rebuild|refresh|reinstall|"
-                    r"review gate|first\s+(?:failed\s+)?validation|"
-                    r"first\s+validation\s+failure)\b",
+                    r"(?i)\b(?:stop|pause|halt)\s+(?:at|after|on|before|for)\s+"
+                    r"(?:(?:the|any|each|every|a)\s+)?"
+                    r"(?P<work>milestone boundar(?:y|ies)|checkpoints?|rebuilds?|"
+                    r"refresh(?:es)?|reinstalls?|review gates?|"
+                    r"first\s+(?:failed\s+)?validation(?:\s+failure)?)"
+                    r"(?=\s*(?:[.!]?\s*$|,\s*(?:any|each|every|or)\b|"
+                    r"(?:and|then|to)\s+(?:ask|wait|request)\b))",
+                    clause,
+                ) or re.search(
+                    r"(?i)^\s*[-*]?\s*(?P<work>milestone boundar(?:y|ies)|"
+                    r"checkpoints?|rebuilds?|refresh(?:es)?|reinstalls?|review gates?)"
+                    r"\s+(?:are|is)\s+(?:always\s+)?(?:hard stops?|stop conditions?)\s*[.!]?\s*$",
                     clause,
                 )
                 if recoverable:
                     errors.append(
                         "runtime hard stop misclassifies recoverable work: "
-                        + recoverable.group(0)
+                        + recoverable.group("work")
                     )
                     break
             else:
@@ -548,6 +613,7 @@ def main() -> int:
             break
 
     states = milestone_states(visible_text)
+    errors.extend(deferred_approval_errors(visible_text, states))
     if not states:
         errors.append("missing milestone status table")
     close_rows = [state for state in states if state.name.casefold() == "close"]
@@ -1291,7 +1357,10 @@ def main() -> int:
                                 "failed": r"failed(?:\s+size)?|失败(?:大小|体积)?",
                                 "residual": r"residual(?:\s+size)?|残留(?:大小|体积)?",
                             }
-                            for metric, label_pattern in required_metrics.items():
+                            for metric, label_pattern in (
+                                required_metrics.items()
+                                if temporary_cache_policy == "enabled" else ()
+                            ):
                                 if not re.search(
                                     rf"(?i)(?:{label_pattern})\s*[:：=]\s*{size_value}\b",
                                     housekeeping_evidence,

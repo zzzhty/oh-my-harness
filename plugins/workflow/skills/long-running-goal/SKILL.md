@@ -9,7 +9,7 @@ description: Create, upgrade, execute, resume, evolve, or close a continuation-r
 
 Use this skill only when the user explicitly requests a long-running goal by name, explicitly requests one of its lifecycle actions, or confirms a proposed conversion into one. A large, long, staged, recurring, multi-milestone, or continuation-sensitive task is not itself a trigger. Use system planning for ordinary complex work; you may suggest `long-running-goal` as an option, then wait for the user's confirmation before creating or converting its contract.
 
-A `Ready` goal records current truth, ordered work, the next milestone, gates, validation and checkpoint evidence, frozen local and external authority, runtime hard stops, close handling, and a reusable continuation prompt. Keep the goal `Draft` while required design, approval, permission, input, or placeholder work remains unresolved.
+A `Ready` goal records current truth, ordered work, the next milestone, gates, validation and checkpoint evidence, frozen local and external authority, runtime hard stops, close handling, and a reusable continuation prompt. Keep the goal `Draft` while required design, permission boundaries, input acquisition plans, or placeholders remain unresolved. A fully specified later action may await approval in a `Deferred approval gates` table under `components/planning-preflight.md`; earlier authorized milestones may proceed.
 
 Use `templates/long_running_goal_template.md` for one goal and `templates/long_running_goal_sequence_template.md` for a strict sequence unless the repository has a stronger local convention. Prefer the user-specified path, then an existing active goal/TODO directory or index, and use `docs/todo/<goal_slug>_long_running_goal_plan.md` only as a fallback. Do not create a parallel planning tree or append `/todo` to a directory that already serves as the goal directory. Templates and readiness checkers own field shape and structural completeness.
 
@@ -59,12 +59,12 @@ During milestone execution, apply `components/milestone-scope-gate.md` as the st
 Diagnose and fix ordinary failures while the next useful step is clear and in scope. Ask the user only at a runtime hard stop:
 
 - repeated technical impossibility, normally after at least three attempts or three distinct approaches unless the failure is immediately decisive;
-- required credentials, files, tools, or source-of-truth inputs are unavailable locally;
+- required credentials, files, tools, or source-of-truth inputs cannot be obtained or restored through authorized means and prevent the next required action; local absence alone is a non-stop;
 - the next destructive, irreversible, privacy-sensitive, externally visible, or external-write step requires authorization beyond the frozen contract;
 - evidence contradicts frozen semantics and continuing would change scope or product behavior;
 - a required subagent, connector, worktree, or verifier failed and no meaningful in-plan local fallback remains.
 
-Stop only at a runtime hard stop, not at a status checkpoint. Record assumptions, actions, validation, risk, and checkpoint evidence in the goal.
+Stop only at a runtime hard stop, not at a status checkpoint. Stop the affected action; finish any independent authorized work within the current milestone, without bypassing required gates or advancing past an incomplete milestone. Record assumptions, actions, validation, risk, and checkpoint evidence in the goal.
 
 Task temporary cache housekeeping is separate from execution authority. Use only the policy and owner paths recorded by planning preflight; never infer cleanup consent from YOLO scope, a skipped grill, or generic cleanup language.
 

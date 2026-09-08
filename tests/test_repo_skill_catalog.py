@@ -84,6 +84,72 @@ class RepoSkillCatalogTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "escapes repository authority"):
                 repo_skill_catalog.load_repo_skill_catalog(root)
 
+    def test_discovery_preserves_native_invocation_boundaries(self) -> None:
+        cases = (
+            ("explicit", "disable-model-invocation: true\n", "false", None),
+            ("implicit", "disable-model-invocation: false\n", "true", None),
+            ("codex-only", "", "false", None),
+            ("lost-native-policy", "disable-model-invocation: true\n", "true", "policies disagree"),
+            ("opposite-policy", "disable-model-invocation: false\n", "false", "policies disagree"),
+            ("missing-native-file", "disable-model-invocation: true\n", None, "missing Codex invocation metadata"),
+            ("string-flag", 'disable-model-invocation: "true"\n', "false", "must be a boolean"),
+            ("string-policy", "", '"false"', "must be a boolean"),
+            ("conflicting-flags", "disable-model-invocation: true\ndisable_model_invocation: false\n", "false", "conflicting model-invocation flags"),
+        )
+        for label, flags, native_policy, error in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "repo"
+                skill = write_skill(root, "alpha", "one")
+                (skill / "SKILL.md").write_text(
+                    f"---\nname: one\ndescription: fixture\n{flags}---\n",
+                    encoding="utf-8",
+                )
+                if native_policy is not None:
+                    (skill / "agents").mkdir()
+                    (skill / "agents" / "openai.yaml").write_text(
+                        "interface:\n  display_name: Fixture\n  short_description: Fixture skill\n"
+                        f"policy:\n  allow_implicit_invocation: {native_policy}\n",
+                        encoding="utf-8",
+                    )
+                if error:
+                    with self.assertRaisesRegex(SystemExit, error):
+                        repo_skill_catalog.load_repo_skill_catalog(root)
+                else:
+                    self.assertEqual(len(repo_skill_catalog.load_repo_skill_catalog(root).sources), 1)
+
+    def test_native_metadata_schema_and_resources_are_enforced_at_both_entries(self) -> None:
+        import yaml
+        from validate_plugin import validate_skill_root
+
+        cases = (
+            ({"policy": {"allow_implicit_invocation": False}}, None),
+            ({"policy": {"allow_implicit_invocations": False}}, "unknown Codex policy fields"),
+            ({"policies": {}}, "unknown Codex metadata fields"),
+            ({"interface": None}, "interface must be a mapping"),
+            ({"interface": {"display_name": "Fixture"}}, "short_description must be non-empty"),
+            ({"interface": {"display_name": "Fixture", "short_description": "Fixture", "icon_small": "../outside.png"}}, "must stay inside the plugin archive"),
+            ({"interface": {"display_name": "Fixture", "short_description": "Fixture", "icon_small": "missing.png"}}, "cannot resolve Codex icon_small"),
+            ({"interface": {"display_name": "Fixture", "short_description": "Fixture", "icon_small": "assets/icon.svg"}}, None),
+        )
+        for changes, error in cases:
+            with self.subTest(changes=changes), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "repo"
+                skill = write_skill(root, "alpha", "one")
+                (skill / "agents").mkdir()
+                (skill / "assets").mkdir()
+                (skill / "assets/icon.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
+                metadata = {"interface": {"display_name": "Fixture", "short_description": "Fixture skill"}, **changes}
+                (skill / "agents/openai.yaml").write_text(yaml.safe_dump(metadata), encoding="utf-8")
+                errors = []
+                validate_skill_root(skill.parent, errors)
+                if error:
+                    self.assertTrue(any(error in message for message in errors), errors)
+                    with self.assertRaisesRegex(SystemExit, error):
+                        repo_skill_catalog.load_repo_skill_catalog(root)
+                else:
+                    self.assertEqual(errors, [])
+                    self.assertEqual(len(repo_skill_catalog.load_repo_skill_catalog(root).sources), 1)
+
     def test_live_catalog_matches_all_repository_skill_frontmatter_names(self) -> None:
         catalog = repo_skill_catalog.load_repo_skill_catalog()
         self.assertGreaterEqual(len(catalog.sources), 30)

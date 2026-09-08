@@ -70,7 +70,7 @@ class GoalSequenceCheckerTests(unittest.TestCase):
     ) -> None:
         self.regex_replace_once(
             path,
-            rf"^\| {re.escape(milestone)} \| [^|\n]+ \| [^|\n]+ \| [^|\n]+ \|$",
+            rf"^\| {re.escape(milestone)} \| (?:Not Started|Ready|In Progress|Blocked|Done) \| [^|\n]+ \| [^|\n]+ \|$",
             f"| {milestone} | {status} | {review} | {checkpoint} |",
         )
 
@@ -384,6 +384,31 @@ class GoalSequenceCheckerTests(unittest.TestCase):
             with self.subTest(name=name), self.sequence_workspace() as workspace:
                 mutation(workspace)
                 completed = self.run_sequence(workspace, *args)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_future_child_approval_does_not_block_preceding_work_or_inherit_parent_authority(self) -> None:
+        gate = """
+## Deferred approval gates
+
+| Milestone | Action | Status | Approval evidence |
+| --- | --- | --- | --- |
+| M0 | Apply the reviewed release to the demo service | Pending | None |
+"""
+        for stage in (None, self.first_child_executing, self.successor_executing):
+            with self.subTest(stage=stage), self.sequence_workspace() as workspace:
+                child = workspace / "children" / "child-b.md"
+                child.write_text(child.read_text(encoding="utf-8") + gate, encoding="utf-8")
+                if stage:
+                    stage(workspace)
+                completed = self.run_sequence(workspace)
+                if stage == self.successor_executing:
+                    self.assertEqual(completed.returncode, 1, completed.stdout)
+                    self.assertIn("M0 cannot be In Progress with a Pending approval gate", completed.stderr)
+                    self.replace_once(
+                        child, "| Pending | None |",
+                        "| Approved | User authorized the child release, 2026-09-08 task message |",
+                    )
+                    completed = self.run_sequence(workspace)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_legacy_sequence_without_housekeeping_sections_remains_valid(self) -> None:

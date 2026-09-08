@@ -46,3 +46,7 @@ This contract makes the existing Codex version-sensitive cache behavior safe:
 equal complete versions mean equal canonical plugin content, while a content
 change deterministically produces a new generation and therefore a new cache
 directory.
+
+## Later decision
+
+[ADR 0012](0012-maintain-a-local-mattpocock-selection.md) supersedes the Matt upstream-mirror ownership/version exception. The historical reasoning above remains recorded; current Matt skills are locally maintained.

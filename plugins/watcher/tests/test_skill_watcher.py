@@ -51,6 +51,8 @@ from watcher_runtime.skill.report_pipeline import (  # noqa: E402
     report_state_key,
     save_report_state,
     state_since,
+    skill_logical_groups,
+    usage_rows,
     update_report_state,
 )
 from watcher_runtime.skill.propose_skill_patch import build_proposal, main as propose_main  # noqa: E402
@@ -566,54 +568,33 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertNotIn("sk-testsecret123", json.dumps(redacted))
         self.assertNotIn("abcdefghijklmnop", json.dumps(redacted))
 
-    def test_mattpocock_v123_metadata_preserves_native_and_historical_attribution(self) -> None:
+    def test_matt_selection_preserves_invocation_and_historical_attribution(self) -> None:
         metadata = discover_skill_metadata(REPO_ROOT)
         watcher_identities = set(metadata["skills"])
-        self.assertEqual(len(watcher_identities), 35)
-        self.assertEqual(len(metadata["legacy_names"]), 11)
+        selected = {
+            "ask-matt", "code-review", "codebase-design", "diagnosing-bugs",
+            "domain-modeling", "grill-me", "grill-with-docs", "grilling", "handoff",
+            "implement", "improve-codebase-architecture", "prototype", "research",
+            "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "teach",
+            "to-spec", "triage", "writing-for-agents",
+        }
+        self.assertEqual(len(watcher_identities), 30)
         self.assertEqual(
-            sum(len(values["aliases"]) for values in metadata["skills"].values()),
-            147,
+            {name.split(":", 1)[1] for name in watcher_identities if name.startswith("mattpocock-skills:")},
+            selected,
         )
-        self.assertEqual(
-            sum(len(values["supporting_skills"]) for values in metadata["skills"].values()),
-            5,
-        )
-        self.assertEqual(
-            {
-                role: sum(
-                    values["role"] == role
-                    for values in metadata["skills"].values()
-                )
-                for role in {values["role"] for values in metadata["skills"].values()}
-            },
-            {"discipline": 7, "entrypoint": 2, "specialized": 23, "wrapper": 3},
-        )
-        for skill_name in (
-            "code-review",
-            "implement",
-            "research",
-            "resolving-merge-conflicts",
-            "setup-matt-pocock-skills",
-            "to-questionnaire",
-            "to-spec",
-            "to-tickets",
-            "wait-what",
-            "wayfinder",
-            "wizard",
-            "writing-for-agents",
-        ):
+        for skill_name in selected:
             full_name = f"mattpocock-skills:{skill_name}"
-            self.assertIn(full_name, watcher_identities)
             aliases = metadata["skills"][full_name]["aliases"]
             self.assertIn(
                 {"value": full_name, "kind": "skill_name", "match": "phrase"},
                 aliases,
             )
-            self.assertIn(
-                {"value": skill_name, "kind": "slug", "match": "token"},
-                aliases,
-            )
+            if skill_name in {"code-review", "implement", "research", "resolving-merge-conflicts", "setup-matt-pocock-skills", "to-spec", "writing-for-agents"}:
+                self.assertIn(
+                    {"value": skill_name, "kind": "slug", "match": "token"},
+                    aliases,
+                )
 
         explicit_workflows = {
             "ask-matt",
@@ -624,12 +605,8 @@ class SkillWatcherTests(unittest.TestCase):
             "improve-codebase-architecture",
             "setup-matt-pocock-skills",
             "teach",
-            "to-questionnaire",
             "to-spec",
-            "to-tickets",
             "triage",
-            "wait-what",
-            "wayfinder",
         }
         for full_name, values in metadata["skills"].items():
             if not full_name.startswith("mattpocock-skills:"):
@@ -671,14 +648,9 @@ class SkillWatcherTests(unittest.TestCase):
                 "mattpocock-skills:code-review",
             },
         )
-        self.assertEqual(
-            metadata["skills"]["mattpocock-skills:wayfinder"]["supporting_skills"],
-            [],
-        )
 
         renamed = (
             ("mattpocock-skills:to-prd", "to-prd", "mattpocock-skills:to-spec"),
-            ("mattpocock-skills:to-issues", "to-issues", "mattpocock-skills:to-tickets"),
             (
                 "mattpocock-skills:write-a-skill",
                 "write-a-skill",
@@ -715,6 +687,34 @@ class SkillWatcherTests(unittest.TestCase):
                     self.assertEqual(primary["name"], current_name)
                     self.assertEqual(primary["source"], "prompt_mention")
                     self.assertEqual(primary["alias_kind"], "legacy")
+
+        retired_names = {
+            f"mattpocock-skills:{name}"
+            for name in ("to-questionnaire", "to-tickets", "wait-what", "wayfinder", "wizard", "to-issues")
+        }
+        self.assertTrue(retired_names.isdisjoint(watcher_identities))
+        self.assertTrue(retired_names.isdisjoint(metadata["legacy_names"]))
+        self.assertTrue(retired_names.isdisjoint(metadata["legacy_names"].values()))
+        events = [
+            {
+                "event_type": "turn_summary",
+                "session_id": "historical",
+                "event_id": f"turn-{number}",
+                "skill_attribution": {
+                    "primary": {"name": name, "role": "specialized"},
+                    "supporting": [{"name": "mattpocock-skills:code-review", "role": "discipline"}],
+                },
+            }
+            for number, name in enumerate(sorted(retired_names))
+        ]
+        original_events = json.loads(json.dumps(events))
+        rows = {row["skill"]: row for row in usage_rows(events, skill_logical_groups(metadata))}
+        for name in retired_names:
+            self.assertEqual(rows[name]["primary_turns"], 1)
+            self.assertEqual(rows[name]["effective_turns"], 1)
+            self.assertEqual(rows[name]["logical_group"], "")
+        self.assertEqual(rows["mattpocock-skills:code-review"]["supporting_turns"], len(events))
+        self.assertEqual(events, original_events)
 
     def test_codex_hook_lifecycle_filters_summarizes_and_guards_skill_list(self) -> None:
         catalog = load_repo_skill_catalog(REPO_ROOT)

@@ -10,7 +10,7 @@ This repository is the development mainline for the plugins and personal Codex c
 
 - `watcher`: observes Codex skill usage, audits documentation drift, and packages `doc-alignment`, `housekeeping`, `skill-maintainer`, and `skill-compressor` workflows.
 - `workflow`: packages reusable workflow skills, including continuation-ready long-running goal plans with frozen YOLO non-stops and runtime hard stops, SOP execution harnesses, prompt/strategy loops, explicit subagent orchestration, and standalone summaries.
-- `mattpocock-skills`: packages the unchanged published skill tree and native Codex metadata from `mattpocock/skills`.
+- `mattpocock-skills`: packages 20 locally maintained engineering skills derived from `mattpocock/skills`, with upstream attribution and native Codex metadata.
 
 The old `plugins/doc-watcher` and `plugins/skill-watcher` source trees were removed after the Watcher migration. Git history remains the recovery path for those retired plugin sources.
 
@@ -93,7 +93,7 @@ manager lock.
 
 ## Release And Plugin Distribution Identity
 
-`VERSION` is the canonical `oh-my-harness` release version. First-party plugins use that value as their base version; an upstream-locked mirror keeps its upstream base version. Every complete plugin version ends in `+codex.<generation>`, where `generation` is derived from the canonical plugin package content rather than a timestamp. `.agents/plugins/distribution-identity.json` records the full per-package SHA-256 values and the release-level bundle identity.
+`VERSION` is the canonical `oh-my-harness` release version. All repository plugins use that value as their base version. Every complete plugin version ends in `+codex.<generation>`, where `generation` is derived from the canonical plugin package content rather than a timestamp. `.agents/plugins/distribution-identity.json` records the full per-package SHA-256 values and the release-level bundle identity.
 
 Use the repository-owned tools instead of editing cachebusters manually:
 
@@ -104,7 +104,7 @@ python3 scripts/check_plugin_generations.py
 
 A source edit without a regenerated identity fails before Codex mutation. An already installed plugin is skipped only when its full cache content identity matches the source; same-version drift fails closed instead of silently retaining stale content.
 
-Directory projections use directory symlinks on POSIX and directory junctions on Windows. They manage only entries proven to target canonical skill directories in this checkout, prune only repository-owned stale links, preserve unrelated user skills, and refuse unmanaged same-name entries. A retry may recover an exact canonical empty ordinary directory left by an interrupted link creation; recovery rejects non-empty directories and reparse points and uses only non-recursive `rmdir()`. The unchanged `plugins/mattpocock-skills/skills/` mirror is never rewritten.
+Directory projections use directory symlinks on POSIX and directory junctions on Windows. They manage only entries proven to target canonical skill directories in this checkout, prune only repository-owned stale links, preserve unrelated user skills, and refuse unmanaged same-name entries. A retry may recover an exact canonical empty ordinary directory left by an interrupted link creation; recovery rejects non-empty directories and reparse points and uses only non-recursive `rmdir()`. Matt skills are maintained in the source catalog under the same rules as the other local plugins.
 
 Instructions are part of every harness plan. A missing target requires confirmation, and `--yes` may confirm its creation. Replacing a different existing file always requires live confirmation; `--yes` does not authorize replacement. Directories, unknown reparse points, unmanaged symlinks, configured shadow files, and source or target changes after preflight fail closed. POSIX Codex instructions use a symlink; other current entries use atomic copies.
 
@@ -113,25 +113,14 @@ Instructions are part of every harness plan. A missing target requires confirmat
 Source-package validation is independent of the selected harness:
 
 ```bash
-omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
-omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
-if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
-    if [ -f "$omh_system_validator" ] && [ -f "$omh_system_identifier" ]; then
-        PLUGIN_VALIDATOR="$omh_system_validator"
-    else
-        PLUGIN_VALIDATOR="${OH_MY_HARNESS_ROOT:-$PWD}/scripts/validate_plugin.py"
-    fi
-fi
+PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${OH_MY_HARNESS_ROOT:-$PWD}/scripts/validate_plugin.py}"
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/watcher
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/workflow
-"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/update_mattpocock_skills.py --validate-only
+"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" "$PLUGIN_VALIDATOR" plugins/mattpocock-skills
 "${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/check_plugin_generations.py
 ```
 
-Lifecycle validation preserves an explicit `PLUGIN_VALIDATOR`, otherwise uses
-Codex's system `plugin-creator` validator when both it and its identifier helper
-are present, and falls back to `scripts/validate_plugin.py` only when that
-official bundle is incomplete.
+Lifecycle validation uses the repository-owned `scripts/validate_plugin.py` for every package and preserves an explicit `PLUGIN_VALIDATOR` override. The local contract supports the selected cross-harness frontmatter plus native Codex invocation metadata; it does not inherit a separately installed validator's incompatible requirement to make every frontmatter invocation flag false. An explicit validator failure remains a failure, with no retry through another validator.
 
 The public lifecycle commands own refresh and closure; the Python helpers remain lower-level implementation surfaces:
 
@@ -164,18 +153,13 @@ $ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
 & $ToolingPython scripts\sync_agents_skills.py --target-root (Join-Path $HOME ".agents\skills") --remove-managed --yes
 ```
 
-## Matt Pocock Upstream Sync
+## Matt Pocock Local Selection
 
-The repo-owned updater for the `mattpocock-skills` package lives outside the Watcher runtime. From the repository root, run:
+`plugins/mattpocock-skills/` is a locally maintained selection of 20 skills, derived from upstream v1.2.3. The plugin [README](plugins/mattpocock-skills/README.md) records attribution and the selected entrypoints; [ADR 0012](docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the migration from the complete upstream mirror.
 
-```bash
-python3 scripts/bootstrap_tooling_env.py
-"${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python" scripts/update_mattpocock_skills.py
-```
+Edit the selected source skills directly. For upstream releases, follow the [comparison and selection workflow](plugins/mattpocock-skills/README.md#upstream-updates) and retain review progress and deferred changes in the [upstream review record](dev_docs/mattpocock-upstream-review.md). `omh update` distributes the resulting local edition; it does not import Matt upstream releases. The complete-tree importer and upstream lock remain retired. Source catalog checks preserve cross-harness invocation policy consistency, and the shared plugin validator and distribution identity gates apply to Matt as to every other package.
 
-By default it selects the latest upstream semantic-version tag, clones the source under `~/.codex/sources`, and copies every skill published by the upstream manifest without content rewrites or omissions. It then regenerates only the local plugin wrapper and Watcher metadata, regenerates the distribution identity, and validates byte parity plus upstream's native Codex invocation contract. Use `--source-dir <upstream-checkout> --tag <vX.Y.Z>` to sync from an existing checkout, or `--validate-only` to check the currently packaged plugin without fetching or changing files.
-
-Never edit `plugins/mattpocock-skills/skills/` directly. Its updater-owned upstream lock makes local drift fail validation and blocks an upstream refresh before that drift can be overwritten; local adaptation belongs only in the plugin wrapper, Watcher metadata, and repository-owned tooling around the unchanged mirror.
+The selection removes to-questionnaire, to-tickets, wait-what, wayfinder and wizard from installed discovery. Their direct entrypoints are no longer available; Git history and upstream retain their source. Existing logs and user-created artifacts are preserved. The remaining skill names and invocation policies are unchanged. All three plugins use repository `VERSION` plus their own content generation; activation must select that exact identity even though Matt's base changes from upstream 1.2.3 to local 1.0.0.
 
 After reviewing the source diff, reconcile the complete Codex harness distribution:
 
@@ -610,18 +594,10 @@ python3 -m json.tool .agents/plugins/marketplace.json >/dev/null
 python3 -m json.tool .agents/plugins/install-manifest.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.json >/dev/null
 python3 -m json.tool .agents/harnesses/registry.schema.json >/dev/null
-omh_system_validator="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/validate_plugin.py"
-omh_system_identifier="${CODEX_HOME:-$HOME/.codex}/skills/.system/plugin-creator/scripts/identifier_validation.py"
-if [ -z "${PLUGIN_VALIDATOR:-}" ]; then
-    if [ -f "$omh_system_validator" ] && [ -f "$omh_system_identifier" ]; then
-        PLUGIN_VALIDATOR="$omh_system_validator"
-    else
-        PLUGIN_VALIDATOR="$OH_MY_HARNESS_ROOT/scripts/validate_plugin.py"
-    fi
-fi
+PLUGIN_VALIDATOR="${PLUGIN_VALIDATOR:-${OH_MY_HARNESS_ROOT:-$PWD}/scripts/validate_plugin.py}"
 "$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/watcher"
 "$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/workflow"
-"$OH_MY_HARNESS_PYTHON" "$OH_MY_HARNESS_ROOT/scripts/update_mattpocock_skills.py" --validate-only
+"$OH_MY_HARNESS_PYTHON" "$PLUGIN_VALIDATOR" "$OH_MY_HARNESS_ROOT/plugins/mattpocock-skills"
 "$OH_MY_HARNESS_PYTHON" -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
@@ -632,18 +608,14 @@ Windows PowerShell:
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\plugins\install-manifest.json | Out-Null
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.json | Out-Null
 & $env:OH_MY_HARNESS_PYTHON -m json.tool .agents\harnesses\registry.schema.json | Out-Null
-$SystemPluginValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\validate_plugin.py"
-$SystemIdentifierValidator = Join-Path $env:CODEX_HOME "skills\.system\plugin-creator\scripts\identifier_validation.py"
 $PluginValidator = if ($env:PLUGIN_VALIDATOR) {
     $env:PLUGIN_VALIDATOR
-} elseif ((Test-Path -LiteralPath $SystemPluginValidator -PathType Leaf) -and (Test-Path -LiteralPath $SystemIdentifierValidator -PathType Leaf)) {
-    $SystemPluginValidator
 } else {
     Join-Path $env:OH_MY_HARNESS_ROOT "scripts\validate_plugin.py"
 }
 & $env:OH_MY_HARNESS_PYTHON $PluginValidator "$env:OH_MY_HARNESS_ROOT\plugins\watcher"
 & $env:OH_MY_HARNESS_PYTHON $PluginValidator "$env:OH_MY_HARNESS_ROOT\plugins\workflow"
-& $env:OH_MY_HARNESS_PYTHON "$env:OH_MY_HARNESS_ROOT\scripts\update_mattpocock_skills.py" --validate-only
+& $env:OH_MY_HARNESS_PYTHON $PluginValidator "$env:OH_MY_HARNESS_ROOT\plugins\mattpocock-skills"
 & $env:OH_MY_HARNESS_PYTHON -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
@@ -675,7 +647,6 @@ scripts/validate_plugin.py
 scripts/sync_agents_skills.py
 scripts/sync_codex_agents.py
 scripts/sync_harness_instructions.py
-scripts/update_mattpocock_skills.py
 scripts/upgrade_oh_my_harness.ps1
 scripts/upgrade_oh_my_harness.sh
 tests/

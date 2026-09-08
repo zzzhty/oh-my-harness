@@ -1,12 +1,12 @@
 {
   "name": "mattpocock-skills",
-  "version": "1.2.3+codex.1b99dd16bd582276",
-  "description": "Local Codex package of Matt Pocock's upstream agent skills.",
+  "version": "1.0.0+codex.ac2426f67fdb924a",
+  "description": "OMH's locally maintained selection of Matt Pocock's engineering skills.",
   "author": {
     "name": "Matt Pocock"
   },
   "homepage": "https://github.com/mattpocock/skills",
-  "repository": "https://github.com/mattpocock/skills",
+  "repository": "https://github.com/zzzhty/oh-my-harness",
   "license": "MIT",
   "keywords": [
     "skills",
@@ -16,10 +16,10 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Matt Pocock Skills",
-    "shortDescription": "Use Matt Pocock's agent skills in Codex.",
-    "longDescription": "Matt Pocock Skills packages the unchanged upstream mattpocock/skills v1.2.3 skill tree and its native Codex metadata.",
-    "developerName": "Matt Pocock",
+    "displayName": "Matt Pocock Skills (OMH edition)",
+    "shortDescription": "Selected engineering skills maintained by OMH.",
+    "longDescription": "A locally maintained selection derived from Matt Pocock's skills, with focused workflows and preserved upstream attribution.",
+    "developerName": "Oh My Harness",
     "category": "Productivity",
     "capabilities": [
       "skills"

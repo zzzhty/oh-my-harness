@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -85,7 +85,77 @@ def skill_frontmatter_name(skill_file: Path) -> str:
         raise SystemExit(f"skill frontmatter name must be a non-empty trimmed string: {skill_file}")
     if _CALLABLE_NAME.fullmatch(name) is None:
         raise SystemExit(f"skill frontmatter name is not a portable bare catalog skill name: {name!r}: {skill_file}")
+    validate_skill_invocation(skill_file, payload)
     return name
+
+
+def validate_skill_invocation(skill_file: Path, frontmatter: dict[str, Any]) -> None:
+    """Keep declared cross-harness invocation policies consistent at discovery."""
+
+    flags = [
+        frontmatter[key]
+        for key in ("disable-model-invocation", "disable_model_invocation")
+        if key in frontmatter
+    ]
+    if any(not isinstance(value, bool) for value in flags):
+        raise SystemExit(f"model-invocation flag must be a boolean: {skill_file}")
+    if len(set(flags)) > 1:
+        raise SystemExit(f"conflicting model-invocation flags: {skill_file}")
+
+    agent_file = skill_file.parent / "agents" / "openai.yaml"
+    if not agent_file.exists():
+        if flags and flags[0]:
+            raise SystemExit(f"explicit-only skill is missing Codex invocation metadata: {agent_file}")
+        return
+    yaml = _require_yaml()
+    try:
+        agent = yaml.safe_load(agent_file.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise SystemExit(f"invalid Codex skill metadata: {agent_file}: {exc}") from exc
+    if not isinstance(agent, dict):
+        raise SystemExit(f"Codex skill metadata must be a mapping: {agent_file}")
+    interface = agent.get("interface")
+    policy = agent.get("policy", {})
+    dependencies = agent.get("dependencies", {})
+    sections = (
+        ("metadata", agent, {"interface", "policy", "dependencies"}),
+        ("interface", interface, {"display_name", "short_description", "icon_small", "icon_large", "brand_color", "default_prompt"}),
+        ("policy", policy, {"allow_implicit_invocation"}),
+        ("dependencies", dependencies, {"tools"}),
+    )
+    for label, values, allowed in sections:
+        if not isinstance(values, dict):
+            raise SystemExit(f"Codex {label} must be a mapping: {agent_file}")
+        unknown = set(values) - allowed
+        if unknown:
+            raise SystemExit(f"unknown Codex {label} fields {sorted(map(str, unknown))}: {agent_file}")
+    allow_implicit = policy.get("allow_implicit_invocation", True)
+    if not isinstance(allow_implicit, bool):
+        raise SystemExit(f"allow_implicit_invocation must be a boolean: {agent_file}")
+    if flags and flags[0] == allow_implicit:
+        raise SystemExit(f"Claude and Codex invocation policies disagree: {skill_file}")
+    for key in ("display_name", "short_description"):
+        value = interface.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise SystemExit(f"Codex {key} must be non-empty: {agent_file}")
+    prompt = interface.get("default_prompt")
+    if prompt is not None and (not isinstance(prompt, str) or not prompt.strip()):
+        raise SystemExit(f"Codex default_prompt must be non-empty: {agent_file}")
+    color = interface.get("brand_color")
+    if color is not None and (not isinstance(color, str) or re.fullmatch(r"#[0-9A-Fa-f]{6}", color) is None):
+        raise SystemExit(f"Codex brand_color must use #RRGGBB: {agent_file}")
+    for key in ("icon_small", "icon_large"):
+        raw = interface.get(key)
+        if raw is None:
+            continue
+        if not isinstance(raw, str) or not raw.strip():
+            raise SystemExit(f"Codex {key} must be a non-empty relative path: {agent_file}")
+        relative = PurePosixPath(raw.replace("\\", "/"))
+        if relative.is_absolute() or ".." in relative.parts or re.match(r"^[A-Za-z]:", raw):
+            raise SystemExit(f"Codex {key} must stay inside the plugin archive: {agent_file}")
+        asset = _resolved_within(skill_file.parent / relative, skill_file.parents[2].resolve(), label=f"Codex {key}")
+        if not asset.is_file():
+            raise SystemExit(f"Codex {key} must point to a file: {agent_file}")
 
 
 def load_repo_skill_catalog(repo_root: Path = REPO_ROOT) -> SkillCatalog:

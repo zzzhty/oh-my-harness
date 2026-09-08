@@ -665,6 +665,26 @@ Residual size: 3 KiB
         completed = self.run_goal(disabled_closed, name="disabled-closed.md")
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+        without_sizes = re.sub(
+            r"^(?:Removed|Preserved|Failed|Residual) size:.*\n", "", disabled_closed,
+            flags=re.MULTILINE,
+        )
+        for label, document in (
+            ("omitted", without_sizes),
+            ("unknown", without_sizes + "Residual size: unknown; inventory is unavailable.\n"),
+        ):
+            with self.subTest(disabled_sizes=label):
+                completed = self.run_goal(document)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assert_goal_error(
+            without_sizes.replace("Action: Preserved the exact retained roots without cleanup.", ""),
+            "must record the preserved or retained action",
+        )
+        self.assert_goal_error(
+            without_sizes.replace("- goal-owned: /tmp/demo-goal-cache", ""),
+            "must repeat every exact recorded root",
+        )
+
         enabled_none_created = self.close_goal(
             self.ready,
             recorded_roots="None created",
@@ -1125,6 +1145,108 @@ Checkpoint evidence：close revision recorded.
         for name, text, message in cases:
             with self.subTest(name=name):
                 self.assert_goal_error(text, message)
+
+    def test_deferred_approval_allows_preparation_but_gates_execution_and_close(self) -> None:
+        gate = """
+## Deferred approval gates
+
+| Milestone | Action | Status | Approval evidence |
+| --- | --- | --- | --- |
+| M1 | Publish the reviewed release to the demo production service | Pending | None |
+"""
+        ready = replace_all(
+            self.with_harness(self.ready, LOOP_HARNESS),
+            ("## Milestone status table", "## M1 milestone\n\nPublish the prepared release.\n\n## Milestone status table"),
+            ("| Close | Not Started", "| M1 | Not Started | Pending | Pending |\n| Close | Not Started"),
+        ) + gate
+        preparing = replace_all(
+            ready,
+            ("Overall status: Ready", "Overall status: In Progress"),
+            ("| M0 | Ready |", "| M0 | In Progress |"),
+        )
+        at_gate = replace_all(
+            ready,
+            ("| M0 | Ready | Pending | Pending |", "| M0 | Done | Passed | Done |"),
+            ("| M1 | Not Started |", "| M1 | Ready |"),
+        )
+        blocked = replace_all(
+            at_gate,
+            ("Overall status: Ready", "Overall status: In Progress"),
+            ("| M1 | Ready |", "| M1 | Blocked |"),
+            ("## M1 milestone", "## M1 milestone\n\nRuntime hard-stop evidence: awaiting the user's release authorization."),
+        )
+        for document in (ready, preparing, at_gate, blocked):
+            completed = self.run_goal(document)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        running = replace_all(
+            at_gate,
+            ("Overall status: Ready", "Overall status: In Progress"),
+            ("| M1 | Ready |", "| M1 | In Progress |"),
+        )
+        self.assert_goal_error(running, "M1 cannot be In Progress with a Pending approval gate")
+        approved = running.replace("| Pending | None |", "| Approved | User release authorization, 2026-09-08 task message |")
+        completed = self.run_goal(approved)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        closed = self.close_goal(
+            at_gate.replace("| M1 | Ready | Pending | Pending |", "| M1 | Done | Passed | Done |"),
+            recorded_roots="goal-owned: /tmp/demo-goal-cache", evidence=CLOSE_EVIDENCE,
+        )
+        self.assert_goal_error(closed, "M1 cannot be Done with a Pending approval gate")
+        close_gate = closed.replace(
+            "| M1 | Publish the reviewed release", "| Close | Publish the reviewed release"
+        )
+        self.assert_goal_error(close_gate, "Close cannot be Done with a Pending approval gate")
+        completed = self.run_goal(closed.replace(
+            "| Pending | None |", "| Approved | User release authorization, 2026-09-08 task message |"
+        ))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        for old, new, error in (
+            ("| M1 | Publish", "| M9 | Publish", "unknown milestone: M9"),
+            ("Publish the reviewed release to the demo production service", "", "requires a concrete action"),
+            ("Publish the reviewed release to the demo production service", "unknown", "requires a concrete action"),
+            ("| Pending | None |", "| Denied | User denied |", "must be Pending or Approved"),
+            ("| Pending | None |", "| Approved | None |", "requires actual user approval evidence"),
+            ("| Pending | None |", "| Approved | awaiting user approval |", "requires actual user approval evidence"),
+            ("| Pending | None |", "| Approved | User has not approved this action yet |", "requires actual user approval evidence"),
+            ("| Pending | None |", "| Approved | User approval is denied |", "requires actual user approval evidence"),
+            ("| Status | Approval evidence |", "| Approval | Evidence |", "requires a Milestone / Action / Status"),
+        ):
+            with self.subTest(error=error, replacement=new):
+                self.assert_goal_error(ready.replace(old, new), error)
+        self.assert_goal_error(ready + gate, "duplicate Deferred approval gates sections")
+        # Declaring a future gate never converts unresolved pre-approval into permission.
+        self.assert_goal_error(
+            ready.replace("Not applicable: this demo does not access external systems.", "Release write: pending approval."),
+            "unresolved external write approval keeps the goal Draft",
+        )
+
+    def test_hard_stop_resource_failures_are_not_keyword_stops(self) -> None:
+        for reason in (
+            "Stop if required checkpoint signing credentials cannot be obtained through authorized recovery.",
+            "Stop when the rebuild tool is unavailable after authorized restore attempts.",
+            "Stop at checkpoint if required signing credentials remain unavailable after authorized recovery.",
+            "A required review gate verifier failed and no meaningful in-plan step remains.",
+        ):
+            with self.subTest(reason=reason):
+                document = re.sub(
+                    r"Stop only when repeated local diagnostics.*?externally visible\.",
+                    reason, self.ready, flags=re.DOTALL,
+                )
+                completed = self.run_goal(document)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+        for reason in (
+            "Stop at every checkpoint.", "Checkpoints are hard stops.", "Pause after each rebuild.",
+            "Stop at every checkpoint and ask the user for permission before continuing.",
+            "Stop at the first validation failure and wait for user instructions.",
+        ):
+            document = re.sub(
+                r"Stop only when repeated local diagnostics.*?externally visible\.",
+                reason, self.ready, flags=re.DOTALL,
+            )
+            self.assert_goal_error(document, "runtime hard stop misclassifies recoverable work")
 
     def test_goal_checker_accepts_valid_contract_matrix(self) -> None:
         ready = self.ready

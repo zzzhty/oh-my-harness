@@ -21,7 +21,6 @@ VERSION_FILE = Path("VERSION")
 MARKETPLACE_FILE = Path(".agents/plugins/marketplace.json")
 IDENTITY_FILE = Path(".agents/plugins/distribution-identity.json")
 PLUGIN_MANIFEST = Path(".codex-plugin/plugin.json")
-UPSTREAM_LOCK = Path(".codex-plugin/upstream-lock.json")
 CODEX_VERSION_PATTERN = re.compile(
     rf"^(?P<base>.+)\+codex\.(?P<generation>[0-9a-f]{{{GENERATION_LENGTH}}})$"
 )
@@ -209,23 +208,6 @@ def _manifest_name_and_version(plugin_root: Path) -> tuple[str, str, dict[str, o
     return name.strip(), version.strip(), payload
 
 
-def _upstream_base_version(plugin_root: Path) -> str:
-    path = plugin_root / UPSTREAM_LOCK
-    payload = _load_json_object(path, label="upstream identity lock")
-    upstream = payload.get("upstream")
-    if not isinstance(upstream, dict):
-        raise PluginIdentityError(f"upstream identity lock is missing upstream object: {path}")
-    tag = upstream.get("tag")
-    if not isinstance(tag, str) or not tag.strip():
-        raise PluginIdentityError(f"upstream identity lock tag is missing: {path}")
-    version = tag.strip()
-    if version.startswith("v"):
-        version = version[1:]
-    if not version:
-        raise PluginIdentityError(f"upstream identity lock tag has no version: {path}")
-    return version
-
-
 def expected_plugin_identity(
     repo_root: Path,
     plugin_root: Path,
@@ -237,12 +219,7 @@ def expected_plugin_identity(
         raise PluginIdentityError(
             f"plugin manifest name mismatch; expected {expected_name!r}, found {name!r}: {plugin_root}"
         )
-    if (plugin_root / UPSTREAM_LOCK).is_file():
-        authority = "upstream"
-        base_version = _upstream_base_version(plugin_root)
-    else:
-        authority = "release"
-        base_version = release_version(repo_root)
+    base_version = release_version(repo_root)
     content_sha256 = canonical_plugin_package_digest(
         plugin_root,
         base_version=base_version,
@@ -250,7 +227,7 @@ def expected_plugin_identity(
     generation = content_sha256[:GENERATION_LENGTH]
     return PluginDistributionIdentity(
         name=name,
-        version_authority=authority,
+        version_authority="release",
         base_version=base_version,
         version=f"{base_version}+codex.{generation}",
         generation=generation,

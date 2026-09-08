@@ -11,3 +11,7 @@ The migration should be explicit: archive the old `events.jsonl`, reset turn sta
 Installed plugin metadata is part of the runtime contract. Validation and `SessionStart` should fail visibly when a manifest references missing skills or invalid dependency entries, because silently dropping those relationships would make effective usage counts untrustworthy.
 
 For upstream-synced skill packages such as `mattpocock-skills`, this work should add incremental metadata indexes rather than changing skill behavior text. Skill Watcher can consume canonical names, typed aliases, roles, and dependency relationships from plugin-owned metadata, but it should not require editing the upstream skill instructions themselves to make reporting accurate.
+
+## Later decision
+
+[ADR 0012](0012-maintain-a-local-mattpocock-selection.md) supersedes the Matt upstream-mirror ownership/version exception. The historical reasoning above remains recorded; current Matt skills are locally maintained.

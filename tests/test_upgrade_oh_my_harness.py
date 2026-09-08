@@ -144,7 +144,7 @@ class UnixUpgradeWrapperTests(unittest.TestCase):
         )
         self.assertNotIn("bootstrap Python has no PyYAML", result.stderr)
 
-    def test_wrapper_prefers_complete_system_validator_then_falls_back(self) -> None:
+    def test_wrapper_uses_repository_validator_and_preserves_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             codex_home = root / ".codex"
@@ -202,7 +202,7 @@ class UnixUpgradeWrapperTests(unittest.TestCase):
         self.assertEqual(incomplete_result.returncode, 0, incomplete_result.stderr)
         self.assertIn(f"PLUGIN_VALIDATOR={fallback_validator}", incomplete_result.stdout)
         self.assertEqual(system_result.returncode, 0, system_result.stderr)
-        self.assertIn(f"PLUGIN_VALIDATOR={system_validator}", system_result.stdout)
+        self.assertIn(f"PLUGIN_VALIDATOR={fallback_validator}", system_result.stdout)
         self.assertEqual(override_result.returncode, 0, override_result.stderr)
         self.assertIn(
             "PLUGIN_VALIDATOR=/custom/validate_plugin.py",
@@ -537,12 +537,7 @@ class PowerShellUpgradeWrapperContractTests(unittest.TestCase):
         self.assertIn('$refreshArgs += "--yes"', script)
         self.assertIn('@("--migrate-from-repo", $MigrateFromRepo)', script)
         self.assertIn('if (-not $env:PLUGIN_VALIDATOR)', script)
-        self.assertIn('$systemPluginValidator', script)
-        self.assertIn('$systemIdentifierValidator', script)
-        self.assertIn(
-            'Join-Path $env:CODEX_HOME "skills\\.system\\plugin-creator\\scripts\\validate_plugin.py"',
-            script,
-        )
+        self.assertIn('$env:PLUGIN_VALIDATOR = Join-Path $env:OH_MY_HARNESS_ROOT "scripts\\validate_plugin.py"', script)
         self.assertIn(
             'Join-Path $env:OH_MY_HARNESS_ROOT "scripts\\validate_plugin.py"',
             script,
