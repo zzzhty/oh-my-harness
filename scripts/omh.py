@@ -47,6 +47,7 @@ from manager_state import (
     write_manager,
 )
 from plugin_package_identity import require_repository_identity
+from manager_environment import ensure_user_path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_COMMANDS = {
@@ -59,6 +60,7 @@ PUBLIC_COMMANDS = {
     "check",
     "doctor",
     "recover",
+    "repair",
     "version",
 }
 INTERNAL_COMMANDS = {
@@ -894,6 +896,14 @@ def _invoke_internal(repo: Path, home: Path, command: str, *extra: str) -> subpr
 
 
 def command_update(args: argparse.Namespace) -> int:
+    shortcut = getattr(args, "target", None)
+    if shortcut:
+        if args.channel or args.to:
+            raise SystemExit("use one update target: positional TARGET, --channel, or --to")
+        if shortcut in {"main", "stable"}:
+            args.channel = shortcut
+        else:
+            args.to = shortcut
     home = lexical_absolute(manager_home(args.home))
     repo = repo_path(home)
     with ManagerLock(home):
@@ -907,8 +917,9 @@ def command_update(args: argparse.Namespace) -> int:
                 "managed checkout remote differs from manager state; "
                 f"expected {recorded_repository!r}, found {actual_repository!r}"
             )
-        _git(repo, "fetch", "--prune", "--prune-tags", "--tags", "origin", capture=False)
         channel = args.channel or desired["updatePolicy"]["channel"]
+        fetch_refs = ["+refs/heads/main:refs/remotes/origin/main"] if channel == "main" else []
+        _git(repo, "fetch", "--prune", "--prune-tags", "--tags", "origin", *fetch_refs, capture=False)
         requested_ref, target = _target_revision(
             repo,
             channel=channel,
@@ -935,6 +946,14 @@ def command_update(args: argparse.Namespace) -> int:
                 requested_ref=requested_ref,
             )
             write_desired(home, desired_harnesses(desired), channel=channel)
+            from install_oh_my_harness import write_launchers
+
+            write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
+            ensure_user_path(home)
+            refresh_args = argparse.Namespace(**{**vars(args), "yes": True, "dry_run": False, "repair": False})
+            for harness in desired_harnesses(desired):
+                _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
+                _write_harness_state(home, harness)
             return 0
 
         if not args.allow_downgrade:
@@ -1085,6 +1104,10 @@ def command_resume_update(args: argparse.Namespace) -> int:
     for harness in targets:
         _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
         _write_harness_state(home, harness)
+    from install_oh_my_harness import write_launchers
+
+    write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
+    ensure_user_path(home)
     finish_operation(home, outcome="success")
     print(f"updated oh-my-harness to {release} ({target['revision'][:12]})")
     return 0
@@ -1173,31 +1196,74 @@ def command_recover(args: argparse.Namespace) -> int:
 
 def command_manager_repair(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
-        _manager, desired = _state_context(home, persist=True)
-        _bootstrap_tooling(home)
-        from install_oh_my_harness import write_launchers
+    dry_run = bool(getattr(args, "dry_run", False))
+    if not dry_run and (getattr(args, "rebuild", False) or getattr(args, "reclone", False)):
+        if os.environ.get("OH_MY_HARNESS_REPAIR_BOOTSTRAPPED") != str(home):
+            raise SystemExit("run runtime/checkout repair through the omh launcher, not scripts/omh.py")
+    if load_current_operation(home) is not None:
+        if dry_run:
+            print("would roll back the interrupted update before repairing harnesses")
+            return 0
+        command_recover(args)
+    from contextlib import nullcontext
 
-        write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
-        refresh_args = argparse.Namespace(
-            home=str(home),
-            targets=[],
-            harness=None,
-            all=True,
-            repair=False,
-            codex_home=None,
-            codex=None,
-            yes=True,
-            dry_run=False,
-            no_check=False,
-            migrate_marketplace=False,
-            migrate_from_repo=None,
-            operation_id=None,
-        )
-        for harness in desired_harnesses(desired):
+    with nullcontext() if dry_run else ManagerLock(home):
+        manager, desired = _state_context(home, persist=not dry_run, allow_degraded=True)
+        installed = list(desired_harnesses(desired))
+        targets = _target_set(args, desired=tuple(installed), mode="refresh")
+        receipt_path = state_path(home) / "install.json"
+        receipt = None
+        if receipt_path.exists() or receipt_path.is_symlink():
+            from manager_state import install_receipt
+
+            receipt = install_receipt(home)
+        if not targets and receipt and receipt.get("status") == "installing":
+            targets = _validate_targets([receipt["harness"]])
+        former_repo = getattr(args, "migrate_from_repo", None)
+        if not former_repo and receipt:
+            paths = receipt.get("paths")
+            recorded = paths.get("repo") if isinstance(paths, dict) else None
+            if isinstance(recorded, str) and Path(recorded).is_absolute() and Path(recorded) != REPO_ROOT:
+                former_repo = recorded
+        if not dry_run:
+            _bootstrap_tooling(home)
+            from install_oh_my_harness import write_launchers
+
+            write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
+        if not getattr(args, "no_path", False):
+            ensure_user_path(home, dry_run=dry_run)
+        for harness in targets:
+            refresh_args = argparse.Namespace(
+                home=str(home), targets=[harness], harness=None, all=False,
+                repair=True, yes=True, dry_run=dry_run, no_check=False,
+                codex_home=getattr(args, "codex_home", None) if harness == "codex" else None,
+                codex=getattr(args, "codex", None) if harness == "codex" else None,
+                migrate_marketplace=bool(getattr(args, "migrate_marketplace", False)) if harness == "codex" else False,
+                migrate_from_repo=former_repo if harness == "codex" else None,
+                operation_id=None,
+            )
             _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
-            _write_harness_state(home, harness)
-        print("manager repair complete")
+            if not dry_run:
+                _write_harness_state(home, harness)
+                if harness not in installed:
+                    installed.append(harness)
+                write_desired(home, installed)
+        if not dry_run:
+            write_manager(
+                home, repository=manager["repository"], revision=manager["revision"],
+                release_version=manager["releaseVersion"], bundle_identity=manager["bundleIdentity"],
+                channel=manager["channel"], requested_ref=manager.get("requestedRef", "main"),
+                status="ready",
+            )
+            if receipt is not None:
+                from install_oh_my_harness import launcher_paths, write_install_state
+
+                write_install_state(
+                    home=home, repository=manager["repository"], ref=receipt.get("ref", "main"),
+                    repo=REPO_ROOT, harness=receipt["harness"], launchers=launcher_paths(home),
+                    status="ready", revision=manager["revision"],
+                )
+        print("repair plan complete" if dry_run else "manager and selected harnesses repaired and checked")
     return 0
 
 
@@ -1300,6 +1366,7 @@ def command_manager_uninstall(args: argparse.Namespace) -> int:
                 + ", ".join(unknown)
                 + "; inspect them or pass --purge-unknown"
             )
+        ensure_user_path(home, remove=True)
         _schedule_self_delete(home)
         print(f"manager uninstall scheduled after current process exits: {home}")
     return 0
@@ -1368,6 +1435,16 @@ def _add_harness_common(
     parser.add_argument("--dry-run", action="store_true")
 
 
+def _add_repair_options(parser: argparse.ArgumentParser, harness_choices: Sequence[str]) -> None:
+    _add_harness_common(parser, harness_choices=harness_choices)
+    parser.add_argument("--rebuild", action="store_true", help="Rebuild the tooling venv through the stable launcher.")
+    parser.add_argument("--reclone", action="store_true", help="Restore the recorded checkout from its remote, keeping a backup.")
+    parser.add_argument("--no-path", action="store_true", help="Do not change current-user shell/registry PATH settings.")
+    parser.add_argument("--migrate-marketplace", action="store_true")
+    parser.add_argument("--migrate-from-repo")
+    parser.set_defaults(func=command_manager_repair)
+
+
 def build_parser() -> argparse.ArgumentParser:
     harness_choices = _load_registry().choices
     parser = argparse.ArgumentParser(
@@ -1397,16 +1474,20 @@ def build_parser() -> argparse.ArgumentParser:
     remove.set_defaults(func=command_remove)
 
     update = sub.add_parser("update", help="Update manager source and refresh installed harnesses.")
+    update.add_argument("target", nargs="?", metavar="TARGET", help="main, stable, or a Git ref; defaults to the saved channel.")
     update.add_argument("--check", action="store_true", help="Show the available transition without changing state.")
     update.add_argument("--channel", choices=("stable", "main"))
     update.add_argument("--to", help="Explicit Git ref/tag/commit target.")
     update.add_argument("--allow-downgrade", action="store_true")
     update.set_defaults(func=command_update)
 
+    repair = sub.add_parser("repair", help="Repair runtime, launchers, user PATH and managed harness resources.")
+    _add_repair_options(repair, harness_choices)
+
     manager = sub.add_parser("manager", help="Repair or uninstall the manager instance.")
     manager_sub = manager.add_subparsers(dest="manager_command", required=True)
-    repair = manager_sub.add_parser("repair", help="Rebuild manager runtime and launchers.")
-    repair.set_defaults(func=command_manager_repair)
+    repair = manager_sub.add_parser("repair", help="Compatibility spelling of omh repair.")
+    _add_repair_options(repair, harness_choices)
     uninstall = manager_sub.add_parser("uninstall", help="Uninstall the manager instance.")
     uninstall.add_argument("--with-harnesses", action="store_true")
     uninstall.add_argument("--purge-unknown", action="store_true")

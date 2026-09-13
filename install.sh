@@ -6,15 +6,22 @@ default_bootstrap_ref=main
 
 find_bootstrap_python() {
     if [ -n "${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}" ]; then
-        printf '%s\n' "$OH_MY_HARNESS_BOOTSTRAP_PYTHON"
-    elif command -v python3 >/dev/null 2>&1; then
-        command -v python3
-    elif command -v python >/dev/null 2>&1; then
-        command -v python
-    else
-        echo "error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install python3." >&2
+        if "$OH_MY_HARNESS_BOOTSTRAP_PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+            printf '%s\n' "$OH_MY_HARNESS_BOOTSTRAP_PYTHON"
+            return 0
+        fi
+        echo "error: OH_MY_HARNESS_BOOTSTRAP_PYTHON must select Python 3.11 or newer" >&2
         return 1
     fi
+    for candidate in python3 python python3.14 python3.13 python3.12 python3.11; do
+        if command -v "$candidate" >/dev/null 2>&1 &&
+           "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+            command -v "$candidate"
+            return 0
+        fi
+    done
+    echo "error: Python 3.11 or newer not found; set OH_MY_HARNESS_BOOTSTRAP_PYTHON" >&2
+    return 1
 }
 
 resolve_script_dir() {

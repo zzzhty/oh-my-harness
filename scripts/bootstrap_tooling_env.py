@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -112,7 +113,7 @@ def create_venv(base_python: Path, venv_path: Path, *, dry_run: bool) -> None:
 
 
 def refresh_dependencies(python: Path, requirements: Path, *, dry_run: bool) -> None:
-    run([str(python), "-m", "pip", "install", "-r", str(requirements)], dry_run=dry_run)
+    run([str(python), "-m", "pip", "--disable-pip-version-check", "install", "-r", str(requirements)], dry_run=dry_run)
     run(
         [
             str(python),
@@ -139,7 +140,33 @@ def rollback_rebuild(venv_path: Path, backup_path: Path | None) -> None:
         print(f"restored previous tooling venv after bootstrap failure: {venv_path}", flush=True)
 
 
-def bootstrap_tooling_env(venv_path: Path, requirements: Path, *, dry_run: bool) -> None:
+def _dependencies_ready(venv_path: Path, requirements: Path) -> bool:
+    receipt = venv_path / ".omh-requirements.txt"
+    try:
+        if receipt.is_symlink() or receipt.read_text(encoding="utf-8") != requirements.read_text(encoding="utf-8"):
+            return False
+        result = subprocess.run(
+            [str(venv_python(venv_path)), "-c", "import jsonschema, yaml"],
+            capture_output=True,
+        )
+        return result.returncode == 0
+    except (OSError, UnicodeError):
+        return False
+
+
+def _record_requirements(venv_path: Path, requirements: Path) -> None:
+    target = venv_path / ".omh-requirements.txt"
+    temporary = venv_path / f".omh-requirements-{uuid.uuid4().hex}.tmp"
+    try:
+        temporary.write_text(requirements.read_text(encoding="utf-8"), encoding="utf-8")
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def bootstrap_tooling_env(
+    venv_path: Path, requirements: Path, *, dry_run: bool, rebuild: bool = False
+) -> None:
     require_supported_python()
     base_python = canonical_base_python()
     print(f"Bootstrap base Python: {base_python}")
@@ -149,14 +176,14 @@ def bootstrap_tooling_env(venv_path: Path, requirements: Path, *, dry_run: bool)
         raise SystemExit(f"refusing to replace non-directory venv path: {venv_path}")
 
     healthy, health_detail = venv_health(venv_path, base_python=base_python)
-    if healthy:
+    if healthy and not rebuild:
         print(health_detail)
-        create_venv(base_python, venv_path, dry_run=dry_run)
-        if not dry_run:
-            refreshed_healthy, refreshed_detail = venv_health(venv_path, base_python=base_python)
-            if not refreshed_healthy:
-                raise RuntimeError(f"refreshed tooling venv is unhealthy: {refreshed_detail}")
+        if _dependencies_ready(venv_path, requirements):
+            print("tooling dependencies are ready; no pip installation required")
+            return
         refresh_dependencies(venv_python(venv_path), requirements, dry_run=dry_run)
+        if not dry_run:
+            _record_requirements(venv_path, requirements)
         return
 
     print(f"Tooling venv rebuild required: {health_detail}")
@@ -181,6 +208,7 @@ def bootstrap_tooling_env(venv_path: Path, requirements: Path, *, dry_run: bool)
         if not created_healthy:
             raise RuntimeError(f"new tooling venv is unhealthy: {created_detail}")
         refresh_dependencies(venv_python(venv_path), requirements, dry_run=False)
+        _record_requirements(venv_path, requirements)
     except BaseException as bootstrap_error:
         try:
             rollback_rebuild(venv_path, backup_path)
@@ -214,6 +242,7 @@ def main() -> None:
         action="store_true",
         help="Inspect and print the bootstrap plan without writing.",
     )
+    parser.add_argument("--rebuild", action="store_true", help="Rebuild even a healthy tooling venv.")
     args = parser.parse_args()
 
     venv_path = Path(args.venv).expanduser()
@@ -221,7 +250,7 @@ def main() -> None:
     if not requirements.is_file():
         raise SystemExit(f"requirements file does not exist: {requirements}")
 
-    bootstrap_tooling_env(venv_path, requirements, dry_run=args.dry_run)
+    bootstrap_tooling_env(venv_path, requirements, dry_run=args.dry_run, rebuild=args.rebuild)
 
 
 if __name__ == "__main__":

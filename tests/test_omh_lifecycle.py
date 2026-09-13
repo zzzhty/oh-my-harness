@@ -473,6 +473,12 @@ class LifecycleStateBoundaryTests(unittest.TestCase):
 
 
 class UpdateTransactionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        for target in ("omh.ensure_user_path", "install_oh_my_harness.write_launchers"):
+            patcher = mock.patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def make_remote_pair(self, root: Path) -> tuple[Path, str, str]:
         remote = root / "remote.git"
         writer = root / "writer"
@@ -586,6 +592,8 @@ class UpdateTransactionTests(unittest.TestCase):
                 mock.patch.object(omh, "_validate_update_target", return_value=("1.0.0", "sha256:bundle")),
                 mock.patch.object(omh, "write_manager") as write_manager,
                 mock.patch.object(omh, "write_desired") as write_desired,
+                mock.patch.object(omh, "_refresh_one") as refresh,
+                mock.patch.object(omh, "_write_harness_state") as receipt,
             ):
                 self.assertEqual(omh.command_update(args), 0)
 
@@ -601,6 +609,10 @@ class UpdateTransactionTests(unittest.TestCase):
             write_desired.assert_called_once_with(
                 home, ("codex",), channel="stable"
             )
+
+            refresh.assert_called_once()
+            self.assertTrue(refresh.call_args.kwargs["check_after"])
+            receipt.assert_called_once_with(home, "codex")
 
     def test_check_does_not_revalidate_predecessor_after_semantic_split(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1027,11 +1039,14 @@ class ManagerRepairInstructionTests(unittest.TestCase):
             desired = {"harnesses": ["zcode"]}
             with (
                 mock.patch.object(omh, "ManagerLock"),
-                mock.patch.object(omh, "_state_context", return_value=({}, desired)),
+                mock.patch.object(omh, "_state_context", return_value=({"repository": "repo", "revision": "a" * 40, "releaseVersion": "1.0.0", "bundleIdentity": "bundle", "channel": "main"}, desired)),
                 mock.patch.object(omh, "_bootstrap_tooling"),
                 mock.patch("install_oh_my_harness.write_launchers"),
                 mock.patch.object(omh, "_refresh_one") as refresh,
                 mock.patch.object(omh, "_write_harness_state"),
+                mock.patch.object(omh, "write_desired"),
+                mock.patch.object(omh, "write_manager"),
+                mock.patch.object(omh, "ensure_user_path"),
             ):
                 self.assertEqual(
                     omh.command_manager_repair(argparse.Namespace(home=str(home))),
@@ -1039,6 +1054,7 @@ class ManagerRepairInstructionTests(unittest.TestCase):
                 )
 
             refresh_args = refresh.call_args.args[0]
+            self.assertTrue(refresh_args.repair)
             self.assertIsNone(refresh_args.operation_id)
             self.assertTrue(refresh.call_args.kwargs["check_after"])
 
@@ -1130,15 +1146,8 @@ class BootstrapHelpTests(unittest.TestCase):
                     omh_bootstrap.main(["--home", str(home), "--help"]),
                     0,
                 )
-            run.assert_called_once_with(
-                [
-                    sys.executable,
-                    str(scripts / "omh.py"),
-                    "--home",
-                    str(home),
-                    "--help",
-                ]
-            )
+            run.assert_not_called()
+            self.assertFalse((home / "venv").exists())
 
     def test_unsupported_python_rejects_repair_before_checkout_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1165,7 +1174,11 @@ class BootstrapRepairTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(source), "config", "user.email", "test@example.invalid"], check=True)
             subprocess.run(["git", "-C", str(source), "config", "user.name", "Test"], check=True)
             (source / "marker.txt").write_text("manager", encoding="utf-8")
-            subprocess.run(["git", "-C", str(source), "add", "marker.txt"], check=True)
+            for name in omh_bootstrap._REQUIRED_FILES:
+                path = source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# fixture\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(source), "add", "."], check=True)
             subprocess.run(["git", "-C", str(source), "commit", "-qm", "base"], check=True)
             revision = subprocess.check_output(
                 ["git", "-C", str(source), "rev-parse", "HEAD"],
@@ -1177,6 +1190,7 @@ class BootstrapRepairTests(unittest.TestCase):
             (home / "state" / "manager.json").write_text(
                 json.dumps(
                     {
+                        "product": "oh-my-harness",
                         "repository": str(source),
                         "revision": revision,
                     }

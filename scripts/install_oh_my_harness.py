@@ -26,6 +26,7 @@ from manager_paths import (
     venv_python,
 )
 from terminal_output import write_stderr
+from manager_environment import ensure_user_path
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
@@ -249,47 +250,64 @@ def write_bootstrap(*, home: Path, repo: Path, dry_run: bool) -> Path:
 
 
 def posix_launcher(*, home: Path, repo: Path) -> str:
-    bootstrap = _bootstrap_script_path(home)
-    return (
-        "#!/usr/bin/env sh\n"
-        "set -eu\n"
-        "if [ -n \"${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}\" ]; then\n"
-        "    bootstrap_python=$OH_MY_HARNESS_BOOTSTRAP_PYTHON\n"
-        "elif command -v python3 >/dev/null 2>&1; then\n"
-        "    bootstrap_python=$(command -v python3)\n"
-        "elif command -v python >/dev/null 2>&1; then\n"
-        "    bootstrap_python=$(command -v python)\n"
-        "else\n"
-        "    echo \"error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install python3.\" >&2\n"
-        "    exit 1\n"
-        "fi\n"
-        f"exec \"$bootstrap_python\" {shlex.quote(str(bootstrap))} --home {shlex.quote(str(home))} \"$@\"\n"
-    )
+    return r'''#!/usr/bin/env sh
+set -eu
+bootstrap_python=
+if [ -n "${OH_MY_HARNESS_BOOTSTRAP_PYTHON:-}" ]; then
+    bootstrap_python=$OH_MY_HARNESS_BOOTSTRAP_PYTHON
+    "$bootstrap_python" -c 'import sys; sys.exit(sys.version_info < (3, 11))' || {
+        echo "error: OH_MY_HARNESS_BOOTSTRAP_PYTHON must select Python 3.11 or newer" >&2
+        exit 1
+    }
+else
+    for candidate in python3 python python3.14 python3.13 python3.12 python3.11; do
+        if command -v "$candidate" >/dev/null 2>&1 &&
+           "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+            bootstrap_python=$(command -v "$candidate")
+            break
+        fi
+    done
+fi
+if [ -z "$bootstrap_python" ]; then
+    echo "error: Python 3.11 or newer not found; set OH_MY_HARNESS_BOOTSTRAP_PYTHON" >&2
+    exit 1
+fi
+omh_command=$0
+case "$omh_command" in
+    */*) ;;
+    *) omh_command=$(command -v "$omh_command") ;;
+esac
+omh_home=$("$bootstrap_python" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().parent.parent)' "$omh_command")
+exec "$bootstrap_python" "$omh_home/bootstrap/omh_bootstrap.py" --home "$omh_home" "$@"
+'''
 
 
 def windows_launcher(*, home: Path, repo: Path) -> str:
-    bootstrap = _bootstrap_script_path(home)
-    return (
-        "@echo off\r\n"
-        "setlocal\r\n"
-        "if defined OH_MY_HARNESS_BOOTSTRAP_PYTHON (\r\n"
-        "  set \"OHM_PY=%OH_MY_HARNESS_BOOTSTRAP_PYTHON%\"\r\n"
-        "  goto :run\r\n"
-        ")\r\n"
-        "where python >nul 2>nul && (\r\n"
-        "  set \"OHM_PY=python\"\r\n"
-        "  goto :run\r\n"
-        ")\r\n"
-        "where py >nul 2>nul && (\r\n"
-        "  set \"OHM_PY=py\"\r\n"
-        "  goto :run\r\n"
-        ")\r\n"
-        "echo error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install Python. 1>&2\r\n"
-        "exit /b 1\r\n"
-        ":run\r\n"
-        f"\"%OHM_PY%\" \"{bootstrap}\" --home \"{home}\" %*\r\n"
-        "exit /b %ERRORLEVEL%\r\n"
-    )
+    return r'''@echo off
+setlocal DisableDelayedExpansion
+for %%I in ("%~dp0..") do set "OMH_HOME=%%~fI"
+if defined OH_MY_HARNESS_BOOTSTRAP_PYTHON (
+  "%OH_MY_HARNESS_BOOTSTRAP_PYTHON%" -c "import sys; sys.exit(sys.version_info < (3, 11))" >nul 2>nul
+  if errorlevel 1 (
+    echo error: OH_MY_HARNESS_BOOTSTRAP_PYTHON must select Python 3.11 or newer 1>&2
+    exit /b 1
+  )
+  set "OHM_PY=%OH_MY_HARNESS_BOOTSTRAP_PYTHON%"
+  goto :run
+)
+for %%P in (python py python3) do (
+  %%P -c "import sys; sys.exit(sys.version_info < (3, 11))" >nul 2>nul
+  if not errorlevel 1 (
+    set "OHM_PY=%%P"
+    goto :run
+  )
+)
+echo error: Python 3.11 or newer not found; set OH_MY_HARNESS_BOOTSTRAP_PYTHON 1>&2
+exit /b 1
+:run
+"%OHM_PY%" "%OMH_HOME%\bootstrap\omh_bootstrap.py" --home "%OMH_HOME%" %*
+exit /b %ERRORLEVEL%
+'''.replace("\n", "\r\n")
 
 
 def expected_launcher_content(*, home: Path, repo: Path) -> str:
@@ -533,6 +551,8 @@ def validate_incomplete_adoption(
         "harnesses",
         "operations",
         "manager.lock",
+        "environment.json",
+        "repair-backups",
     }
     unexpected_state = sorted(
         path for path in state_entries if path.name not in allowed_state_names
@@ -637,6 +657,75 @@ def invoke_refresh(
     run(command)
 
 
+def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
+    """A repeated installer invocation repairs the owned instance, not a new install."""
+    receipt_path = state_path(home) / "install.json"
+    if args.adopt_current_checkout or args.resume_fast_forward:
+        return False  # Preserve the explicitly requested legacy recovery contracts.
+    if not path_exists_without_following(receipt_path):
+        return False
+    require_ordinary_directory(state_path(home), label="managed state root")
+    if path_exists_without_following(repo_path(home)):
+        require_ordinary_directory(repo_path(home), label="managed repository root")
+    if not is_ordinary_file(receipt_path):
+        raise SystemExit(f"installation receipt must be an ordinary file: {receipt_path}")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"installation receipt is unreadable; preserved: {receipt_path}: {exc}") from exc
+    if not isinstance(receipt, dict) or receipt.get("product") != PRODUCT_NAME:
+        raise SystemExit("refusing to repair an installation belonging to another product")
+    if receipt.get("status") not in {"installing", "ready"}:
+        raise SystemExit("unsupported installation state; no state was reset")
+    repository = receipt.get("repository")
+    ref = receipt.get("ref")
+    initial_harness = receipt.get("harness")
+    if not all(isinstance(value, str) and value.strip() for value in (repository, ref, initial_harness)):
+        raise SystemExit("installation receipt is missing its source or initial harness")
+    if args.repository and args.repository != repository:
+        raise SystemExit("existing installation uses another repository; repair will not change its source")
+    explicit_ref = any(arg == "--ref" or arg.startswith("--ref=") for arg in sys.argv[1:])
+    explicit_harness = any(arg == "--harness" or arg.startswith("--harness=") for arg in sys.argv[1:])
+    if explicit_ref and args.ref != ref:
+        raise SystemExit("use omh update to change an existing installation's ref; reinstall only repairs")
+    if explicit_harness and not args.harness.strip():
+        raise SystemExit("harness must not be empty")
+    for path in (repo_path(home), venv_path(home), bin_path(home), home / "bootstrap"):
+        if path_exists_without_following(path):
+            require_ordinary_directory(path, label="manager-owned recovery path")
+    print(f"repair existing installation: {home}")
+    # Use this installer version to restore the independent bootstrap, even when repo is missing.
+    from contextlib import nullcontext
+    from omh_bootstrap import _mutation_lock
+
+    with nullcontext() if args.dry_run else _mutation_lock(home):
+        write_launchers(home=home, repo=SOURCE_ROOT, dry_run=args.dry_run)
+        if not args.no_path:
+            ensure_user_path(home, dry_run=args.dry_run)
+    if args.dry_run:
+        print("would repair the recorded runtime and installed harnesses; no state written")
+        return True
+    command = [str(bootstrap_python()), str(_bootstrap_script_path(home)), "--home", str(home), "repair"]
+    if args.no_path:
+        command.append("--no-path")
+    if args.codex_home:
+        command.extend(["--codex-home", args.codex_home])
+    if args.migrate_marketplace:
+        command.append("--migrate-marketplace")
+    if args.migrate_from_repo:
+        command.extend(["--migrate-from-repo", args.migrate_from_repo])
+    run(command)
+    if explicit_harness:
+        invoke_refresh(
+            home=home, repo=repo_path(home), harness=args.harness,
+            codex_home=Path(args.codex_home).expanduser() if args.codex_home else None,
+            assume_yes=args.yes, migrate_marketplace=args.migrate_marketplace,
+            migrate_from_repo=Path(args.migrate_from_repo).expanduser() if args.migrate_from_repo else None,
+        )
+    print(f"installation repaired: {home}")
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Clone and initialize one managed oh-my-harness installation."
@@ -679,6 +768,8 @@ def main() -> None:
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--repair", action="store_true", help="Repair an owned installation; repeated installs already do this automatically.")
+    parser.add_argument("--no-path", action="store_true", help="Skip current-user PATH registration.")
     args = parser.parse_args()
 
     _require_supported_python()
@@ -687,6 +778,8 @@ def main() -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     validate_manager_home(home)
+    if resume_managed_install(args, home):
+        return
     repository = args.repository or repository_from_checkout()
     if not repository.strip():
         raise SystemExit("repository source must not be empty")
@@ -783,6 +876,8 @@ def main() -> None:
         status="installing",
         revision=validated_revision,
     )
+    if not args.no_path:
+        ensure_user_path(home)
     if validated_revision is not None:
         assert_checkout_snapshot(
             repo=repo,
@@ -817,10 +912,10 @@ def main() -> None:
         revision=validated_revision,
     )
     print(f"installation complete: {home}")
-    print(
-        f"add {bin_path(home)} to PATH, then run "
-        f"`{launcher_help_invocation(os.name)}`"
-    )
+    if args.no_path:
+        print(f"PATH registration skipped; launcher: {launchers[1]}")
+    else:
+        print(f"open a new terminal and run `{launcher_help_invocation(os.name)}`")
 
 
 def cli() -> int:

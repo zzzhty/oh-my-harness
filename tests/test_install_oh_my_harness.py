@@ -21,6 +21,11 @@ import install_oh_my_harness as installer  # noqa: E402
 
 
 class InstallerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = mock.patch.object(installer, "ensure_user_path")
+        self.ensure_user_path = patcher.start()
+        self.addCleanup(patcher.stop)
+
     @staticmethod
     def seed_bootstrap(repo: Path) -> None:
         source = REPO_ROOT / "scripts" / "omh_bootstrap.py"
@@ -74,15 +79,15 @@ class InstallerTests(unittest.TestCase):
                 short_command.read_text(encoding="utf-8"),
             )
             content = long_command.read_text(encoding="utf-8")
-            self.assertIn(str(home / "bootstrap" / "omh_bootstrap.py"), content)
-            self.assertIn(f"--home {home}", content)
+            self.assertIn('"$omh_home/bootstrap/omh_bootstrap.py"', content)
+            self.assertIn('--home "$omh_home"', content)
             self.assertTrue(long_command.stat().st_mode & stat.S_IXUSR)
 
     def test_windows_aliases_dispatch_to_one_powershell_wrapper(self) -> None:
         home = Path(r"C:\Users\Tester\.oh-my-harness")
         repo = home / "repo"
         content = installer.windows_launcher(home=home, repo=repo)
-        self.assertIn(str(home / "bootstrap" / "omh_bootstrap.py"), content)
+        self.assertIn('%OMH_HOME%\\bootstrap\\omh_bootstrap.py', content)
         self.assertIn('--home "', content)
         self.assertIn("%*", content)
 
@@ -227,106 +232,37 @@ class InstallerTests(unittest.TestCase):
                 retired_repo,
             )
 
-    def test_exact_installing_state_auto_resumes_from_managed_checkout(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / ".oh-my-harness"
-            repo = home / "repo"
-            repo.mkdir(parents=True)
-            self.seed_bootstrap(repo)
-            repository = "https://example.invalid/oh-my-harness.git"
-            with (
-                mock.patch.object(installer, "installed_revision", return_value="abc123"),
-                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
-            ):
-                launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
-                installer.write_install_state(
-                    home=home,
-                    repository=repository,
-                    ref="main",
-                    repo=repo,
-                    harness="codex",
-                    launchers=launchers,
-                    status="installing",
-                )
+    def test_repeated_install_uses_shared_repair_from_local_or_external_source(self) -> None:
+        for external in (False, True):
+            with self.subTest(external=external), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp) / ".oh-my-harness"
+                repo = home / "repo"
+                repo.mkdir(parents=True)
+                source = Path(tmp) / "external-checkout" if external else repo
+                self.seed_bootstrap(source)
+                repository = "https://example.invalid/oh-my-harness.git"
+                with mock.patch.object(installer, "installed_revision", return_value="a" * 40):
+                    installer.write_install_state(
+                        home=home, repository=repository, ref="main", repo=repo,
+                        harness="codex", launchers=installer.launcher_paths(home), status="installing",
+                    )
+                before = (home / "state/install.json").read_bytes()
                 with (
-                    mock.patch.object(installer, "SOURCE_ROOT", repo),
-                    mock.patch.object(
-                        sys,
-                        "argv",
-                        [
-                            "install_oh_my_harness.py",
-                            "--home",
-                            str(home),
-                            "--repository",
-                            repository,
-                            "--harness",
-                            "codex",
-                        ],
-                    ),
+                    mock.patch.object(installer, "SOURCE_ROOT", source),
+                    mock.patch.object(sys, "argv", ["installer", "--home", str(home), "--repository", repository]),
                     mock.patch.object(installer, "clone_repository") as clone,
+                    mock.patch.object(installer, "run") as run,
                     mock.patch.object(installer, "invoke_refresh") as refresh,
                 ):
                     installer.main()
-
-            clone.assert_not_called()
-            refresh.assert_called_once()
-            state = json.loads(
-                (home / "state" / "install.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(state["status"], "ready")
-            self.assertEqual(state["revision"], "abc123")
-
-    def test_exact_installing_state_auto_resumes_when_invoked_from_external_checkout(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / ".oh-my-harness"
-            repo = home / "repo"
-            repo.mkdir(parents=True)
-            self.seed_bootstrap(repo)
-            external_checkout = Path(tmp) / "external-checkout"
-            external_checkout.mkdir()
-            repository = "https://example.invalid/oh-my-harness.git"
-            with (
-                mock.patch.object(installer, "installed_revision", return_value="abc123"),
-                mock.patch.object(installer, "validate_checkout_clean_and_remote"),
-            ):
-                launchers = installer.write_launchers(home=home, repo=repo, dry_run=False)
-                installer.write_install_state(
-                    home=home,
-                    repository=repository,
-                    ref="main",
-                    repo=repo,
-                    harness="codex",
-                    launchers=launchers,
-                    status="installing",
-                )
-                with (
-                    mock.patch.object(installer, "SOURCE_ROOT", external_checkout),
-                    mock.patch.object(
-                        sys,
-                        "argv",
-                        [
-                            "install_oh_my_harness.py",
-                            "--home",
-                            str(home),
-                            "--repository",
-                            repository,
-                            "--harness",
-                            "codex",
-                        ],
-                    ),
-                    mock.patch.object(installer, "clone_repository") as clone,
-                    mock.patch.object(installer, "invoke_refresh") as refresh,
-                ):
-                    installer.main()
-
-            clone.assert_not_called()
-            refresh.assert_called_once()
-            self.assertEqual(refresh.call_args.kwargs["repo"], repo)
-            state = json.loads(
-                (home / "state" / "install.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(state["status"], "ready")
-            self.assertEqual(state["revision"], "abc123")
+                clone.assert_not_called()
+                refresh.assert_not_called()
+                run.assert_called_once()
+                self.assertEqual(run.call_args.args[0][-3:], ["--home", str(home), "repair"])
+                self.assertTrue(installer.launcher_paths(home)[1].is_file())
+                self.ensure_user_path.assert_called_with(home, dry_run=False)
+                # The delegated command, not the installer, owns completion of the receipt.
+                self.assertEqual((home / "state/install.json").read_bytes(), before)
 
     def test_exact_resume_rejects_a_dirty_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -405,6 +341,7 @@ class InstallerTests(unittest.TestCase):
                         repository,
                         "--harness",
                         "codex",
+                        "--adopt-current-checkout",
                     ],
                 ),
                 mock.patch.object(
