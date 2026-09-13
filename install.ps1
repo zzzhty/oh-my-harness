@@ -89,19 +89,26 @@ function Remove-BootstrapRoot {
     }
 }
 
-$bootstrapPython = if ($env:OH_MY_HARNESS_BOOTSTRAP_PYTHON) {
-    $env:OH_MY_HARNESS_BOOTSTRAP_PYTHON
+$bootstrapPython = $null
+$candidates = if ($env:OH_MY_HARNESS_BOOTSTRAP_PYTHON) {
+    @($env:OH_MY_HARNESS_BOOTSTRAP_PYTHON)
+} else {
+    @("python", "py", "python3")
 }
-elseif (Get-Command python -CommandType Application -ErrorAction SilentlyContinue) {
-    "python"
+foreach ($candidate in $candidates) {
+    $application = Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $application) { continue }
+    try {
+        & $application.Source -c "import sys; sys.exit(sys.version_info < (3, 11))" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $bootstrapPython = $application.Source
+            break
+        }
+    } catch { continue }
 }
-elseif (Get-Command py -CommandType Application -ErrorAction SilentlyContinue) {
-    "py"
-}
-else {
-    Write-AccentError -Message (
-        "error: Bootstrap Python not found. Set OH_MY_HARNESS_BOOTSTRAP_PYTHON or install Python."
-    )
+if (-not $bootstrapPython) {
+    Write-AccentError -Message "error: Python 3.11 or newer not found; set OH_MY_HARNESS_BOOTSTRAP_PYTHON"
     exit 1
 }
 
@@ -214,4 +221,27 @@ if ($installerExitCode -ne 0) {
         "error: oh-my-harness installation failed with exit code $installerExitCode; see the error above."
     )
     exit $installerExitCode
+}
+if ($env:OS -eq "Windows_NT" -and
+    $forwardedInstallerArguments -notcontains "--dry-run" -and
+    $forwardedInstallerArguments -notcontains "--no-path") {
+    $managerHome = if ($env:OH_MY_HARNESS_HOME) {
+        $env:OH_MY_HARNESS_HOME
+    } else {
+        Join-Path $HOME ".oh-my-harness"
+    }
+    for ($index = 0; $index -lt $forwardedInstallerArguments.Count; $index++) {
+        $argument = $forwardedInstallerArguments[$index]
+        if ($argument -eq "--home" -and $index + 1 -lt $forwardedInstallerArguments.Count) {
+            $index++
+            $managerHome = $forwardedInstallerArguments[$index]
+        } elseif ($argument.StartsWith("--home=")) {
+            $managerHome = $argument.Substring("--home=".Length)
+        }
+    }
+    $bin = Join-Path $managerHome "bin"
+    if ((Test-Path -LiteralPath (Join-Path $bin "omh.cmd")) -and
+        @($env:PATH -split ";") -notcontains $bin) {
+        $env:PATH = $bin + ";" + $env:PATH
+    }
 }

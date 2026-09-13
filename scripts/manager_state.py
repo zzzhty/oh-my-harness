@@ -141,12 +141,13 @@ def derive_initial_state(
     harnesses: list[str] = []
     if receipt.get("status") == "ready" and isinstance(initial_harness, str) and initial_harness:
         harnesses = [initial_harness]
+    channel = "main" if receipt.get("ref") == "main" else "stable"
     manager = {
         "schemaVersion": STATE_SCHEMA_VERSION,
         "product": PRODUCT_NAME,
         "status": "ready",
         "repository": repository,
-        "channel": "stable",
+        "channel": channel,
         "requestedRef": receipt.get("ref") if isinstance(receipt.get("ref"), str) else "main",
         "revision": revision,
         "releaseVersion": release_version,
@@ -156,7 +157,7 @@ def derive_initial_state(
     desired = {
         "schemaVersion": STATE_SCHEMA_VERSION,
         "harnesses": sorted(set(harnesses)),
-        "updatePolicy": {"channel": "stable"},
+        "updatePolicy": {"channel": channel},
         "updatedAt": _now(),
     }
     if persist:
