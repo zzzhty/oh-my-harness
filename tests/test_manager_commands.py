@@ -122,7 +122,10 @@ class NativeLauncherTests(unittest.TestCase):
                 env={**os.environ, "OH_MY_HARNESS_BOOTSTRAP_PYTHON": sys.executable},
                 capture_output=True, text=True, check=True,
             )
-            self.assertEqual(json.loads(result.stdout), ["--home", str(moved), "repair", "argument with spaces"])
+            arguments = json.loads(result.stdout)
+            self.assertEqual(arguments[0], "--home")
+            self.assertEqual(Path(arguments[1]).resolve(), moved.resolve())
+            self.assertEqual(arguments[2:], ["repair", "argument with spaces"])
 
     @unittest.skipIf(os.name == "nt", "POSIX external symlink")
     def test_launcher_follows_external_symlink(self):
@@ -140,7 +143,10 @@ class NativeLauncherTests(unittest.TestCase):
             link.symlink_to(launcher)
             result = subprocess.run([str(link), "status"], capture_output=True, text=True, check=True,
                                     env={**os.environ, "OH_MY_HARNESS_BOOTSTRAP_PYTHON": sys.executable})
-            self.assertEqual(json.loads(result.stdout), ["--home", str(home), "status"])
+            arguments = json.loads(result.stdout)
+            self.assertEqual(arguments[0], "--home")
+            self.assertEqual(Path(arguments[1]).resolve(), home.resolve())
+            self.assertEqual(arguments[2:], ["status"])
 
 
 class ToolingFastPathTests(unittest.TestCase):
