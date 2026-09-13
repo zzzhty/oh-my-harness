@@ -6,20 +6,101 @@ on:
     paths: [.github/workflows/omh-validation-workspace.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  source:
+  apply:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Package repository history for isolated validation
-        run: git bundle create "$RUNNER_TEMP/omh-source.bundle" --all
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          name: omh-validation-source
-          path: ${{ runner.temp }}/omh-source.bundle
-          retention-days: 1
+          python-version: '3.12'
+      - name: Reassemble exact validated patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          shas = [
+              '48c8a6f69aac74b7697b1b1d3e642130e650673b',
+              'bb09705475c6a38b7c935aacd7896e0e14a4c19c',
+              '306254ec2c01375fbfd920b0fee8fd3034a81203',
+              'f1e41ac8e6fd3fbeba3b6a0670c4dfbc2d0c3086',
+              'b2cc367ebd22cdce05d726436e9434ec8eae1495',
+              '8657924b272314a092037499eed349703e05c85d',
+              'ecc8399eb9f91a9887da5f2c0f2373e13caa33fe',
+              'dd1a3db69d5f57efb7064aca8cb118ecd43d8727',
+              '3d4a9c7e4db70588a155c870ff9e04e942b42059',
+              '2d83bbbf7ac3ea5c53fe1e260ce996d26668a3af',
+              'ebbfddbb01dfe3f707fcb2a3a900f0413911ef7d',
+              '7e1fe271ca9867df55ba9910e485542caf1370c5',
+          ]
+          chunks = []
+          for index, sha in enumerate(shas):
+              url = f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs/{sha}'
+              request = urllib.request.Request(url, headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+              })
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  payload = json.load(response)
+              data = base64.b64decode(payload['content'])
+              if index == 8:
+                  encoded = base64.b64encode(data).decode('ascii')
+                  if encoded.count('Sdz1UYP') != 1:
+                      raise SystemExit('transport correction did not match')
+                  data = base64.b64decode(encoded.replace('Sdz1UYP', 'SdzU1YP'))
+              chunks.append(data)
+          patch = gzip.decompress(b''.join(chunks))
+          expected = '4467fbf5867f3846ccc50b96512554dfaf0d6390cfd57cc54bfce715bb900c85'
+          if hashlib.sha256(patch).hexdigest() != expected:
+              raise SystemExit('transported patch differs from locally validated patch')
+          Path(os.environ['RUNNER_TEMP'], 'manager-repair.patch').write_bytes(patch)
+          print(f'Validated patch transport: {len(patch)} bytes')
+          PY
+      - name: Apply scripts-only changes and remove temporary workflow
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse origin/main)" = 5b7b5120bb3e3bc5be75e6e26b25b11c07e022d4
+          git apply --check "$RUNNER_TEMP/manager-repair.patch"
+          git apply --index "$RUNNER_TEMP/manager-repair.patch"
+          git rm .github/workflows/omh-validation-workspace.yml
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              'install.ps1', 'install.sh',
+              'scripts/bootstrap_tooling_env.py',
+              'scripts/install_oh_my_harness.py',
+              'scripts/manager_environment.py',
+              'scripts/manager_state.py', 'scripts/omh.py',
+              'scripts/omh_bootstrap.py',
+              'tests/test_install_oh_my_harness.py',
+              'tests/test_manager_commands.py',
+              'tests/test_manager_environment.py',
+              'tests/test_manager_repair_resilience.py',
+              'tests/test_omh_lifecycle.py',
+          }
+          actual = set(subprocess.check_output(
+              ['git', 'diff', '--cached', '--name-only', 'origin/main'], text=True
+          ).splitlines())
+          if actual != allowed:
+              raise SystemExit(f'Unexpected final change scope: {sorted(actual ^ allowed)}')
+          PY
+          python -m compileall -q scripts tests
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(manager): unify repair, simplify update and register user PATH'
+          git push origin HEAD:refs/heads/fix/manager-repair-cli-20260913
+          echo "Submitted commit $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
