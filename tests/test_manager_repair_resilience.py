@@ -71,7 +71,8 @@ class CheckoutRepairTests(unittest.TestCase):
         self.assertEqual(self.git(self.home / "repo", "config", "--get", "remote.origin.url").stdout.strip(), str(self.origin))
 
     def test_missing_checkout_restores_from_recorded_source(self):
-        shutil.rmtree(self.home / "repo")
+        (self.home / "repo").rename(self.root / "removed-repo")
+        self.assertFalse((self.home / "repo").exists())
         bootstrap._repair_checkout(self.home)
         self.assertEqual(self.git(self.home / "repo", "rev-parse", "HEAD").stdout.strip(), self.revision)
 
