@@ -1,0 +1,25 @@
+name: Temporary OMH validation workspace
+
+on:
+  push:
+    branches: [fix/manager-repair-cli-20260913]
+    paths: [.github/workflows/omh-validation-workspace.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package repository history for isolated validation
+        run: git bundle create "$RUNNER_TEMP/omh-source.bundle" --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omh-validation-source
+          path: ${{ runner.temp }}/omh-source.bundle
+          retention-days: 1
