@@ -1106,8 +1106,11 @@ def command_resume_update(args: argparse.Namespace) -> int:
         _write_harness_state(home, harness)
     from install_oh_my_harness import write_launchers
 
-    write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
+    # Profile validation may fail; keep the old shim intact until it succeeds.
+    # This also protects upgrades whose old rollback implementation predates
+    # launcher restoration.
     ensure_user_path(home)
+    write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
     finish_operation(home, outcome="success")
     print(f"updated oh-my-harness to {release} ({target['revision'][:12]})")
     return 0
@@ -1155,6 +1158,11 @@ def command_resume_rollback(args: argparse.Namespace) -> int:
     for harness in desired_harnesses(desired):
         _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
         _write_harness_state(home, harness)
+    from install_oh_my_harness import write_launchers
+
+    # A rollback restores the executable entry points as well as the checkout.
+    # Do not retry PATH integration: that may be the update's original failure.
+    write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
     finish_operation(home, outcome="rolled-back", detail=args.detail)
     print(f"restored oh-my-harness revision {before['revision'][:12]}")
     return 0

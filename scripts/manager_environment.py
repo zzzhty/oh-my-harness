@@ -185,15 +185,17 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
         new_receipt = {"product": "oh-my-harness", "userHome": str(user_home), "bin": entry, "added": added}
     else:
         paths = _profile_paths(user_home)
-        # Include prior profiles only when they still belong to this same user's setup.
-        # Do not trust a receipt copied from another account as a filesystem write list.
+        # Retain same-user ownership even for external ZDOTDIR/XDG_CONFIG_HOME.
+        # Prior-only paths are cleanup targets, never destinations for new blocks.
+        # A receipt copied from another account is not a filesystem write list.
         known = {str(path): (path, fish) for path, fish in paths}
+        active_profiles = set(known)
         if same_user:
             for item in receipt.get("profiles", []):
                 if not isinstance(item, dict) or not isinstance(item.get("path"), str):
                     continue
                 path = Path(item["path"])
-                if path.is_absolute() and path.is_relative_to(user_home):
+                if path.is_absolute():
                     known.setdefault(str(path), (path, bool(item.get("fish"))))
         plans = []
         for path, fish in known.values():
@@ -206,7 +208,8 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
             allowed = {current_block}
             if isinstance(previous, str):
                 allowed.add(_block(previous, fish=fish))
-            new = _replace_block(old, None if remove else current_block, allowed)
+            cleanup_only = remove or str(path) not in active_profiles
+            new = _replace_block(old, None if cleanup_only else current_block, allowed)
             plans.append((path, target, old, new, fish))
         # Preflight every profile before modifying any of them.
         for path, target, old, new, fish in plans:
@@ -216,7 +219,8 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
                     _atomic_text(target, new)
         new_receipt = {
             "product": "oh-my-harness", "userHome": str(user_home), "bin": entry,
-            "profiles": [{"path": str(path), "fish": fish} for path, _, _, _, fish in plans],
+            "profiles": [{"path": str(path), "fish": fish} for path, _, _, _, fish in plans
+                         if str(path) in active_profiles],
         }
     if dry_run:
         return

@@ -44,7 +44,8 @@ omh refresh [HARNESS...]
 omh refresh [HARNESS...] --repair
 omh remove HARNESS... | --all
 omh update --check [--channel stable|main]
-omh update [--channel stable|main]
+omh update [main|stable|REF]
+omh repair [HARNESS...] [--rebuild] [--reclone] [--dry-run]
 omh status
 omh check
 omh doctor
@@ -75,13 +76,23 @@ omh install pi-agent --yes
 Do not move or pull `${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/repo`
 directly. If update reports that the managed checkout differs from manager
 lifecycle state, run `omh status`. With `operation: none`, run
-`omh manager repair` to reconstruct the recorded checkout, then retry the
-update. If an interrupted operation is active, run `omh recover` before any
-new lifecycle mutation.
+`omh repair` to restore the recorded version, then retry the update. Repair
+recovers known interrupted updates before reconciling installed harnesses;
+`omh recover` remains available as a rollback-only command. Healthy checkouts
+are reused, damaged checkouts are restored from local Git objects when possible,
+and replaced directories are preserved under `state/repair-backups/`. Use
+`--reclone` to restore from the recorded remote and `--rebuild` to recreate the
+tooling venv. `--dry-run` previews recovery without writing. The existing
+`omh manager repair` and `omh refresh --repair` spellings remain supported.
 
 `omh refresh` never fetches remote source; it reconciles the current managed
-release. `omh update` is the explicit remote transition and defaults to the
-stable release channel, while `--channel main` follows `origin/main`.
+release. `omh update` is the explicit remote transition and uses the saved
+channel. New installations from `main` start on `main`; release-tag installs
+start on `stable`. Existing saved channels are preserved. `omh update main` or
+`omh update stable` selects and saves that channel; legacy `--channel` and `--to`
+options remain supported. An update at the same commit still reconciles user
+PATH, launchers, and installed harnesses. To upgrade an older manager that does
+not recognize positional update targets, use `omh update --channel main` once.
 Same-version content drift remains a hard failure during ordinary refresh and is
 re-materialized only by explicit `--repair`. `remove` deletes only resources
 whose manager ownership is proven.
@@ -210,11 +221,13 @@ installer from a different repository.
 `state/install.json` records one initialization lifecycle and its source
 snapshot. It has no independent schema-version field, and its recorded
 repository and revision are an installation receipt rather than rolling Git
-authority. Failed-install recovery accepts only the current exact receipt fields
-and repository-defined lifecycle state entries. When an installation record exists, an installer launched from either
-the managed repository or another checkout automatically attempts strict
-recovery of the exact managed `repo/`; neither the invoking checkout nor the
-process working directory becomes installation authority. A checkout already
+authority. Rerunning the initializer on a recognized installation delegates
+to repair for the recorded source and version, including incomplete installs;
+use `omh update` for an upgrade. An installer launched from either the managed
+repository or another checkout targets the same managed `repo/`; neither the
+invoking checkout nor the working directory becomes installation authority.
+Explicit legacy adoption and fast-forward resume requests retain their strict
+receipt checks. A checkout already
 moved to the managed path with no incomplete installation record still requires
 the explicit `--adopt-current-checkout` option before the initializer may claim
 it.
@@ -223,7 +236,7 @@ Unix:
 
 ```bash
 ./install.sh --harness codex --yes
-export PATH="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/bin:$PATH"
+# Open a new terminal; PATH registration is automatic.
 omh --help
 ```
 
@@ -304,7 +317,7 @@ Windows PowerShell:
 
 ```powershell
 .\install.ps1 --harness codex --yes
-$env:PATH = "$env:USERPROFILE\.oh-my-harness\bin;$env:PATH"
+# Open a new terminal when running from a separate PowerShell process.
 omh --help
 ```
 
@@ -314,10 +327,27 @@ PowerShell can likewise bootstrap without a checkout:
 irm https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.ps1 | iex
 ```
 
-The initializer does not edit shell profiles or the machine-wide `PATH`. Add the
-manager `bin/` directory through the shell configuration you own. Both command
-names dispatch to the same manager-home bootstrap shim; `oh-my-harness` is canonical and
-`omh` is the short form. Neither launcher is a symlink.
+Installation, repair, and update automatically register the manager `bin/` in
+the current user's environment. On Linux/macOS this edits a marked block in
+`.profile` and the active bash/zsh/fish startup files, respecting `ZDOTDIR` and
+`XDG_CONFIG_HOME`. On Windows it updates only `HKCU\Environment\Path`.
+No machine-wide PATH or system profile is changed. Unrelated profile content
+and dotfile symlinks are preserved; registration is idempotent.
+
+Pass `--no-path` to the initializer or `omh repair` to skip registration for that
+invocation; it is not a saved preference and later `omh update` registers PATH.
+A child process cannot change the environment of an already-open parent shell;
+open a new terminal after installation rather than editing profiles manually.
+`state/environment.json` records ownership so uninstall removes only managed
+blocks or Windows entries added by this installation. Same-user external shell
+config roots remain cleanup targets after their environment variables change.
+Edited managed blocks are preserved and reported, not silently overwritten.
+
+Both command names dispatch to the same manager-home bootstrap shim;
+`oh-my-harness` is canonical and `omh` is the short form. Neither launcher is a
+symlink. Launchers resolve their home from their own location, so moving the
+whole manager directory does not retain a hardcoded old launcher path; run the
+launcher from its new `bin/` path with `repair` to reconcile PATH and outputs.
 
 The managed installation layout is:
 
@@ -334,6 +364,8 @@ The managed installation layout is:
     ├── install.json
     ├── manager.json
     ├── desired.json
+    ├── environment.json
+    ├── repair-backups/  # created when checkout replacement preserves a backup
     ├── harnesses/
     ├── operations/
     └── manager.lock
@@ -347,10 +379,12 @@ drive and UNC spellings as the same path while still rejecting a different
 directory.
 
 If initialization fails, `state/install.json` remains `installing`. Rerun the
-same installer request from either checkout: recovery proceeds only when the
-recorded identity, paths, revision, launcher set and launcher content still
-match exactly. It refuses ready installations, links, unknown state entries and
-changed state; normal updates to a ready installation use `omh update`.
+same installer request from either checkout to repair the recognized
+installation. Corrupt state, foreign ownership, linked manager-owned paths,
+and unsupported interrupted operations are preserved and reported instead of
+being reset. Repair does not implicitly upgrade a ready installation; use
+`omh update` for that. Explicit legacy adoption/resume flags retain their
+stricter identity and snapshot checks.
 
 Use the harness-aware refresh command for global instructions. It resolves the target from the registry and applies the required confirmation policy; do not force-copy over an existing instructions file.
 
@@ -413,7 +447,7 @@ Windows skill projection does not require file-symlink privilege. The projection
 - Windows: `Scripts\python.exe`
 - Unix: `bin/python`
 
-The bootstrap resolves the selected base Python to its real executable before creating the venv. This prevents PATH aliases or uv-managed Python symlinks from producing a `pyvenv.cfg` that cannot locate the standard library. If an existing tooling venv cannot start, reports the wrong prefix, or was created from a different base interpreter, bootstrap rebuilds it and restores the previous directory if creation or dependency validation fails. `--dry-run` performs the same read-only health preflight and prints whether a rebuild would occur.
+A healthy tooling venv with unchanged requirements and importable dependencies is reused without recreating the venv or running pip. Changed requirements or failed dependency imports trigger dependency repair; `omh repair --rebuild` explicitly rebuilds the venv. The bootstrap resolves the selected base Python to its real executable before creating the venv. This prevents PATH aliases or uv-managed Python symlinks from producing a `pyvenv.cfg` that cannot locate the standard library. If an existing tooling venv cannot start, reports the wrong prefix, or was created from a different base interpreter, bootstrap rebuilds it and restores the previous directory if creation or dependency validation fails. `--dry-run` performs the same read-only health preflight and prints whether a rebuild would occur.
 
 If a tooling command reports that `PyYAML` or the registry validator
 `jsonschema` is missing, refresh the shared tooling venv from the repository
