@@ -86,6 +86,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("[close.md](close.md)", execute)
         self.assertIn("Remove closed goals from active navigation", close)
         self.assertIn("readiness and authorization checks in `execute-and-close.md`", close)
+        self.assertIn("For direct or resumed Close, apply the matching", close)
         self.assertIn("recorded-root binding rule before any producer writes", close)
         cutover = REFERENCES["cutover"].read_text(encoding="utf-8")
         self.assertIn("default/full-shadow/production comparison matrix", cutover)

@@ -1,6 +1,6 @@
 # Current Docs And Close
 
-Use only when entering Close. `../SKILL.md` owns supersession, execution authority, runtime hard stops and native goal-tool boundaries. For resumed work, first apply the pre-implementation/resume preflight, readiness and authorization checks in `execute-and-close.md`; close routing does not waive them. If Close creates task-temporary data for the first time, apply that reference's recorded-root binding rule before any producer writes.
+Use only when entering Close. `../SKILL.md` owns supersession, execution authority, runtime hard stops and native goal-tool boundaries. For direct or resumed Close, apply the matching pre-implementation/resume preflight, readiness and authorization checks in `execute-and-close.md`; close routing does not waive them. If Close creates task-temporary data for the first time, apply that reference's recorded-root binding rule before any producer writes.
 
 After creating, upgrading, or evolving a goal, update only the current docs that need concise pointers: active TODO/goal index, development/runtime/status docs, boundary registers, validation logs, or runtime test checklists. Keep detailed milestone plans in the goal file.
 
