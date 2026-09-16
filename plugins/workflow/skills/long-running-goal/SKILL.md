@@ -1,6 +1,6 @@
 ---
 name: long-running-goal
-description: Use only for an explicitly requested long-running-goal lifecycle action or confirmed conversion. Create, upgrade, execute, resume, evolve, or close staged goals and strict serial sequences; task size or duration alone is not a trigger.
+description: Create, upgrade, execute, resume, evolve, or close a continuation-ready staged goal or strict serial Long-Running Goal Sequence only when the user explicitly requests that lifecycle action or confirms conversion; task size or duration alone is not a trigger.
 ---
 
 # Long Running Goal
