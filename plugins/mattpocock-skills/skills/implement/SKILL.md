@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Implement the user's spec or tickets within the agreed scope. Reuse confirmed requirements and test boundaries; resolve only missing decisions that block the implementation.
 
-Record the starting commit and relevant pre-existing work so this task's changes remain identifiable. Use `/tdd` for behaviors that warrant persistent tests and follow repository verification requirements. Run focused checks while iterating and broader required gates at completion.
+Record the starting commit and relevant pre-existing work so this task's changes remain identifiable. Use `/tdd` for behaviors that warrant persistent tests and follow repository verification requirements. Run focused checks while iterating. At completion, satisfy required gates with evidence covering the final affected state; reuse valid results from `/tdd` or other stages under the global verification policy instead of rerunning them just because this skill is finishing. Required code review remains separate.
 
 Before finishing, use `/code-review` with the task/spec, starting commit and changed-file inventory. Explicitly include this task's committed, staged, unstaged and untracked changes; a comparison ending at HEAD alone cannot review uncommitted implementation.
 

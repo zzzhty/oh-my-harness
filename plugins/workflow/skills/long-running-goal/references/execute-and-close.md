@@ -1,6 +1,6 @@
-# Execute, Checkpoint, Evolve, And Close
+# Execute, Checkpoint, And Evolve
 
-Use the matching sections after `../SKILL.md` routes an execute, resume, continue, advance, evolve, or close branch here. The inline supersession, pre-approval/YOLO, runtime-hard-stop, and goal-tool boundaries remain authoritative.
+Use this reference after `../SKILL.md` routes an execute, resume, continue, advance, or evolve branch here. Load `close.md` only when entering Close. The inline supersession, pre-approval/YOLO, runtime-hard-stop, and goal-tool boundaries remain authoritative.
 
 ## Execute, Checkpoint, And Evolve
 
@@ -19,7 +19,7 @@ For each milestone:
 1. Check any `Deferred approval gates` for this milestone before its work begins. Reconcile the row with sourced actual authorization first; when still covered, record Approved evidence and continue without another question. Otherwise ask only for the reserved final approval or uncovered increment, stop at the gate and record section-local runtime hard-stop evidence. Mark the milestone `In Progress` only after its approval gates pass. Do not remove a user-retained final gate on the strength of generic pre-approval.
 2. Apply `../components/milestone-scope-gate.md`, then implement only its recorded scope and necessary consequences.
 3. If a gate, validation rule, rollback path, milestone boundary, Loop field, or skill strategy is too weak for observed risk, pause mutation only long enough to update the contract; do not ask for permission unless a runtime hard stop applies.
-4. Run the milestone validation commands and complete its review gate.
+4. Satisfy the milestone validation commands and complete its review gate. Reuse still-valid passing results under the global verification policy; a checkpoint or skill transition alone does not require rerunning them. Explicit lifecycle fresh-run requirements, including the readiness check above, remain binding.
 5. Record scope and necessary-consequence completion, changed files, behavior impact, command results, doc sync, rollback path, and remaining risk.
 6. If the milestone exercises a Loop Blueprint, also record trigger/input path, orchestration or worktree isolation evidence, connector read/write evidence, independent verification, YOLO actions, and runtime-hard-stop decisions.
 7. Apply `../components/checkpoint.md`.
@@ -36,24 +36,4 @@ Completion criterion: the current milestone has passing scope and review gates p
 
 ## Current Docs And Close
 
-After creating, upgrading, or evolving a goal, update only the current docs that need concise pointers: active TODO/goal index, development/runtime/status docs, boundary registers, validation logs, or runtime test checklists. Keep detailed milestone plans in the goal file.
-
-When all milestones are done:
-
-1. Apply any deferred approval gate for Close before entering its work. Then mark the Close row `In Progress` and keep the overall goal `In Progress` while preparing close evidence.
-2. Fill close execution evidence before removing or archiving the active goal.
-3. Sync durable outcomes into current docs, indexes, validation logs, and status/boundary registers.
-4. Apply the recorded task-temporary-cache outcome without re-resolving the platform temp root:
-   - `None created` or `Not applicable`: record explicitly that no roots were created; do not invoke cleanup or invent size metrics.
-   - concrete roots plus `Enabled`: confirm durable evidence is outside the recorded roots, then invoke `watcher:housekeeping` to inventory and clean only confirmed owner-specific disposable candidates. Do not replace it with raw recursive deletion, escalate privileges, cross symlink/junction/reparse-point boundaries, or delete dependencies, runtime state, logs, reports, unknown producers, or locked content. Record the policy, every exact root, the watcher action, and removed, preserved, failed, and residual sizes; safety-preserved residuals do not imply failure unless zero residue was separately confirmed in preflight.
-   - concrete roots plus `Disabled`: do not clean; record the policy, every retained exact root, and the retained/preserved action. Size metrics are optional; omit them or record `unknown` with a brief diagnostic when measurement is unavailable. Do not scan retained trees solely to satisfy Close.
-   - missing legacy field/section: treat cleanup as unauthorized, preserve any discovered roots, and record the legacy disposition without rerunning the full grill.
-   If `watcher:housekeeping` is unavailable for an enabled policy, keep Close and the overall goal `In Progress`, or use `Blocked` only when the normal runtime hard-stop contract is met. Report the missing capability and do not fall back to `rm -rf`, PowerShell recursive deletion, or another raw delete command. Continue as `Disabled` only after the user explicitly evolves the recorded preflight policy.
-5. Follow local archive conventions; do not invent dated archive trees or checked-in closed copies just to preserve history.
-6. Remove closed goals from active navigation, or archive/delete the goal file according to local convention.
-7. Validate index topology with `check_todo_index.py --mode closed --archived-goal <archive-path> <old-active-path> <index>...` after archiving, or `--mode absent <old-active-path> <index>...` after deletion without an archive.
-8. Run `git diff --check -- <changed-paths>` and `check_md_links.py` when Markdown links changed.
-9. Record close checkpoint evidence. If version control is active and expected, use the local close commit/revision format, such as `<goal_slug> close: <summary>`.
-10. Only after every close gate and evidence check passes, set the Close row to `Done/Passed/Done` and the overall goal status to `Closed`.
-
-Completion criterion: every milestone is `Done`, close evidence and validation are recorded, the explicit or legacy task-temporary-cache disposition is recorded, durable current docs are synchronized, active navigation no longer points to closed work, and archive/delete handling follows local convention.
+Use [close.md](close.md) when entering Close; it owns current-doc synchronization and close completion.
