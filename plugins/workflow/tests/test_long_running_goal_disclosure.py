@@ -13,6 +13,7 @@ REFERENCES = {
     "sequence": SKILL_DIR / "references" / "sequence-child-goals.md",
     "cutover": SKILL_DIR / "references" / "production-cutover.md",
     "execute": SKILL_DIR / "references" / "execute-and-close.md",
+    "close": SKILL_DIR / "references" / "close.md",
 }
 PREFLIGHT = SKILL_DIR / "components" / "planning-preflight.md"
 ATOMIC_TEMPLATE = SKILL_DIR / "templates" / "long_running_goal_template.md"
@@ -27,26 +28,30 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
     def test_entry_interface_keeps_lifecycle_authority_and_goal_tool_contracts(self) -> None:
         text = SKILL.read_text(encoding="utf-8")
 
+        # Disclosure checks locate guardrails; semantic equivalence needs review.
         for semantic in (
-            "A `Ready` goal",
-            "Keep the goal `Draft`",
-            "non-executable `Draft`",
-            "only when the user explicitly requests a long-running goal",
-            "is not itself a trigger",
-            "Use system planning for ordinary complex work",
-            "wait for the user's confirmation before creating or converting",
-            "Never invent missing design or permission",
-            "An explicit pause, stop, redirect, or change-scope request overrides",
-            "without running milestone commands, editing goal evidence, or updating native goal-tool status",
-            "Only a `Ready` goal pre-approves",
-            "normally after at least three attempts or three distinct approaches",
-            "Stop only at a runtime hard stop",
-            "Task temporary cache housekeeping is separate",
-            "Use the harness's native goal tools only when the user explicitly asks",
+            "Only `Ready` pre-approves frozen non-destructive local work",
+            "keep a goal `Draft`",
+            "explicit request naming this skill or one of its lifecycle actions",
+            "task size or duration alone is not a trigger",
+            "Otherwise use system planning",
+            "suggesting this skill does not authorize creating its contract",
+            "Explicit pause, stop, redirect or scope change overrides every continuation case",
+            "without milestone commands, goal-evidence edits or native goal-status updates",
+            "normally after at least three attempts or distinct approaches",
+            "Ask only at a runtime hard stop",
+            "Never infer cleanup consent",
+            "Use native goal tools only on an explicit active-conversation request",
             "check_goal_ready.py [--allow-draft] <goal-file>",
-            "non-executable `Draft` that records known facts and open decisions",
         ):
             self.assertIn(semantic, text)
+        create = REFERENCES["create"].read_text(encoding="utf-8")
+        for semantic in (
+            "non-executable `Draft` with known facts and unresolved decisions",
+            "never invent design or authority",
+            "Templates and readiness checkers own field shape and structural completeness",
+        ):
+            self.assertIn(semantic, create)
 
     def test_each_conditional_branch_has_a_strong_pointer_and_completion_criterion(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
@@ -56,14 +61,16 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "references/sequence-child-goals.md",
             "references/production-cutover.md",
             "references/execute-and-close.md",
+            "references/close.md",
         ):
             self.assertIn(relative_path, skill)
         for trigger in (
-            "create or upgrade",
+            "Create/upgrade",
             "Loop-shaped",
             "Sequence Child Goals",
-            "production cutover",
-            "execute, resume, continue, advance, evolve, or close",
+            "Production cutover",
+            "Execute, resume, continue, advance or evolve",
+            "Enter Close",
         ):
             self.assertIn(trigger, skill)
         for reference in REFERENCES.values():
@@ -75,7 +82,12 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("Connector read/write boundaries:", create)
         execute = REFERENCES["execute"].read_text(encoding="utf-8")
         self.assertIn("Apply `../components/checkpoint.md`", execute)
-        self.assertIn("Remove closed goals from active navigation", execute)
+        close = REFERENCES["close"].read_text(encoding="utf-8")
+        self.assertIn("[close.md](close.md)", execute)
+        self.assertIn("Remove closed goals from active navigation", close)
+        self.assertIn("readiness and authorization checks in `execute-and-close.md`", close)
+        self.assertIn("For direct or resumed Close, apply the matching", close)
+        self.assertIn("recorded-root binding rule before any producer writes", close)
         cutover = REFERENCES["cutover"].read_text(encoding="utf-8")
         self.assertIn("default/full-shadow/production comparison matrix", cutover)
 
@@ -140,15 +152,16 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         atomic_template = ATOMIC_TEMPLATE.read_text(encoding="utf-8")
         sequence_template = SEQUENCE_TEMPLATE.read_text(encoding="utf-8")
 
-        self.assertIn("Task temporary cache housekeeping is separate", skill)
+        self.assertIn("Temporary-cache housekeeping uses only preflight's recorded policy and owner paths", skill)
         self.assertIn("Close housekeeping policy", preflight)
         self.assertIn("host platform or runtime's standard temporary-directory resolver", preflight)
         self.assertIn("Default to `Disabled`", preflight)
         self.assertIn("not unconditional recursive deletion", preflight)
-        self.assertIn("If `watcher:housekeeping` is unavailable", execute)
+        close = REFERENCES["close"].read_text(encoding="utf-8")
+        self.assertIn("If `watcher:housekeeping` is unavailable", close)
         self.assertIn("Before any command may write task-temporary data", execute)
         self.assertIn("bind every task-temporary producer", execute)
-        self.assertIn("missing legacy field", execute)
+        self.assertIn("missing legacy field", close)
         self.assertIn("never inherits, widens, or overrides a child's policy", sequence)
 
         for template in (atomic_template, sequence_template):

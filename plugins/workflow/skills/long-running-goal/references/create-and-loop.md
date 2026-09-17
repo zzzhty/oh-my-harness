@@ -6,6 +6,8 @@ Use the matching sections after `../SKILL.md` routes a creation, upgrade, or Loo
 
 Here, `upgrade` means converting or reshaping an existing TODO, PRD, issue, checklist, or rough plan into a long-running-goal contract. It does not mean ordinary runtime evolution during milestone execution.
 
+Use `../templates/long_running_goal_template.md` for one goal and `../templates/long_running_goal_sequence_template.md` for a strict sequence unless the repository has a stronger local convention. Prefer the user-specified path, then an existing active goal/TODO directory or index, and use `docs/todo/<goal_slug>_long_running_goal_plan.md` only as a fallback. Do not create a parallel planning tree or append `/todo` to a directory that already serves as the goal directory. Templates and readiness checkers own field shape and structural completeness.
+
 1. Read current truth before drafting: root instructions, README/area overviews, active TODO or goal indexes, current guides, status/boundary registers, validation logs, runtime audits, architecture/contract docs, and existing goal/archive docs.
 2. Read and complete `../components/planning-preflight.md` before freezing the goal, including its required methods, sourced decision evidence and authorization coverage through Close. Reuse settled answers without exempting a complete-looking plan from the workflow.
 3. Create or reshape the goal file as a continuation contract, preserve useful findings from existing TODOs, and record the planning-preflight marker with completion/reuse/explicit-skip evidence, an optional time estimate, and the task-temporary-cache policy (default `Disabled`).
@@ -21,6 +23,8 @@ Here, `upgrade` means converting or reshaping an existing TODO, PRD, issue, chec
 6. Add close criteria and a reusable continuation prompt that names the exact goal path and directs the next agent to its frozen authority, required gates, current state, and close handling.
 
 Completion criterion: the goal contains the current baseline, frozen contract, ordered milestones and gates, settled approval boundaries, a task-temporary-cache policy with explicit authorization if `Enabled`, close criteria, reusable prompt, and a completed or explicitly skipped planning-preflight marker; otherwise it remains `Draft`. Legacy goals without the housekeeping section remain compatible but grant no cleanup authorization.
+
+Creation may produce a non-executable `Draft` with known facts and unresolved decisions, or a complete `Ready` contract. Validate Draft with `check_goal_ready.py --allow-draft` (and the applicable sequence check); never invent design or authority to satisfy a checker. Current navigation must point to the active contract. Templates and readiness checkers own field shape and structural completeness.
 
 ## Loop Blueprint Harness
 

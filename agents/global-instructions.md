@@ -11,7 +11,8 @@
 - Verification defines done. Complete required owner checks and the smallest behavior-level check that can expose an error in the changed result; skip unaffected surfaces and proof-only artifacts.
 - Content identity—hashes, checksums, snapshots, or goldens—needs an existing exact-byte contract, explicit user request, or an evidenced gap in semantic checks. Before adding a mechanism, name its owner, evidence, and insufficient weaker check; changes cannot self-authorize. Keep existing identity gates within their declared artifact and operation.
 - For instruction edits, compare affected meanings and behavior; a text digest cannot establish semantic equivalence.
-- Persistent checks need distinct evidenced failure modes. Once scoped required checks pass, finish verification; repeat or expand only for new edits, failures, or evidenced affected contracts.
+- Reuse recorded passing checks across skills, reviews, checkpoints, and context transitions when they cover the final affected state. Repeat only for missing or uncertain coverage, relevant changes to code, inputs, dependencies, configuration, environment or acceptance criteria, new failures, or an explicit owner-required fresh run. A phase change or unrelated docs/evidence edit is not invalidation; an older pass never overrides a later failure.
+- Persistent checks need distinct evidenced failure modes. Keep results with their existing owner, without a new verification ledger. Once scoped required checks have valid passing evidence, finish verification.
 - Existing security, privacy, destructive-action, compatibility, integrity, and review gates remain binding until their owner explicitly changes them. Never silently remove or rebaseline verification contracts.
 
 ## Failure-handling policy
