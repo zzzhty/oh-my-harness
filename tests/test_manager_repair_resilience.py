@@ -15,6 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import omh_bootstrap as bootstrap
+import manager_state
 
 
 @unittest.skipUnless(shutil.which("git"), "requires Git")
@@ -147,16 +148,19 @@ class CheckoutRepairTests(unittest.TestCase):
     def test_second_mutation_cannot_enter_lock(self):
         code = (
             "import sys; from pathlib import Path; "
-            "sys.path.insert(0, sys.argv[1]); import omh_bootstrap as b; "
-            "b._mutation_lock(Path(sys.argv[2])).__enter__()"
+            "sys.path.insert(0, sys.argv[1]); import omh_bootstrap as b, manager_state as m; "
+            "{'bootstrap': b._mutation_lock, 'manager': m.ManagerLock}[sys.argv[3]]"
+            "(Path(sys.argv[2])).__enter__()"
         )
-        with bootstrap._mutation_lock(self.home):
-            result = subprocess.run(
-                [sys.executable, "-c", code, str(Path(bootstrap.__file__).parent), str(self.home)],
-                capture_output=True, text=True,
-            )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("already running", result.stderr)
+        for name, lock in (("bootstrap", bootstrap._mutation_lock), ("manager", manager_state.ManagerLock)):
+            with self.subTest(lock=name):
+                with lock(self.home):
+                    result = subprocess.run(
+                        [sys.executable, "-c", code, str(Path(bootstrap.__file__).parent), str(self.home), name],
+                        capture_output=True, text=True,
+                    )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("already running", result.stderr)
 
     def test_lock_released_after_exception(self):
         with self.assertRaises(RuntimeError):

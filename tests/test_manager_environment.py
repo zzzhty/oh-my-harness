@@ -39,29 +39,31 @@ class UserEnvironmentTests(unittest.TestCase):
         environment.ensure_user_path(self.home, **kwargs)
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_install_creates_only_active_shell_and_login_profiles(self):
-        self.install()
-        self.assertTrue(self.profile().is_file())
-        self.assertTrue((self.user / ".profile").is_file())
-        self.assertFalse((self.user / ".zshrc").exists())
-        self.assertIn(environment.START, self.profile().read_text())
-
-    @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_repeat_is_byte_and_mtime_idempotent(self):
-        self.install()
-        before = self.profile().read_bytes(), self.profile().stat().st_mtime_ns
-        self.install()
-        self.assertEqual(before, (self.profile().read_bytes(), self.profile().stat().st_mtime_ns))
-        self.assertEqual(self.profile().read_text().count(environment.START), 1)
-
-    @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_preserves_unrelated_profile_text(self):
-        old = "export CUSTOM='keep me'\n# personal config\n"
-        self.profile().write_text(old)
-        self.install()
-        self.assertTrue(self.profile().read_text().startswith(old))
-        self.install(remove=True)
-        self.assertEqual(self.profile().read_text(), old)
+    def test_shell_registration_repeat_and_uninstall(self):
+        cases = (
+            ("/bin/bash", {}, self.profile(), "export PATH="),
+            ("/bin/zsh", {"ZDOTDIR": str(self.user / "zsh")}, self.user / "zsh/.zshrc", "export PATH="),
+            ("/bin/fish", {"XDG_CONFIG_HOME": str(self.user / "xdg")},
+             self.user / "xdg/fish/conf.d/oh-my-harness.fish", "set -gx PATH "),
+        )
+        for shell, variables, path, assignment in cases:
+            with self.subTest(shell=shell), mock.patch.dict(os.environ, {"SHELL": shell, **variables}):
+                personal = "# personal shell settings\n"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(personal)
+                self.install()
+                installed = path.read_text()
+                self.assertIn(assignment, installed)
+                self.assertIn(str(self.home / "bin"), installed)
+                receipt = self.home / "state" / environment.RECEIPT
+                self.assertEqual(json.loads(receipt.read_text())["profiles"],
+                                 [{"path": str(path), "fish": shell == "/bin/fish"}])
+                self.install()
+                self.assertEqual(path.read_text(), installed)
+                path.write_text(installed + "# settings below\n")
+                self.install(remove=True)
+                self.assertEqual(path.read_text(), personal + "# settings below\n")
+                self.assertFalse(receipt.exists())
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
     def test_dry_run_writes_nothing(self):
@@ -98,37 +100,42 @@ class UserEnvironmentTests(unittest.TestCase):
         self.assertIn(str(self.home / "bin"), self.profile().read_text())
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_profile_symlink_is_preserved(self):
+    def test_registration_preserves_dotfile_link_and_permissions(self):
         target = self.user / "dotfiles/bashrc"
         target.parent.mkdir()
         target.write_text("# dotfiles\n")
+        target.chmod(0o640)
         self.profile().symlink_to(target)
         self.install()
         self.assertTrue(self.profile().is_symlink())
         self.assertIn(environment.START, target.read_text())
-
-    @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_permissions_are_preserved(self):
-        self.profile().write_text("# kept\n")
-        self.profile().chmod(0o640)
-        self.install()
-        self.assertEqual(self.profile().stat().st_mode & 0o777, 0o640)
-
-    @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_modified_owned_block_is_not_overwritten(self):
-        self.install()
-        damaged = self.profile().read_text().replace("export PATH=", "export PATH=custom:")
-        self.profile().write_text(damaged)
-        with self.assertRaisesRegex(RuntimeError, "edited"):
-            self.install()
-        self.assertEqual(self.profile().read_text(), damaged)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o640)
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
     def test_all_profiles_are_preflighted_before_any_write(self):
-        self.profile().write_text(environment.START + "\n# incomplete\n")
+        inactive = self.user / "other-config" / ".zshrc"
+        inactive.parent.mkdir()
+        inactive.write_text(environment.START + "\n")
+        state = self.home / "state"
+        state.mkdir(parents=True)
+        receipt = state / environment.RECEIPT
+        original = json.dumps({"product": "oh-my-harness", "userHome": str(self.user),
+                               "bin": str(self.home / "bin"),
+                               "profiles": [{"path": str(inactive), "fish": False}]})
+        receipt.write_text(original)
         with self.assertRaisesRegex(RuntimeError, "incomplete"):
             self.install()
-        self.assertFalse((self.user / ".profile").exists())
+        self.assertFalse(self.profile().exists())
+        self.assertEqual(receipt.read_text(), original)
+        self.assertEqual(inactive.read_text(), environment.START + "\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX profiles")
+    def test_unsupported_shell_reports_registration_unavailable(self):
+        with mock.patch.dict(os.environ, {"SHELL": "/bin/sh"}):
+            self.install()
+        receipt = json.loads((self.home / "state" / environment.RECEIPT).read_text())
+        self.assertEqual(receipt["profiles"], [])
+        self.assertIn("PATH was not registered", self.stdout.getvalue())
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
     def test_linked_state_is_rejected(self):
@@ -141,54 +148,51 @@ class UserEnvironmentTests(unittest.TestCase):
         self.assertEqual(list(other.iterdir()), [])
 
     @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_zsh_respects_zdotdir(self):
-        root = self.user / "zsh-files"
-        with mock.patch.dict(os.environ, {"SHELL": "/bin/zsh", "ZDOTDIR": str(root)}):
-            self.install()
-        self.assertTrue((root / ".zprofile").is_file())
-        self.assertTrue((root / ".zshrc").is_file())
-        self.assertFalse(self.profile().exists())
-
-    @unittest.skipIf(os.name == "nt", "POSIX profiles")
-    def test_fish_respects_xdg(self):
-        root = self.user / "xdg"
-        with mock.patch.dict(os.environ, {"SHELL": "/bin/fish", "XDG_CONFIG_HOME": str(root)}):
-            self.install()
-        text = (root / "fish/conf.d/oh-my-harness.fish").read_text()
-        self.assertIn("set -gx PATH", text)
-        self.assertNotIn("export PATH=", text)
+    def test_invalid_blocks_preserve_profile_and_receipt(self):
+        self.install()
+        entry = str(self.home / "bin")
+        current = environment._block(entry)
+        receipt = self.home / "state" / environment.RECEIPT
+        before = receipt.read_bytes()
+        for damaged in (current.replace("export PATH=", "export PATH=custom:"),
+                        current + current,
+                        current.replace("esac\n", "esac; export EXTRA=edited\n"),
+                        environment.START + "\n"):
+            with self.subTest(damaged=damaged):
+                self.profile().write_text(damaged)
+                with self.assertRaises(RuntimeError):
+                    self.install()
+                self.assertEqual(self.profile().read_text(), damaged)
+                self.assertEqual(before, receipt.read_bytes())
 
     @unittest.skipUnless(os.name != "nt" and shutil.which("sh"), "needs POSIX sh")
-    def test_shell_block_quotes_spaces_apostrophes_and_dollars(self):
+    def test_shell_execution_quotes_paths_and_deduplicates_entries(self):
         entry = str(self.user / "space ' $ & [literal]" / "bin")
         code = environment._block(entry)
-        process = subprocess.run(["sh", "-c", code + code + '\nprintf "%s" "$PATH"'],
-                                 env={"PATH": "/usr/bin:/bin"}, capture_output=True, text=True, check=True)
-        self.assertEqual(process.stdout, entry + ":/usr/bin:/bin")
-
-    @unittest.skipUnless(os.name != "nt" and shutil.which("sh"), "needs POSIX sh")
-    def test_empty_path_does_not_gain_current_directory(self):
-        entry = "/some/bin"
-        process = subprocess.run([shutil.which("sh"), "-c", environment._block(entry) + 'printf "%s" "$PATH"'],
-                                 env={"PATH": ""}, capture_output=True, text=True, check=True)
-        self.assertEqual(process.stdout, entry)
+        for shell in ("sh", "bash", "zsh"):
+            executable = shutil.which(shell)
+            if executable is None:
+                continue
+            for existing in ("", "/usr/bin:/bin", "/usr/bin:" + entry + ":/bin"):
+                with self.subTest(shell=shell, existing=existing):
+                    process = subprocess.run([executable, "-c", code + code + '\nprintf "%s" "$PATH"'],
+                                             env={"PATH": existing}, capture_output=True, text=True, check=True)
+                    expected = existing if entry in existing.split(":") else entry + (":" + existing if existing else "")
+                    self.assertEqual(process.stdout, expected)
 
     def test_unsafe_posix_path_entries_rejected(self):
         for value in ("/tmp/part:other", "/tmp/line\nbreak", "/tmp/line\rbreak"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 environment._block(value)
 
-    def test_windows_comparison_is_case_insensitive(self):
-        current = r"C:\Windows;C:\Users\ME\omh\bin;D:\Tools"
-        value, added = environment._windows_path(current, r"c:\users\me\omh\bin")
-        self.assertEqual(value, current)
-        self.assertFalse(added)
-
-    def test_windows_insertion_and_removal_preserve_other_entries(self):
+    def test_windows_path_add_repeat_and_remove(self):
         original = r"C:\Windows;%USERPROFILE%\Tools;;D:\Other"
         entry = r"D:\My Harness\bin"
         updated, added = environment._windows_path(original, entry)
         self.assertTrue(added)
+        repeated, added = environment._windows_path(updated, entry.lower())
+        self.assertEqual(repeated, updated)
+        self.assertFalse(added)
         restored, removed = environment._windows_path(updated, entry, remove=True)
         self.assertTrue(removed)
         self.assertEqual(restored, original)
@@ -201,10 +205,6 @@ class UserEnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unrecognized"):
             self.install()
         self.assertEqual(path.read_text(), '{"product":"other"}')
-
-    def test_removal_does_not_change_unmanaged_text(self):
-        text = "export PATH=/my/own/bin:$PATH\n"
-        self.assertEqual(environment._replace_block(text, None, set()), text)
 
 
 if __name__ == "__main__":

@@ -377,11 +377,32 @@ irm https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.ps1 | ie
 ```
 
 Installation, repair, and update automatically register the manager `bin/` in
-the current user's environment. On Linux/macOS this edits a marked block in
-`.profile` and the active bash/zsh/fish startup files, respecting `ZDOTDIR` and
-`XDG_CONFIG_HOME`. On Windows it updates only `HKCU\Environment\Path`.
+the current user's environment. On Linux/macOS this edits only the active shell's
+configuration: `.bashrc` for bash, `.zshrc` for zsh, or
+`fish/conf.d/oh-my-harness.fish` for fish, respecting `ZDOTDIR` and
+`XDG_CONFIG_HOME`. It does not register PATH in `.profile`, `.zprofile`,
+`.bash_profile`, or `.bash_login`. Other shells require manual PATH setup.
+On Windows it updates only `HKCU\Environment\Path`.
 No machine-wide PATH or system profile is changed. Unrelated profile content
-and dotfile symlinks are preserved; registration is idempotent.
+and dotfile symlinks are preserved; repeated registration does not duplicate
+the managed block.
+
+Shell profiles use a short comment and a readable deduplication check on every
+POSIX platform. For bash/zsh, a default installation looks like this (the
+actual manager path is written, with shell quoting when needed):
+
+```sh
+# oh-my-harness PATH
+case ":${PATH:-}:" in
+    *:/Users/you/.oh-my-harness/bin:*) ;;
+    *) export PATH=/Users/you/.oh-my-harness/bin${PATH:+:"$PATH"} ;;
+esac
+```
+
+Fish uses the same comment followed by `if not contains`, `set -gx PATH`, and `end`.
+Windows keeps using the user registry and does not add a PowerShell profile
+snippet. Repeated sourcing does not add duplicate PATH entries. An empty PATH
+stays free of an implicit current-directory entry.
 
 Pass `--no-path` to the initializer or `omh repair` to skip registration for that
 invocation; it is not a saved preference and later `omh update` registers PATH.

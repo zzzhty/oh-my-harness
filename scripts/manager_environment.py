@@ -8,8 +8,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-START = "# >>> oh-my-harness PATH >>>"
-END = "# <<< oh-my-harness PATH <<<"
+START = "# oh-my-harness PATH"
 RECEIPT = "environment.json"
 
 
@@ -67,53 +66,49 @@ def _block(bin_dir: str, *, fish: bool = False) -> str:
         body = f"if not contains -- {quoted} $PATH\n    set -gx PATH {quoted} $PATH\nend"
     else:
         quoted = shlex.quote(bin_dir)
-        body = (
-            f"case \":${{PATH:-}}:\" in\n"
-            f"    *:{quoted}:*) ;;\n"
-            f"    *) export PATH={quoted}${{PATH:+:\"$PATH\"}} ;;\n"
-            "esac"
-        )
-    return f"{START}\n{body}\n{END}\n"
+        body = (f'case ":${{PATH:-}}:" in\n'
+                f"    *:{quoted}:*) ;;\n"
+                f'    *) export PATH={quoted}${{PATH:+:"$PATH"}} ;;\n'
+                "esac")
+    return f"{START}\n{body}\n"
 
 
 def _replace_block(text: str, block: str | None, allowed: set[str]) -> str:
     """Replace our exact block, preserving every byte outside it."""
-    starts, ends = text.count(START), text.count(END)
-    if starts == ends == 0:
+    starts = text.count(START)
+    if starts == 0:
         if block is None:
             return text
         return text + ("\n" if text and not text.endswith("\n") else "") + block
-    if starts != 1 or ends != 1:
-        raise RuntimeError("PATH markers are duplicated or incomplete; preserve the profile and inspect its managed block")
+    if starts != 1:
+        raise RuntimeError("PATH markers are duplicated; preserve the profile and inspect its managed block")
     begin = text.index(START)
-    finish = text.index(END, begin) + len(END)
     if begin and text[begin - 1] != "\n":
         raise RuntimeError("PATH marker is not on its own line")
-    if finish < len(text) and text[finish] != "\n":
-        raise RuntimeError("PATH end marker is not on its own line")
-    if finish < len(text):
-        finish += 1
-    existing = text[begin:finish]
-    if existing.rstrip("\n") not in {item.rstrip("\n") for item in allowed}:
-        raise RuntimeError("managed PATH block was edited or belongs to another installation; no profile content was overwritten")
-    return text[:begin] + (block or "") + text[finish:]
+    if text[begin:].rstrip("\n") == START:
+        raise RuntimeError("PATH block is incomplete; preserve the profile and inspect its managed block")
+    # The complete known command bounds ownership without a closing marker.
+    for expected in allowed:
+        expected = expected.rstrip("\n")
+        finish = begin + len(expected)
+        if text.startswith(expected, begin) and (finish == len(text) or text[finish] == "\n"):
+            if finish < len(text):
+                finish += 1
+            return text[:begin] + (block or "") + text[finish:]
+    raise RuntimeError("managed PATH block was edited or belongs to another installation; no profile content was overwritten")
 
 
 def _profile_paths(user_home: Path) -> list[tuple[Path, bool]]:
-    """Cover login and interactive shells without creating every shell's config."""
-    result = [(user_home / ".profile", False)]
+    """Register only the active shell's own config, never login profiles."""
+    result = []
     shell = Path(os.environ.get("SHELL", "/bin/bash")).name
     if shell == "bash":
         result.append((user_home / ".bashrc", False))
-        for name in (".bash_profile", ".bash_login"):
-            path = user_home / name
-            if path.exists() or path.is_symlink():
-                result.append((path, False))
     elif shell == "zsh":
         root = Path(os.environ.get("ZDOTDIR") or user_home).expanduser()
         if not root.is_absolute():
             raise ValueError("ZDOTDIR must be absolute")
-        result.extend([(root / ".zprofile", False), (root / ".zshrc", False)])
+        result.append((root / ".zshrc", False))
     elif shell == "fish":
         root = Path(os.environ.get("XDG_CONFIG_HOME") or user_home / ".config").expanduser()
         if not root.is_absolute():
@@ -155,7 +150,7 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
     entry = str(home / "bin")
     same_user = receipt.get("userHome") == str(user_home)
     previous = receipt.get("bin")
-    # Old block text may migrate, but old-account paths never become write targets.
+    # The recorded bin supports relocation; another account's paths are not write targets.
     if os.name == "nt":
         import winreg
         try:
@@ -205,9 +200,8 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
                 raise RuntimeError(f"shell profile is not a file: {path}")
             old = target.read_bytes().decode("utf-8") if target.exists() else ""
             current_block = _block(entry, fish=fish)
-            allowed = {current_block}
-            if isinstance(previous, str):
-                allowed.add(_block(previous, fish=fish))
+            entries = {entry, previous} if isinstance(previous, str) else {entry}
+            allowed = {_block(value, fish=fish) for value in entries}
             cleanup_only = remove or str(path) not in active_profiles
             new = _replace_block(old, None if cleanup_only else current_block, allowed)
             plans.append((path, target, old, new, fish))
@@ -234,4 +228,7 @@ def ensure_user_path(home: Path, *, dry_run: bool = False, remove: bool = False)
         current = os.environ.get("PATH", "")
         if entry not in current.split(os.pathsep):
             os.environ["PATH"] = entry + (os.pathsep + current if current else "")
-        print("omh is registered for new terminals; existing parent shells keep their current PATH.")
+        if os.name == "nt" or new_receipt["profiles"]:
+            print("omh is registered for new terminals; existing parent shells keep their current PATH.")
+        else:
+            print("No supported shell config was selected; PATH was not registered for new terminals.")

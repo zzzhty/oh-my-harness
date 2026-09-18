@@ -84,7 +84,7 @@ class RuntimeRollbackTests(unittest.TestCase):
 
 @unittest.skipIf(os.name == "nt", "POSIX external shell profiles")
 class ExternalProfileOwnershipTests(unittest.TestCase):
-    CASES = (("/bin/zsh", "ZDOTDIR", (".zprofile", ".zshrc")),
+    CASES = (("/bin/zsh", "ZDOTDIR", (".zshrc",)),
              ("/bin/fish", "XDG_CONFIG_HOME", ("fish/conf.d/oh-my-harness.fish",)))
 
     @contextlib.contextmanager
@@ -133,7 +133,7 @@ class ExternalProfileOwnershipTests(unittest.TestCase):
                 for name in names:
                     self.assertNotIn(environment.START, (new_root / name).read_text())
 
-    def test_edited_external_block_preserves_receipt_and_every_profile(self):
+    def test_edited_external_block_aborts_uninstall(self):
         for shell, variable, names in self.CASES:
             with self.subTest(shell=shell), self.setup_profiles(shell, variable, names) as (_, manager, paths):
                 path = paths[0]
@@ -141,15 +141,13 @@ class ExternalProfileOwnershipTests(unittest.TestCase):
                 path.write_text(damaged, encoding="utf-8")
                 receipt = manager / "state/environment.json"
                 original_receipt = receipt.read_bytes()
-                original_profile = (manager.parent / ".profile").read_bytes()
                 os.environ.pop(variable)
                 with self.assertRaisesRegex(RuntimeError, "edited"):
                     environment.ensure_user_path(manager, remove=True)
                 self.assertEqual(path.read_text(), damaged)
                 self.assertEqual(receipt.read_bytes(), original_receipt)
-                self.assertEqual((manager.parent / ".profile").read_bytes(), original_profile)
 
-    def test_retired_unmanaged_profile_is_never_given_a_new_block(self):
+    def test_inactive_unmanaged_profile_is_never_given_a_new_block(self):
         for shell, variable, names in self.CASES:
             with self.subTest(shell=shell), self.setup_profiles(shell, variable, names) as (_, manager, paths):
                 for path in paths:

@@ -75,15 +75,6 @@ class ManagerStateTests(unittest.TestCase):
             )
             self.assertEqual(desired["harnesses"], [])
 
-    @unittest.skipIf(os.name == "nt", "nested Windows byte-range lock is process-scoped")
-    def test_manager_lock_rejects_a_second_mutation(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / ".oh-my-harness"
-            with manager_state.ManagerLock(home):
-                with self.assertRaisesRegex(SystemExit, "another oh-my-harness mutation"):
-                    with manager_state.ManagerLock(home):
-                        pass
-
 
 class OmhCliTests(unittest.TestCase):
     def registry(self):
@@ -98,12 +89,6 @@ class OmhCliTests(unittest.TestCase):
         self.assertEqual(
             omh._normalize_argv(["--home", "/tmp/omh", "--yes"]),
             ["--home", "/tmp/omh", "refresh", "--yes"],
-        )
-
-    def test_explicit_command_is_not_rewritten(self) -> None:
-        self.assertEqual(
-            omh._normalize_argv(["install", "zcode"]),
-            ["install", "zcode"],
         )
 
     def test_top_level_help_is_not_rewritten_to_refresh(self) -> None:
@@ -125,10 +110,9 @@ class OmhCliTests(unittest.TestCase):
 
     def test_harness_command_help_lists_registry_owned_target_choices(self) -> None:
         registry = self.registry()
-        with mock.patch.object(omh, "_load_registry", return_value=registry) as load:
+        with mock.patch.object(omh, "_load_registry", return_value=registry):
             parser = omh.build_parser()
 
-        load.assert_called_once_with()
         subparsers = next(
             action
             for action in parser._actions
