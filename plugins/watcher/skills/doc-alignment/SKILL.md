@@ -28,7 +28,7 @@ Use implementation mode when the user asks to align, update, reorganize, prune, 
 2. For a configured, scheduled, commit-dependent, or one-repository Watcher audit, read `references/watcher-audit.md` and complete that branch.
 3. Inventory current entry points and disputed names, paths, commands, links, ownership, and validation claims. For script or entry-point naming, documentation-tree placement, planning/TODO navigation, agent skills, classification, severity, reporting, or validation selection, read `references/alignment-reference.md` and apply every matching section.
 4. Classify drift against current truth. In report-only mode, publish evidence-backed findings and bounded recommendations. In implementation mode, edit the narrowest owner, update all active consumers, and preserve declared history or compatibility.
-5. Re-run the affected inventory, stale-term or link scan, and owning validation. Report exact failures and partial checks without presenting them as full validation.
+5. Complete any missing required checks and reuse valid results under the global verification policy; re-run only invalidated checks or explicit fresh-run requirements. Report exact failures and partial checks without presenting them as full validation.
 
 ## Completion
 

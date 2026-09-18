@@ -13,9 +13,10 @@ From the Watcher plugin root, start with deterministic evidence:
 ```bash
 omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
 "$omh_tooling_python" -B scripts/watcher doc doctor --config config/repos.example.json
-"$omh_tooling_python" -B scripts/watcher doc commit-counter --config config/repos.example.json
 "$omh_tooling_python" -B scripts/watcher doc report --config config/repos.example.json --mode commit-dependent --mark-audited --digest
 ```
+
+Run `scripts/watcher doc commit-counter` only when a separate threshold-status preview is needed; `doc report` computes eligibility itself.
 
 Use `config/repos.json` when an approved private config exists. For one repository:
 

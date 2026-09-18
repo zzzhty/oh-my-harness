@@ -1,6 +1,6 @@
 # UI Prototype
 
-Generate **several radically different UI variations** on a single route, switchable from a floating bottom bar. The user flips between variants in the browser, picks one (or steals bits from each), then throws the rest away.
+Build the smallest UI prototype that answers the design question. Start with one design; add alternatives only when comparison is needed. For multiple variants, use one route with a URL selector and a floating switcher so the user can compare them in the browser.
 
 If the question is about logic/state rather than what something looks like — wrong branch. Use [LOGIC.md](LOGIC.md).
 
@@ -17,43 +17,43 @@ A UI prototype is much easier to judge when it's **butting up against the rest o
 
 ### Sub-shape A — adjustment to an existing page (preferred)
 
-The route already exists. Variants are rendered **on the same route**, gated by a `?variant=` URL search param. The existing data fetching, params, and auth all stay — only the rendering swaps. This is the default; pick it unless there's a specific reason not to.
+The route already exists. Render the prototype **on the same route**. When comparing variants, select their rendering with a `?variant=` URL search param. The existing data fetching, params, and auth all stay — only the rendering swaps. This is the default; pick it unless there's a specific reason not to.
 
-If the prototype is for something that doesn't yet have a page but *would naturally live inside one* (a new section of the dashboard, a new card on the settings screen, a new step in an existing flow) — that's still sub-shape A. Mount the variants inside the host page.
+If the prototype is for something that doesn't yet have a page but *would naturally live inside one* (a new section of the dashboard, a new card on the settings screen, a new step in an existing flow) — that's still sub-shape A. Mount the prototype inside the host page.
 
 ### Sub-shape B — a new page (last resort)
 
 Only use this when the thing being prototyped genuinely has no existing page to live inside — e.g. an entirely new top-level surface, or a flow that can't be embedded anywhere sensible.
 
-Create a **throwaway route** following whatever routing convention the project already uses — don't invent a new top-level structure. Name it so it's obviously a prototype (e.g. include the word `prototype` in the path or filename). Same `?variant=` pattern.
+Create a **throwaway route** following whatever routing convention the project already uses — don't invent a new top-level structure. Name it so it's obviously a prototype (e.g. include the word `prototype` in the path or filename). Use `?variant=` only when comparing multiple variants.
 
 Before committing to sub-shape B, sanity-check: is there really no existing page this could be embedded in? An empty route hides design problems that a populated one would expose.
 
-In both sub-shapes the floating bottom bar is identical.
+Both sub-shapes use the same floating bottom bar only when comparing multiple variants.
 
 ## Process
 
 ### 1. State the question and pick N
 
-Default to **3 variants**. More than 5 stops being radically different and starts being noise — cap there.
+Start with one variant. Add only alternatives needed to resolve a concrete design trade-off; use a requested count when the user specifies one.
 
 Write down the plan in one line, in the prototype's location or a top-of-file comment:
 
-> "Three variants of the settings page, switchable via `?variant=`, on the existing `/settings` route."
+> "One settings-page layout on the existing `/settings` route."
 
 This works whether the user is here to push back or not.
 
-### 2. Generate radically different variants
+### 2. Build the prototype or chosen variants
 
-Draft each variant. Hold each one to:
+Build the prototype or each chosen variant around:
 
 - The page's purpose and the data it has access to.
 - The project's component library / styling system (TailwindCSS, shadcn, MUI, plain CSS, whatever).
 - A clear exported component name, e.g. `VariantA`, `VariantB`, `VariantC`.
 
-Variants must be **structurally different** — different layout, different information hierarchy, different primary affordance, not just different colours. Three slightly-tweaked card grids isn't a UI prototype, it's wallpaper. If two drafts come out too similar, redo one with explicit "do not use a card grid" guidance.
+When comparing different layouts or information hierarchies, make variants differ on that decision. Redo a variant only if it fails to test a needed alternative. For a single prototype, proceed directly to Hand it over.
 
-### 3. Wire them together
+### 3. Wire multiple variants together (comparison only)
 
 Create a single switcher component on the route:
 
@@ -74,7 +74,7 @@ For sub-shape A (existing page): keep all the existing data fetching above the s
 
 For sub-shape B (new page): the throwaway route under `/prototype/<name>` mounts the same switcher.
 
-### 4. Build the floating switcher
+### 4. Build the floating switcher (comparison only)
 
 A small fixed-position bar at the bottom-centre of the screen with three pieces:
 
@@ -93,20 +93,20 @@ Put the switcher in a single shared component so both sub-shapes can reuse it. L
 
 ### 5. Hand it over
 
-Surface the URL (and the `?variant=` keys). The user will flip through whenever they get to it. The interesting feedback is usually **"I want the header from B with the sidebar from C"** — that's the actual design they want.
+Surface the URL and, for a comparison, the `?variant=` keys. The user can inspect the prototype or compare alternatives whenever they get to it. For multiple variants, feedback such as **"I want the header from B with the sidebar from C"** can identify the design they want.
 
 ### 6. Capture the answer and clean up
 
-Once a variant has won, record which variant and why, along with the runnable artifact or URL, as the [SKILL](SKILL.md) describes. Keep the variants as local evidence. When production integration is already authorized:
+Once the prototype has answered the question, record the conclusion and why, along with the runnable artifact or URL, as the [SKILL](SKILL.md) describes. Keep the prototype and any compared variants as local evidence. When production integration is already authorized:
 
-- **Sub-shape A** — fold the winner into the existing page; drop the losing variants and the switcher from main.
-- **Sub-shape B** — promote the winning variant to a real route; drop the throwaway route and the switcher from main.
+- **Sub-shape A** — fold the chosen design into the existing page; remove any unused variants and switcher from main.
+- **Sub-shape B** — promote the chosen design to a real route; remove the throwaway route and any switcher from main.
 
 When removing experiment code from production paths, preserve runnable local prototype evidence and record its path. Branch creation, publication and issue updates follow the main skill's authorization rules. A design choice alone does not authorize production integration or deleting the evidence.
 
 ## Anti-patterns
 
-- **Variants that differ only in colour or copy.** That's a tweak, not a prototype. Real variants disagree about structure.
-- **Sharing too much code between variants.** A shared `<Header>` is fine; a shared `<Layout>` defeats the point. Each variant should be free to throw out the layout.
+- **Variants that do not help resolve the design question.** Add a variant only when it tests a needed alternative.
+- **Shared code that prevents a useful comparison.** When comparing layouts, keep variants free to change structure; reuse shared code that does not constrain the dimension being compared.
 - **Wiring variants to real mutations.** Read-only prototypes are fine. If a variant needs to mutate, point it at a stub — the question is "what should this look like", not "does the backend work".
 - **Promoting the prototype directly to production.** The variant code was written under prototype constraints (no tests, minimal error handling). Rewrite it properly when you fold it in.

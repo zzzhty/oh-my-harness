@@ -17,7 +17,7 @@
 
 ## Failure-handling policy
 
-- Surface failures directly: report the failing command/path, known root cause, and breakpoint. Diagnose and fix within scope. Fallbacks or changed assumptions need explicit user or owner authorization. Never present simulated, incomplete, or unverified work as verified success.
+- Surface failures directly: report the failing command/path, known root cause, and breakpoint. Diagnose and fix within scope. Use equivalent methods within existing authorization and required methods and gates when scope, behavior, privacy, safety and acceptance criteria stay unchanged. Fallbacks or changed assumptions that alter those boundaries need explicit user or owner authorization. Never present simulated, incomplete, or unverified work as verified success.
 - A blocked required result or gate stops dependent work. Preserve reversible progress and report useful diagnostics; independent authorized work may continue. Optional missing checks require an explicit unverified or partial-coverage result, not a false pass.
 - When an instruction causes a pause, name its owning file/rule and unmet condition. Separate explicit requirements from interpretation; do not invent approval gates.
 
