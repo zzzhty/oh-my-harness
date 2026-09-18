@@ -232,6 +232,46 @@ class InstallerTests(unittest.TestCase):
                 retired_repo,
             )
 
+    def test_bootstrap_alias_uses_canonical_receipt_and_refresh_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "manager"
+            repo = home / "repo"
+            repo.mkdir(parents=True)
+            self.seed_bootstrap(repo)
+            with (
+                mock.patch.object(installer, "SOURCE_ROOT", repo),
+                mock.patch.object(sys, "argv", [
+                    "install_oh_my_harness.py", "--home", str(home),
+                    "--repository", "https://example.invalid/repo.git",
+                    "--harness", "copilot", "--adopt-current-checkout",
+                ]),
+                mock.patch.object(installer, "installed_revision", return_value="a" * 40),
+                mock.patch.object(installer, "invoke_refresh") as refresh,
+            ):
+                installer.main()
+            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
+            receipt = json.loads((home / "state/install.json").read_text())
+            self.assertEqual(receipt["harness"], "copilot-cli")
+            self.assertEqual(receipt["status"], "ready")
+
+    def test_unknown_bootstrap_harness_fails_before_creating_manager_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "manager"
+            error = io.StringIO()
+            with (
+                mock.patch.object(sys, "argv", [
+                    "install_oh_my_harness.py", "--home", str(home), "--harness", "copliot",
+                ]),
+                mock.patch.object(installer, "clone_repository") as clone,
+                contextlib.redirect_stderr(error),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                installer.main()
+            self.assertEqual(raised.exception.code, 2)
+            self.assertIn("copilot = copilot-cli", error.getvalue())
+            self.assertFalse(home.exists())
+            clone.assert_not_called()
+
     def test_repeated_install_uses_shared_repair_from_local_or_external_source(self) -> None:
         for external in (False, True):
             with self.subTest(external=external), tempfile.TemporaryDirectory() as tmp:

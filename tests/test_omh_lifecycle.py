@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -8,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -84,9 +87,10 @@ class ManagerStateTests(unittest.TestCase):
 
 class OmhCliTests(unittest.TestCase):
     def registry(self):
-        return SimpleNamespace(
-            choices=("claude-code", "codex", "zcode"),
-            default_harness="codex",
+        registry = omh._load_registry()
+        return replace(
+            registry,
+            harnesses={key: registry.harnesses[key] for key in ("claude-code", "codex", "zcode")},
         )
 
     def test_no_subcommand_is_refresh(self) -> None:
@@ -131,11 +135,75 @@ class OmhCliTests(unittest.TestCase):
             if isinstance(action, argparse._SubParsersAction)
         )
         expected = "Available harnesses: claude-code, codex, zcode."
-        for command in ("install", "refresh", "remove", "check", "doctor"):
+        for command in ("install", "refresh", "remove", "check", "doctor", "repair"):
             with self.subTest(command=command):
                 help_text = " ".join(subparsers.choices[command].format_help().split())
                 self.assertIn(expected, help_text)
-                self.assertIn("all registry harnesses", help_text)
+                self.assertIn("claude = claude-code", help_text)
+                if command == "install":
+                    self.assertIn("every available harness", help_text)
+                    self.assertIn("Default: codex", help_text)
+                else:
+                    self.assertIn("all installed harnesses", help_text)
+                if command == "remove":
+                    self.assertIn("there is no default target", help_text)
+
+    def test_aliases_are_normalized_and_deduplicated_across_commands(self) -> None:
+        parser = omh.build_parser()
+        for command in ("install", "refresh", "remove", "check", "doctor", "repair"):
+            with self.subTest(command=command):
+                args = parser.parse_args([command, "copilot", "copilot-cli", "--harness", "claude"])
+                targets = omh._target_set(args, desired=("copilot-cli",), mode=command)
+                self.assertEqual(targets, ("copilot-cli", "claude-code"))
+                all_args = parser.parse_args([command, "--all"])
+                self.assertEqual(
+                    omh._target_set(all_args, desired=("copilot-cli",), mode=command),
+                    omh._load_registry().choices if command == "install" else ("copilot-cli",),
+                )
+
+    def test_unknown_alias_is_rejected_before_any_lifecycle_state_access(self) -> None:
+        error = io.StringIO()
+        with mock.patch.object(omh, "_state_context") as state, contextlib.redirect_stderr(error):
+            with self.assertRaises(SystemExit) as raised:
+                omh.main(["install", "copliot"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("unknown harness 'copliot'", error.getvalue())
+        self.assertIn("copilot = copilot-cli", error.getvalue())
+        state.assert_not_called()
+
+    def test_install_and_remove_alias_share_one_canonical_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "manager"
+            manager_state.atomic_write_json(home / "state/install.json", {
+                "product": "oh-my-harness", "status": "installing", "harness": "codex",
+            })
+            manager, desired = manager_state.derive_initial_state(
+                home, repository="https://example.invalid/repo.git", revision="a" * 40,
+                release_version="1.0.0", bundle_identity="fixture", persist=True,
+            )
+            with (
+                mock.patch.object(omh, "_state_context", return_value=(manager, desired)),
+                mock.patch.object(omh, "_refresh_one") as refresh,
+                mock.patch.object(omh, "_distribution", return_value=("1.0.0", "fixture")),
+                mock.patch.object(omh, "_revision", return_value="a" * 40),
+                mock.patch.dict(os.environ, {"COPILOT_HOME": str(Path(tmp) / "copilot")}),
+            ):
+                omh.main(["--home", str(home), "install", "copilot", "copilot-cli"])
+            refresh.assert_called_once()
+            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
+            desired = json.loads((home / "state/desired.json").read_text())
+            self.assertEqual(desired["harnesses"], ["copilot-cli"])
+            receipt = manager_state.harness_file(home, "copilot-cli")
+            self.assertEqual(json.loads(receipt.read_text())["harness"], "copilot-cli")
+            self.assertFalse(manager_state.harness_file(home, "copilot").exists())
+            with (
+                mock.patch.object(omh, "_state_context", return_value=(manager, desired)),
+                mock.patch.object(omh, "_remove_one") as remove,
+            ):
+                omh.main(["--home", str(home), "remove", "copilot"])
+            self.assertEqual(remove.call_args.kwargs["harness"], "copilot-cli")
+            self.assertEqual(json.loads((home / "state/desired.json").read_text())["harnesses"], [])
+            self.assertFalse(receipt.exists())
 
     def test_internal_resume_commands_remain_dispatchable(self) -> None:
         with (
@@ -1023,7 +1091,6 @@ class RemoveStateTransactionTests(unittest.TestCase):
             with (
                 mock.patch.object(omh, "ManagerLock"),
                 mock.patch.object(omh, "_state_context", return_value=({}, desired)),
-                mock.patch.object(omh, "_load_registry", return_value=SimpleNamespace(choices=("codex",), default_harness="codex")),
                 mock.patch.object(omh, "_remove_one", side_effect=SystemExit("remove failed")),
                 mock.patch.object(omh, "write_desired") as write_desired,
             ):
@@ -1148,6 +1215,35 @@ class BootstrapHelpTests(unittest.TestCase):
                 )
             run.assert_not_called()
             self.assertFalse((home / "venv").exists())
+
+    def test_subcommand_help_never_repairs_checkout_or_bootstraps_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cli = home / "repo/scripts/omh.py"
+            cli.parent.mkdir(parents=True)
+            cli.write_text("pass\n", encoding="utf-8")
+            tooling = omh_bootstrap._venv_python(home)
+            tooling.parent.mkdir(parents=True)
+            tooling.touch()
+            for arguments in (
+                ["install", "--help"], ["refresh", "-h"],
+                ["repair", "--help"],
+                ["manager", "repair", "--help"], ["manager", "uninstall", "-Help"],
+            ):
+                with (
+                    self.subTest(arguments=arguments),
+                    mock.patch.object(omh_bootstrap.sys, "version_info", (3, 10, 13)),
+                    mock.patch.object(omh_bootstrap, "_repair_checkout") as repair,
+                    mock.patch.object(omh_bootstrap.subprocess, "run") as run,
+                ):
+                    run.return_value = subprocess.CompletedProcess([], 0)
+                    self.assertEqual(omh_bootstrap.main(["--home", str(home), *arguments]), 0)
+                    repair.assert_not_called()
+                    run.assert_called_once_with([
+                        str(tooling), str(cli), "--home", str(home),
+                        *("--help" if arg == "-Help" else arg for arg in arguments),
+                    ])
+            self.assertFalse(omh_bootstrap._is_help_request(["install", "--", "--help"]))
 
     def test_unsupported_python_rejects_repair_before_checkout_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

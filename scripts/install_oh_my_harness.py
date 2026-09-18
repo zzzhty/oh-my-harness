@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from harness_registry import HarnessRegistryError, load_harness_registry
 from manager_paths import (
     PRODUCT_NAME,
     bin_path,
@@ -727,8 +728,32 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
 
 
 def main() -> None:
+    registry = load_harness_registry()
+
+    def harness_name(value: str) -> str:
+        try:
+            return registry.resolve_id(value)
+        except HarnessRegistryError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
     parser = argparse.ArgumentParser(
-        description="Clone and initialize one managed oh-my-harness installation."
+        description=(
+            "First-time setup: create the oh-my-harness manager and install skills "
+            "and global instructions for one coding client. Install the client app separately."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            registry.selection_help() + "\n\n"
+            "Examples (use .\\install.ps1 on Windows):\n"
+            "  ./install.sh --harness copilot --dry-run\n"
+            "  ./install.sh --harness copilot --yes\n\n"
+            "After setup, reopen your terminal to use the registered PATH, then run:\n"
+            "  omh install claude        Add another harness\n"
+            "  omh status                Show installed harnesses\n"
+            "  omh --help                See the everyday commands\n"
+            "Already installed? Use omh install to add harnesses, or omh repair to repair.\n"
+            "Rerunning setup repairs the existing installation and preserves its source."
+        ),
     )
     parser.add_argument(
         "--home",
@@ -738,11 +763,20 @@ def main() -> None:
         "--repository",
         help="Git repository source. Defaults to this checkout's remote.origin.url.",
     )
-    parser.add_argument("--ref", default=DEFAULT_REF, help="Git branch to install.")
-    parser.add_argument("--harness", default="codex", help="Initial harness distribution.")
+    parser.add_argument("--ref", default=DEFAULT_REF, help="Git branch or tag to install (default: main).")
+    parser.add_argument(
+        "--harness", default=registry.default_harness, type=harness_name,
+        help=f"Initial harness name or alias (default: {registry.default_harness}).",
+    )
     parser.add_argument("--codex-home", help="Explicit Codex harness home.")
-    parser.add_argument("--yes", action="store_true")
-    parser.add_argument("--migrate-marketplace", action="store_true")
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Confirm creation and managed cleanup; replacing existing instructions still requires a live prompt.",
+    )
+    parser.add_argument(
+        "--migrate-marketplace", action="store_true",
+        help="Codex only: migrate the retired marketplace after confirming its exact cleanup plan.",
+    )
     parser.add_argument(
         "--migrate-from-repo",
         help=(
@@ -767,7 +801,10 @@ def main() -> None:
             "checkout fast-forwards to the published requested ref."
         ),
     )
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview setup or repair without writing installation files; does not validate harness contents.",
+    )
     parser.add_argument("--repair", action="store_true", help="Repair an owned installation; repeated installs already do this automatically.")
     parser.add_argument("--no-path", action="store_true", help="Skip current-user PATH registration.")
     args = parser.parse_args()

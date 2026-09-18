@@ -102,6 +102,49 @@ class HarnessRegistryTests(unittest.TestCase):
             {"type": "string", "const": REGISTRY_SCHEMA_VERSION},
         )
 
+    def test_aliases_resolve_the_same_plan_without_adding_distributions(self) -> None:
+        expected = {"claude": "claude-code", "copilot": "copilot-cli", "gemini": "gemini-cli", "pi": "pi-agent"}
+        self.assertEqual(self.registry.aliases, expected)
+        self.assertTrue(set(expected).isdisjoint(self.registry.choices))
+        with tempfile.TemporaryDirectory() as tmp:
+            for alias, canonical in expected.items():
+                for platform in ("posix", "nt"):
+                    with self.subTest(alias=alias, platform=platform):
+                        options = dict(environ={}, user_home=Path(tmp), os_name=platform)
+                        self.assertEqual(
+                            resolve_harness_plan(self.registry, alias, **options),
+                            resolve_harness_plan(self.registry, canonical, **options),
+                        )
+
+    def test_alias_schema_and_reader_reject_invalid_names_and_collisions(self) -> None:
+        from jsonschema import Draft202012Validator
+
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        schema = json.loads(REGISTRY_FILE.with_name("registry.schema.json").read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        validator.validate(original)
+        cases = (
+            ("not-array", "copilot", True),
+            ("not-string", [1], True),
+            ("invalid-name", ["../copilot"], True),
+            ("untrimmed", [" copilot "], True),
+            ("duplicate", ["copilot", "copilot"], True),
+            ("canonical-collision", ["codex"], False),
+            ("self-collision", ["copilot-cli"], False),
+            ("alias-collision", ["claude"], False),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "registry.json"
+            for label, aliases, structural in cases:
+                with self.subTest(label=label):
+                    payload = json.loads(json.dumps(original))
+                    payload["harnesses"]["copilot-cli"]["aliases"] = aliases
+                    if structural:
+                        self.assertFalse(validator.is_valid(payload))
+                    write_registry(path, payload)
+                    with self.assertRaises(HarnessRegistryError):
+                        load_harness_registry(path)
+
     def test_environment_root_and_environment_home_append_are_distinct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fixture_root = Path(tmp)
@@ -373,7 +416,7 @@ class HarnessRegistryTests(unittest.TestCase):
             (
                 "schema-version",
                 lambda data: data.update({"schemaVersion": "v2"}),
-                "schemaVersion must be '2026-08-25'",
+                f"schemaVersion must be '{REGISTRY_SCHEMA_VERSION}'",
             ),
             (
                 "driver",
@@ -445,9 +488,9 @@ class HarnessRegistryTests(unittest.TestCase):
             duplicate = root / "duplicate.json"
             duplicate.write_text(
                 REGISTRY_FILE.read_text(encoding="utf-8").replace(
-                    '"schemaVersion": "2026-08-25",',
-                    '"schemaVersion": "2026-08-25",\n'
-                    '  "schemaVersion": "2026-08-25",',
+                    f'"schemaVersion": "{REGISTRY_SCHEMA_VERSION}",',
+                    f'"schemaVersion": "{REGISTRY_SCHEMA_VERSION}",\n'
+                    f'  "schemaVersion": "{REGISTRY_SCHEMA_VERSION}",',
                     1,
                 ),
                 encoding="utf-8",

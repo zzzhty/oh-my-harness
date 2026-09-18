@@ -1,6 +1,6 @@
 {
   "$schema": "./registry.schema.json",
-  "schemaVersion": "2026-08-25",
+  "schemaVersion": "2026-09-18",
   "defaults": {
     "harness": "codex"
   },
@@ -119,6 +119,7 @@
     },
     "claude-code": {
       "displayName": "Claude Code",
+      "aliases": ["claude"],
       "root": {
         "candidates": [
           {
@@ -161,6 +162,7 @@
     },
     "copilot-cli": {
       "displayName": "GitHub Copilot CLI",
+      "aliases": ["copilot"],
       "root": {
         "candidates": [
           {
@@ -203,6 +205,7 @@
     },
     "gemini-cli": {
       "displayName": "Gemini CLI",
+      "aliases": ["gemini"],
       "root": {
         "candidates": [
           {
@@ -288,6 +291,7 @@
     },
     "pi-agent": {
       "displayName": "Pi Agent",
+      "aliases": ["pi"],
       "root": {
         "candidates": [
           {

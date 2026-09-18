@@ -7,7 +7,7 @@
   "required": ["$schema", "schemaVersion", "defaults", "sources", "excludedSkillRoots", "harnesses"],
   "properties": {
     "$schema": {"type": "string", "const": "./registry.schema.json"},
-    "schemaVersion": {"type": "string", "const": "2026-08-25"},
+    "schemaVersion": {"type": "string", "const": "2026-09-18"},
     "defaults": {
       "type": "object",
       "additionalProperties": false,
@@ -275,6 +275,11 @@
       "required": ["displayName", "root", "skills", "instructions", "extras"],
       "properties": {
         "displayName": {"type": "string", "minLength": 1},
+        "aliases": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}
+        },
         "root": {"$ref": "#/$defs/root"},
         "skills": {"$ref": "#/$defs/skills"},
         "instructions": {"$ref": "#/$defs/instructions"},

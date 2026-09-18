@@ -78,7 +78,12 @@ def _is_manager_repair(arguments: list[str]) -> bool:
 
 
 def _is_help_request(arguments: list[str]) -> bool:
-    return any(arg in {"-h", "--help", "-Help"} for arg in arguments)
+    for argument in arguments:
+        if argument == "--":
+            break
+        if argument in {"-h", "--help", "-Help"}:
+            return True
+    return False
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -231,7 +236,10 @@ def main(argv: list[str] | None = None) -> int:
     help_request = _is_help_request(command_arguments)
     if help_request:
         if cli.is_file() and tooling_python.is_file():
-            completed = subprocess.run([str(tooling_python), str(cli), "--home", str(home), *command_arguments])
+            completed = subprocess.run([
+                str(tooling_python), str(cli), "--home", str(home),
+                *("--help" if arg == "-Help" else arg for arg in command_arguments),
+            ])
             return completed.returncode
         _fallback_help()
         return 0

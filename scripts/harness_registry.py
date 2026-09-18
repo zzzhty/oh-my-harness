@@ -15,7 +15,7 @@ from repo_skill_catalog import REPO_ROOT, SkillCatalog
 
 
 REGISTRY_FILE = REPO_ROOT / ".agents" / "harnesses" / "registry.json"
-REGISTRY_SCHEMA_VERSION = "2026-08-25"
+REGISTRY_SCHEMA_VERSION = "2026-09-18"
 HARNESS_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 ENVIRONMENT_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -122,6 +122,7 @@ class HarnessSpec:
     skills: SkillsSpec
     instructions: InstructionsSpec
     extras: tuple[str, ...]
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,31 @@ class HarnessRegistry:
     @property
     def choices(self) -> tuple[str, ...]:
         return tuple(sorted(self.harnesses))
+
+    @property
+    def aliases(self) -> dict[str, str]:
+        return {
+            alias: harness.harness_id
+            for harness in self.harnesses.values()
+            for alias in harness.aliases
+        }
+
+    def resolve_id(self, name: str) -> str:
+        """Resolve CLI names before they reach plans, receipts or desired state."""
+        if name in self.harnesses:
+            return name
+        if name in self.aliases:
+            return self.aliases[name]
+        raise HarnessRegistryError(f"unknown harness {name!r}; {self.selection_help()}")
+
+    def selection_help(self) -> str:
+        result = f"Available harnesses: {', '.join(self.choices)}."
+        if self.aliases:
+            aliases = ", ".join(
+                f"{alias} = {canonical}" for alias, canonical in sorted(self.aliases.items())
+            )
+            result += f" Aliases: {aliases}."
+        return result
 
 
 @dataclass(frozen=True)
@@ -562,7 +588,16 @@ def _harness(harness_id: str, value: object) -> HarnessSpec:
             "instructions",
             "extras",
         },
+        optional={"aliases"},
     )
+    aliases_value = payload.get("aliases", [])
+    if not isinstance(aliases_value, list):
+        raise HarnessRegistryError(f"{label}.aliases must be an array")
+    for alias in aliases_value:
+        if not isinstance(alias, str) or not HARNESS_ID_PATTERN.fullmatch(alias):
+            raise HarnessRegistryError(f"{label}.aliases contains invalid harness alias: {alias!r}")
+    if len(set(aliases_value)) != len(aliases_value):
+        raise HarnessRegistryError(f"{label}.aliases contains duplicate values")
     candidates = _root_candidates(payload["root"], label=f"{label}.root")
     extras_value = payload["extras"]
     if not isinstance(extras_value, list):
@@ -593,6 +628,7 @@ def _harness(harness_id: str, value: object) -> HarnessSpec:
         skills=skills,
         instructions=instructions,
         extras=extras,
+        aliases=tuple(aliases_value),
     )
 
 
@@ -651,6 +687,14 @@ def load_harness_registry(
         harness_id: _harness(harness_id, value)
         for harness_id, value in harness_payload.items()
     }
+    names = set(harnesses)
+    for harness in harnesses.values():
+        for alias in harness.aliases:
+            if alias in names:
+                raise HarnessRegistryError(
+                    f"harness alias {alias!r} conflicts with another alias or canonical id"
+                )
+            names.add(alias)
     if default_harness not in harnesses:
         raise HarnessRegistryError(
             f"registry default harness does not exist: {default_harness!r}"
@@ -812,12 +856,8 @@ def resolve_harness_plan(
     user_home: Path | None = None,
     os_name: str = os.name,
 ) -> HarnessPlan:
-    selected = registry.default_harness if harness_id is None else harness_id
-    harness = registry.harnesses.get(selected)
-    if harness is None:
-        raise HarnessRegistryError(
-            f"unknown harness {selected!r}; expected one of: {', '.join(registry.choices)}"
-        )
+    selected = registry.resolve_id(registry.default_harness if harness_id is None else harness_id)
+    harness = registry.harnesses[selected]
     environment = environ if environ is not None else os.environ
     home = lexical_absolute(user_home or Path.home())
     root = _resolve_root(

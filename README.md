@@ -6,6 +6,40 @@ This repository is the development mainline for the plugins and personal Codex c
 
 `agents/global-instructions.md` is the registry-selected global instructions source. Root `AGENTS.md` contains only repository-local routing and is not distributed to harness-global targets.
 
+## Quick Start
+
+Install your coding client separately. Oh My Harness adds skills and global
+instructions to it; it does not install Copilot, Claude Code, or the other apps.
+
+For a first installation from this checkout:
+
+```bash
+./install.sh --harness copilot --yes
+# Reopen the terminal after setup, then:
+omh status
+```
+
+On Windows, use `.\install.ps1 --harness copilot --yes`. Setup registers the
+manager's `bin` in the current user's PATH; reopen the terminal afterward.
+See [Local Install](#local-install) for a streamed installation,
+custom locations, and recovery of an incomplete setup.
+
+After setup, use `omh` for everyday work:
+
+```bash
+omh install claude gemini --dry-run  # Preview adding more harnesses
+omh install claude gemini           # Apply after reviewing the preview
+omh refresh                        # Reapply the installed version
+omh update --check                 # Fetch and preview an update
+omh update                         # Apply the update
+omh check                          # Check installed skills and instructions
+omh remove copilot --dry-run       # Preview removing managed Copilot resources
+```
+
+Use `omh --help` for an overview and `omh COMMAND --help` for defaults,
+options, and examples. Names such as `copilot` and `copilot-cli` select the same
+harness; aliases work in setup, install, refresh, repair, check, doctor, and remove.
+
 ## Plugins
 
 - `watcher`: observes Codex skill usage, audits documentation drift, and packages `doc-alignment`, `housekeeping`, `skill-maintainer`, and `skill-compressor` workflows.
@@ -18,17 +52,24 @@ The old `plugins/doc-watcher` and `plugins/skill-watcher` source trees were remo
 
 `plugins/*/skills/*/SKILL.md` is the canonical skill catalog. The frontmatter `name` is the bare catalog name even when a physical directory has a different name; marketplace state, plugin caches, and user-level directories are projections, not source authority.
 
-Every refresh and closure check selects one complete distribution with `--harness`. The strict JSON authority is `.agents/harnesses/registry.json`, validated by `.agents/harnesses/registry.schema.json` and `scripts/harness_registry.py`. The registry owns root resolution, the skills driver, global instructions, platform materialization, reconciliation, excluded skill roots, and optional runtime extras. The default is `codex`.
+Each harness target selects one complete distribution. Public commands accept
+`HARNESS...`; the lower-level helpers accept `--harness`. The strict JSON authority is `.agents/harnesses/registry.json`, validated by `.agents/harnesses/registry.schema.json` and `scripts/harness_registry.py`. The registry owns canonical names, aliases, root resolution, the skills driver, global instructions, platform materialization, reconciliation, excluded skill roots, and optional runtime extras. The default is `codex`.
 
-| Harness | Skills | Global instructions |
-| --- | --- | --- |
-| `codex` | Exact `.agents/plugins/install-manifest.json` package set through Codex marketplace install | `$CODEX_HOME/AGENTS.md` |
-| `zcode` | `~/.zcode/skills` projection | `~/.zcode/AGENTS.md` |
-| `claude-code` | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills` projection | `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md` |
-| `copilot-cli` | `${COPILOT_HOME:-~/.copilot}/skills` projection | `${COPILOT_HOME:-~/.copilot}/copilot-instructions.md` |
-| `gemini-cli` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
-| `opencode` | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
-| `pi-agent` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
+| Canonical harness | Alias | Skills | Global instructions |
+| --- | --- | --- | --- |
+| `codex` | — | Exact `.agents/plugins/install-manifest.json` package set through Codex marketplace install | `$CODEX_HOME/AGENTS.md` |
+| `zcode` | — | `~/.zcode/skills` projection | `~/.zcode/AGENTS.md` |
+| `claude-code` | `claude` | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills` projection | `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md` |
+| `copilot-cli` | `copilot` | `${COPILOT_HOME:-~/.copilot}/skills` projection | `${COPILOT_HOME:-~/.copilot}/copilot-instructions.md` |
+| `gemini-cli` | `gemini` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
+| `opencode` | — | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
+| `pi-agent` | `pi` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
+
+Aliases are exact lowercase input names declared once in the registry. They
+resolve to the canonical ID before selecting paths or writing state. For example,
+`omh install copilot copilot-cli` installs one distribution and records only
+`copilot-cli`. `--all` also selects each distribution once. Receipts, desired state,
+and existing harness directories retain their canonical identities.
 
 `codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its exact-shape install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. The manifest has no independent schema-version field; its repository-owned reader rejects missing or unsupported fields. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
 
@@ -37,28 +78,33 @@ Every refresh and closure check selects one complete distribution with `--harnes
 `install.sh` and `install.ps1` are standalone bootstrap-only entry points. After
 the first installation, all supported lifecycle management goes through `omh`:
 
-```bash
-omh install --help
-omh install [HARNESS...]
-omh refresh [HARNESS...]
-omh refresh [HARNESS...] --repair
-omh remove HARNESS... | --all
-omh update --check [--channel stable|main]
-omh update [main|stable|REF]
-omh repair [HARNESS...] [--rebuild] [--reclone] [--dry-run]
-omh status
-omh check
-omh doctor
-omh manager repair
-omh manager uninstall
-```
+| Task | Command | Default scope and effect |
+| --- | --- | --- |
+| Add a harness | `omh install copilot` | No target means `codex`; records the harness for future updates. |
+| Reapply current files | `omh refresh` | All installed harnesses; no remote fetch. An explicit target does not add it to the recorded set: use `install` for that. |
+| Repair Codex caches | `omh refresh codex --repair` | Explicitly rebuilds caches at the current version. |
+| Preview an update | `omh update --check` | Fetches and validates the remote target without applying it. |
+| Apply an update | `omh update` | Updates the manager and all installed harnesses using the saved channel. |
+| Inspect state | `omh status` | Shows recorded harnesses, channel, checkout status, and active operation. |
+| Validate files | `omh check` | Read-only; all installed harnesses unless targets are given. |
+| Diagnose warnings | `omh doctor` | The same checks, with warnings treated as failures; does not repair. |
+| Remove a harness | `omh remove copilot` | Explicit targets or `--all` required; removes only proven managed resources. |
+| Repair the installation | `omh repair` | Repairs the recorded checkout, runtime, launchers, user PATH and selected harnesses; default is all installed harnesses. |
+| Recover an update | `omh recover` | Rolls back an interrupted update using its operation journal. |
+| Uninstall the manager | `omh manager uninstall` | Requires an empty harness set, or `--with-harnesses`; unknown files block deletion unless `--purge-unknown` is explicit. |
+
+Running `omh` without a command means `omh refresh`. `--home PATH` goes before
+the command. `install`, `refresh`, `repair`, and `remove` accept `--dry-run` to preview
+changes. `--yes` confirms creation and bounded managed cleanup; replacing different
+existing instructions still requires a live confirmation. Public command help
+bypasses tooling initialization and manager repair, including `omh manager repair --help`.
 
 `HARNESS` selects an oh-my-harness distribution, not the harness application
 itself. Install and configure the Pi, Claude Code, Gemini CLI, or other client
 separately. Run `omh install --help` in a new environment to list the current
 registry-owned choices; the list is generated from `.agents/harnesses/registry.json`
 rather than duplicated in the CLI. `omh install --all` installs every current
-registry choice, while `--all` on refresh, remove, check, or doctor selects the
+registry choice, while `--all` on refresh, repair, remove, check, or doctor selects the
 desired harness set already recorded by the manager.
 
 When a harness was added after the installed manager revision, update the
@@ -93,6 +139,9 @@ start on `stable`. Existing saved channels are preserved. `omh update main` or
 options remain supported. An update at the same commit still reconciles user
 PATH, launchers, and installed harnesses. To upgrade an older manager that does
 not recognize positional update targets, use `omh update --channel main` once.
+`--check` fetches remote refs but does not switch the installed version or save a
+channel change. A Git ref or `--to REF` overrides only this update's target. A target
+that is not a fast-forward descendant requires explicit `--allow-downgrade`.
 Same-version content drift remains a hard failure during ordinary refresh and is
 re-materialized only by explicit `--repair`. `remove` deletes only resources
 whose manager ownership is proven.
@@ -495,7 +544,7 @@ bounded legacy config/cache plan. Run
 marketplace, retire the old selectors and source, and remove the validated old
 cache namespace. The closure check rejects any remaining retired state.
 The registry `schemaVersion` is an ISO calendar date (`YYYY-MM-DD`), currently
-`2026-08-25`; advance it only when the registry schema changes.
+`2026-09-18`; advance it only when the registry schema changes.
 
 `--migrate-from-repo <absolute-path>` is independent of marketplace discovery:
 it authorizes only recognition of the former checkout's exact registry-declared

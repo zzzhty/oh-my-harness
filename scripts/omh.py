@@ -22,6 +22,8 @@ from harness_registry import (
     INSTRUCTIONS_MIGRATION_ORIENTATION,
     INSTRUCTIONS_MIGRATION_ID,
     INSTRUCTIONS_MIGRATION_STAGES,
+    HarnessRegistry,
+    HarnessRegistryError,
 )
 from manager_paths import (
     PRODUCT_NAME,
@@ -528,16 +530,10 @@ def _state_context(
 
 def _validate_targets(targets: Iterable[str]) -> tuple[str, ...]:
     registry = _load_registry()
-    selected = tuple(dict.fromkeys(targets))
-    unknown = sorted(set(selected) - set(registry.choices))
-    if unknown:
-        raise SystemExit(
-            "unknown harness target(s): "
-            + ", ".join(unknown)
-            + "; expected one of: "
-            + ", ".join(registry.choices)
-        )
-    return selected
+    try:
+        return tuple(dict.fromkeys(registry.resolve_id(target) for target in targets))
+    except HarnessRegistryError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _target_set(
@@ -1422,105 +1418,238 @@ def _selected_command(argv: Sequence[str]) -> str | None:
 def _add_harness_common(
     parser: argparse.ArgumentParser,
     *,
-    harness_choices: Sequence[str],
+    registry: HarnessRegistry,
+    mode: str,
 ) -> None:
-    available = ", ".join(harness_choices)
-    parser.add_argument(
-        "targets",
-        nargs="*",
-        metavar="HARNESS",
-        help=f"Harness id(s). Available harnesses: {available}.",
+    def harness_name(value: str) -> str:
+        try:
+            return registry.resolve_id(value)
+        except HarnessRegistryError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
+    default = (
+        f"Default: {registry.default_harness}." if mode == "install"
+        else "Required unless --all is used." if mode == "remove"
+        else "Default: all installed harnesses."
     )
     parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Select all registry harnesses for install; other commands select all desired harnesses.",
+        "targets", nargs="*", metavar="HARNESS", type=harness_name,
+        help=f"One or more harness names or aliases. {default}",
     )
-    parser.add_argument("--harness", help=argparse.SUPPRESS)
-    parser.add_argument("--codex-home")
-    parser.add_argument("--codex")
-    parser.add_argument("--yes", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--all", action="store_true",
+        help=(
+            "Install every available harness once (aliases do not add targets)."
+            if mode == "install" else "Select all installed harnesses."
+        ),
+    )
+    parser.add_argument(
+        "--harness", metavar="HARNESS", type=harness_name,
+        help="Select one harness by name or alias; equivalent to a positional HARNESS.",
+    )
+    codex = parser.add_argument_group("Codex options")
+    codex.add_argument("--codex-home", metavar="PATH", help="Override the Codex configuration directory.")
+    codex.add_argument("--codex", metavar="PATH", help="Use this Codex CLI executable.")
+    mutating = mode in {"install", "refresh", "remove", "repair"}
+    parser.add_argument(
+        "--yes", action="store_true",
+        help=(
+            "Confirm managed-resource removal." if mode == "remove" else
+            "Confirm creation and managed cleanup; replacing existing instructions still requires a live prompt."
+        ) if mutating else argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview changes without applying them." if mutating else argparse.SUPPRESS,
+    )
 
 
-def _add_repair_options(parser: argparse.ArgumentParser, harness_choices: Sequence[str]) -> None:
-    _add_harness_common(parser, harness_choices=harness_choices)
+def _add_install_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--no-check", action="store_true",
+        help="Skip the final installation check (checks run by default).",
+    )
+    migration = parser.add_argument_group("One-time Codex migration options")
+    migration.add_argument(
+        "--migrate-marketplace", action="store_true",
+        help="Migrate the retired marketplace after confirming its exact cleanup plan.",
+    )
+    migration.add_argument(
+        "--migrate-from-repo", metavar="PATH",
+        help="Recognize only this former checkout's managed instructions and broken marketplace source.",
+    )
+
+
+def _add_repair_options(parser: argparse.ArgumentParser, registry: HarnessRegistry) -> None:
+    _add_harness_common(parser, registry=registry, mode="repair")
     parser.add_argument("--rebuild", action="store_true", help="Rebuild the tooling venv through the stable launcher.")
     parser.add_argument("--reclone", action="store_true", help="Restore the recorded checkout from its remote, keeping a backup.")
     parser.add_argument("--no-path", action="store_true", help="Do not change current-user shell/registry PATH settings.")
-    parser.add_argument("--migrate-marketplace", action="store_true")
-    parser.add_argument("--migrate-from-repo")
+    parser.add_argument("--migrate-marketplace", action="store_true", help="Codex only: migrate the retired marketplace after confirming its cleanup plan.")
+    parser.add_argument("--migrate-from-repo", metavar="PATH", help="Recognize this former checkout's managed instructions and broken marketplace source.")
     parser.set_defaults(func=command_manager_repair)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    harness_choices = _load_registry().choices
+    registry = _load_registry()
+    available = textwrap.fill(registry.selection_help(), width=78)
     parser = argparse.ArgumentParser(
         prog="omh",
-        description="Manage the complete oh-my-harness lifecycle.",
+        description=(
+            "Install and manage oh-my-harness skills and global instructions for your "
+            "coding clients. Install each client application separately."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Common tasks:\n"
+            "  omh install copilot --dry-run  Preview adding Copilot skills and instructions\n"
+            "  omh install copilot           Install them (copilot-cli works too)\n"
+            "  omh status                    See installed harnesses and the update channel\n"
+            "  omh refresh                   Reapply the installed version; no remote fetch\n"
+            "  omh update --check            Fetch and preview an available update\n"
+            "  omh update                    Apply the update and refresh installed harnesses\n"
+            "  omh check                     Validate installed harnesses\n"
+            "  omh repair --dry-run          Preview repairing the manager and harnesses\n"
+            "  omh remove copilot --dry-run  Preview removing managed Copilot resources\n\n"
+            + available + "\n\n"
+            "Running omh without a command is equivalent to omh refresh.\n"
+            "First-time setup: ./install.sh or .\\install.ps1; then reopen your terminal.\n"
+            "Run omh COMMAND --help for defaults, options and examples."
+        ),
     )
-    parser.add_argument("--home", help="Manager home (default: ~/.oh-my-harness).")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--home", metavar="PATH", help="Manager home; place before COMMAND (default: OH_MY_HARNESS_HOME or ~/.oh-my-harness).")
+    sub = parser.add_subparsers(dest="command", required=True, title="commands", metavar="COMMAND")
 
-    install = sub.add_parser("install", help="Install one or more harness distributions.")
-    _add_harness_common(install, harness_choices=harness_choices)
-    install.add_argument("--no-check", action="store_true")
-    install.add_argument("--migrate-marketplace", action="store_true")
-    install.add_argument("--migrate-from-repo")
+    def command(name: str, summary: str, description: str, examples: str, *, harnesses: bool = False):
+        epilog = "Examples:\n" + examples
+        if harnesses:
+            epilog += "\n\n" + available
+        return sub.add_parser(
+            name, help=summary, description=description,
+            formatter_class=argparse.RawDescriptionHelpFormatter, epilog=epilog,
+        )
+
+    install = command(
+        "install", "Add skills and instructions to coding clients.",
+        f"Install one or more harness distributions and record them for future updates. "
+        f"Default: {registry.default_harness}. Existing targets are reapplied; this does not install the client app.",
+        "  omh install copilot\n  omh install claude gemini --dry-run\n  omh install --all",
+        harnesses=True,
+    )
+    _add_harness_common(install, registry=registry, mode="install")
+    _add_install_options(install)
     install.set_defaults(func=command_install)
 
-    refresh = sub.add_parser("refresh", help="Reconcile installed harnesses with the current release.")
-    _add_harness_common(refresh, harness_choices=harness_choices)
-    refresh.add_argument("--repair", action="store_true", help="Force current-version re-materialization.")
-    refresh.add_argument("--no-check", action="store_true")
-    refresh.add_argument("--migrate-marketplace", action="store_true")
-    refresh.add_argument("--migrate-from-repo")
+    refresh = command(
+        "refresh", "Reapply the installed version without fetching updates.",
+        "Reapply skills and instructions from the current managed checkout. No remote fetch. "
+        "Default: all installed harnesses. Use install to add a harness to future updates.",
+        "  omh refresh\n  omh refresh copilot --dry-run\n  omh refresh codex --repair",
+        harnesses=True,
+    )
+    _add_harness_common(refresh, registry=registry, mode="refresh")
+    refresh.add_argument(
+        "--repair", action="store_true",
+        help="Explicitly rebuild Codex plugin caches that have drifted at the current version.",
+    )
+    _add_install_options(refresh)
     refresh.set_defaults(func=command_refresh)
 
-    remove = sub.add_parser("remove", help="Remove manager-owned resources from harnesses.")
-    _add_harness_common(remove, harness_choices=harness_choices)
-    remove.set_defaults(func=command_remove)
-
-    update = sub.add_parser("update", help="Update manager source and refresh installed harnesses.")
-    update.add_argument("target", nargs="?", metavar="TARGET", help="main, stable, or a Git ref; defaults to the saved channel.")
-    update.add_argument("--check", action="store_true", help="Show the available transition without changing state.")
-    update.add_argument("--channel", choices=("stable", "main"))
-    update.add_argument("--to", help="Explicit Git ref/tag/commit target.")
-    update.add_argument("--allow-downgrade", action="store_true")
+    update = command(
+        "update", "Fetch a new manager version and refresh installed harnesses.",
+        "Fetch remote source and update the manager plus all installed harnesses. "
+        "Uses the saved update channel (main for new main installs, stable for release-tag installs). "
+        "--check fetches and validates "
+        "the target without switching the installed version or saving a channel change.",
+        "  omh update --check\n  omh update\n  omh update main --check\n  omh update main",
+    )
+    update.add_argument("target", nargs="?", metavar="TARGET", help="main or stable selects and saves a channel; another Git ref selects only this update's target. Defaults to the saved channel.")
+    update.add_argument("--check", action="store_true", help="Fetch and preview the update without applying it.")
+    update.add_argument(
+        "--channel", choices=("stable", "main"),
+        help="stable: latest vX.Y.Z release; main: origin/main. Saved after a successful update, not with --check.",
+    )
+    update.add_argument("--to", metavar="REF", help="Use this Git ref/tag/commit for this update only.")
+    update.add_argument("--allow-downgrade", action="store_true", help="Allow a target that is not a fast-forward descendant, including older releases.")
     update.set_defaults(func=command_update)
 
-    repair = sub.add_parser("repair", help="Repair runtime, launchers, user PATH and managed harness resources.")
-    _add_repair_options(repair, harness_choices)
-
-    manager = sub.add_parser("manager", help="Repair or uninstall the manager instance.")
-    manager_sub = manager.add_subparsers(dest="manager_command", required=True)
-    repair = manager_sub.add_parser("repair", help="Compatibility spelling of omh repair.")
-    _add_repair_options(repair, harness_choices)
-    uninstall = manager_sub.add_parser("uninstall", help="Uninstall the manager instance.")
-    uninstall.add_argument("--with-harnesses", action="store_true")
-    uninstall.add_argument("--purge-unknown", action="store_true")
-    uninstall.add_argument("--yes", action="store_true")
-    uninstall.set_defaults(func=command_manager_uninstall)
-
-    status = sub.add_parser("status", help="Show manager and desired harness state.")
-    status.add_argument("--json", action="store_true")
+    status = command(
+        "status", "Show installed harnesses, update channel and pending operations.",
+        "Read manager state and the recorded harness set without changing them.",
+        "  omh status\n  omh status --json",
+    )
+    status.add_argument("--json", action="store_true", help="Print structured JSON output.")
     status.set_defaults(func=command_status)
 
-    check = sub.add_parser("check", help="Perform read-only closure validation.")
-    _add_harness_common(check, harness_choices=harness_choices)
-    check.set_defaults(func=lambda args: command_check(args, strict=False))
+    for name, summary, description, strict in (
+        ("check", "Check installed skills and instructions without changing them.",
+         "Validate installed harnesses without changing them. Warnings are reported; errors fail the command.", False),
+        ("doctor", "Run checks with warnings treated as failures.",
+         "Run the same read-only checks as check, but also fail on warnings. This command does not repair files.", True),
+    ):
+        check = command(name, summary, description + " Default: all installed harnesses.",
+                        f"  omh {name}\n  omh {name} copilot", harnesses=True)
+        _add_harness_common(check, registry=registry, mode=name)
+        check.set_defaults(func=lambda args, strict=strict: command_check(args, strict=strict))
 
-    doctor = sub.add_parser("doctor", help="Run strict lifecycle diagnostics.")
-    _add_harness_common(doctor, harness_choices=harness_choices)
-    doctor.set_defaults(func=lambda args: command_check(args, strict=True))
+    remove = command(
+        "remove", "Remove a harness's managed skills and instructions.",
+        "Remove only resources whose manager ownership is proven, then stop updating that harness. "
+        "Specify HARNESS or --all; there is no default target. Unrelated user files are preserved.",
+        "  omh remove copilot --dry-run\n  omh remove copilot\n  omh remove --all",
+        harnesses=True,
+    )
+    _add_harness_common(remove, registry=registry, mode="remove")
+    remove.set_defaults(func=command_remove)
 
-    version = sub.add_parser("version", help="Show release and distribution identity.")
-    version.add_argument("--json", action="store_true")
-    version.set_defaults(func=command_version)
+    repair = command(
+        "repair", "Repair the manager, user PATH and selected harnesses.",
+        "Repair the recorded installation: reuse a healthy checkout, recover an interrupted "
+        "update, restore runtime, launchers and user PATH, then repair and check selected "
+        "harnesses. Default: all installed harnesses. Does not select a newer release.",
+        "  omh repair --dry-run\n  omh repair copilot\n  omh repair --rebuild\n  omh repair --reclone",
+        harnesses=True,
+    )
+    _add_repair_options(repair, registry)
 
-    recover = sub.add_parser("recover", help="Roll back an interrupted manager update.")
+    manager = command(
+        "manager", "Repair or uninstall oh-my-harness itself.",
+        "Manage the oh-my-harness installation. Use repair for the manager and harnesses, "
+        "or recover to roll back only an interrupted update.",
+        "  omh repair\n  omh manager uninstall --help",
+    )
+    manager_sub = manager.add_subparsers(dest="manager_command", required=True, metavar="COMMAND")
+    repair = manager_sub.add_parser(
+        "repair", help="Compatibility spelling of omh repair.",
+        description="Equivalent to omh repair: repair the recorded manager, user PATH and selected harnesses. Default: all installed harnesses; no newer release is selected.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Examples:\n  omh manager repair copilot --dry-run\n  omh repair\n\n" + available,
+    )
+    _add_repair_options(repair, registry)
+    uninstall = manager_sub.add_parser(
+        "uninstall", help="Delete the manager installation.",
+        description="Delete the manager home after confirmation. First remove harnesses with omh remove --all, or pass --with-harnesses. Unknown entries block deletion unless --purge-unknown is explicit.",
+    )
+    uninstall.add_argument("--with-harnesses", action="store_true", help="Remove all installed harness distributions before deleting the manager.")
+    uninstall.add_argument("--purge-unknown", action="store_true", help="Also delete unrecognized files inside the manager home.")
+    uninstall.add_argument("--yes", action="store_true", help="Confirm manager removal without prompting.")
+    uninstall.set_defaults(func=command_manager_uninstall)
+
+    recover = command(
+        "recover", "Roll back an interrupted manager update.",
+        "Use the active operation journal to roll back an interrupted update. Run status first; "
+        "use repair for broader manager and harness repair.",
+        "  omh status\n  omh recover",
+    )
     recover.set_defaults(func=command_recover)
 
+    version = command(
+        "version", "Show manager version and package identity.",
+        "Show the release version, source revision and distribution identity.",
+        "  omh version\n  omh version --json",
+    )
+    version.add_argument("--json", action="store_true", help="Print structured JSON output.")
+    version.set_defaults(func=command_version)
     return parser
 
 
