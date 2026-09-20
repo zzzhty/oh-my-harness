@@ -1,0 +1,25 @@
+name: Installer recovery development snapshot
+
+on:
+  push:
+    branches: [fix/installer-repair-reinstall]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package source and local Git fixture history
+        shell: bash
+        run: |
+          git bundle create "$RUNNER_TEMP/oh-my-harness.bundle" --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-recovery-source
+          path: ${{ runner.temp }}/oh-my-harness.bundle
+          retention-days: 1
