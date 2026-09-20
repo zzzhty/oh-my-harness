@@ -272,7 +272,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(home.exists())
             clone.assert_not_called()
 
-    def test_repeated_install_uses_shared_repair_from_local_or_external_source(self) -> None:
+    def test_repeated_incomplete_install_keeps_exact_checkout_gate_from_either_source(self) -> None:
         for external in (False, True):
             with self.subTest(external=external), tempfile.TemporaryDirectory() as tmp:
                 home = Path(tmp) / ".oh-my-harness"
@@ -293,15 +293,14 @@ class InstallerTests(unittest.TestCase):
                     mock.patch.object(installer, "clone_repository") as clone,
                     mock.patch.object(installer, "run") as run,
                     mock.patch.object(installer, "invoke_refresh") as refresh,
+                    self.assertRaisesRegex(SystemExit, "managed checkout revision is unavailable"),
                 ):
                     installer.main()
                 clone.assert_not_called()
                 refresh.assert_not_called()
-                run.assert_called_once()
-                self.assertEqual(run.call_args.args[0][-3:], ["--home", str(home), "repair"])
-                self.assertTrue(installer.launcher_paths(home)[1].is_file())
-                self.ensure_user_path.assert_called_with(home, dry_run=False)
-                # The delegated command, not the installer, owns completion of the receipt.
+                run.assert_not_called()
+                self.assertFalse(installer.launcher_paths(home)[1].exists())
+                self.ensure_user_path.assert_not_called()
                 self.assertEqual((home / "state/install.json").read_bytes(), before)
 
     def test_exact_resume_rejects_a_dirty_checkout(self) -> None:

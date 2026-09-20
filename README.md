@@ -75,8 +75,9 @@ and existing harness directories retain their canonical identities.
 
 ## Lifecycle Manager
 
-`install.sh` and `install.ps1` are standalone bootstrap-only entry points. After
-the first installation, all supported lifecycle management goes through `omh`:
+`install.sh` and `install.ps1` bootstrap new installations and expose explicit
+`--repair` / `--reinstall` recovery for existing ones. Recovery delegates to the
+same manager lifecycle used by `omh`:
 
 | Task | Command | Default scope and effect |
 | --- | --- | --- |
@@ -270,16 +271,45 @@ installer from a different repository.
 `state/install.json` records one initialization lifecycle and its source
 snapshot. It has no independent schema-version field, and its recorded
 repository and revision are an installation receipt rather than rolling Git
-authority. Rerunning the initializer on a recognized installation delegates
-to repair for the recorded source and version, including incomplete installs;
-use `omh update` for an upgrade. An installer launched from either the managed
+authority. A ready installation requires an explicit recovery choice: pass
+`--repair` or `--reinstall`, or select one at the interactive prompt (default:
+Cancel). Noninteractive reruns fail with instructions; `--yes` does not select a
+recovery mode. The two flags are mutually exclusive and cannot be combined with
+adoption or fast-forward resume. Use `omh update` for an upgrade.
+An installer launched from either the managed
 repository or another checkout targets the same managed `repo/`; neither the
 invoking checkout nor the working directory becomes installation authority.
-Explicit legacy adoption and fast-forward resume requests retain their strict
-receipt checks. A checkout already
+Incomplete-install reruns, legacy adoption and fast-forward resume retain their
+strict receipt checks. A checkout already
 moved to the managed path with no incomplete installation record still requires
 the explicit `--adopt-current-checkout` option before the initializer may claim
 it.
+
+For an existing ready installation, use the same flags on either wrapper:
+
+```bash
+./install.sh --repair --dry-run
+./install.sh --repair
+./install.sh --reinstall --dry-run
+./install.sh --reinstall
+```
+
+Repair reuses healthy components and restores damaged ones. Reinstall clones
+the exact recorded revision and rebuilds the tooling venv, then runs manager
+repair and checks every installed harness. It requires access to the recorded
+repository. Replaced checkouts and venvs are preserved under
+`state/repair-backups/`; unrelated files, user skills, desired harnesses and
+update policy remain intact. The initial ready `install.json` is preserved even
+when recovery executes an older manager. Neither mode selects a newer release
+or adds a harness; use `omh update` or `omh install` for those actions.
+
+Legacy ready installations without either lifecycle file are migrated only
+after verifying the current managed checkout, its remote and distribution
+identity. That current revision becomes manager authority; the historical
+initial revision and the invoking checkout do not. Partial lifecycle state,
+unproven paths or a dirty legacy checkout stop recovery. Interrupted updates
+retain the manager's journaled rollback flow. `--dry-run` writes no manager
+files or PATH changes; it previews recovery without claiming harness closure.
 
 Unix:
 
@@ -449,8 +479,8 @@ drive and UNC spellings as the same path while still rejecting a different
 directory.
 
 If initialization fails, `state/install.json` remains `installing`. Rerun the
-same installer request from either checkout to repair the recognized
-installation. Corrupt state, foreign ownership, linked manager-owned paths,
+same installer request from either checkout to resume the exact incomplete
+installation; `--repair` and `--reinstall` require ready state. Corrupt state, foreign ownership, linked manager-owned paths,
 and unsupported interrupted operations are preserved and reported instead of
 being reset. Repair does not implicitly upgrade a ready installation; use
 `omh update` for that. Explicit legacy adoption/resume flags retain their

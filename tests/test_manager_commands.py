@@ -91,9 +91,17 @@ class PublicCommandTests(unittest.TestCase):
             (home / "state/install.json").write_text(json.dumps({
                 "product": "oh-my-harness", "repository": "origin", "ref": "main",
                 "status": "ready", "harness": "codex", "revision": "a" * 40,
+                "paths": {
+                    "home": str(home), "repo": str(home / "repo"), "venv": str(home / "venv"),
+                    "python": str(installer.venv_python(home / "venv")),
+                    "launchers": [str(p) for p in installer.launcher_paths(home)],
+                },
             }), encoding="utf-8")
+            from manager_state import derive_initial_state
+            derive_initial_state(home, repository="origin", revision="a" * 40,
+                                 release_version="1.0.0", bundle_identity="bundle", persist=True)
             with (
-                mock.patch.object(sys, "argv", ["installer", "--home", str(home), "--no-path"]),
+                mock.patch.object(sys, "argv", ["installer", "--home", str(home), "--repair", "--no-path"]),
                 mock.patch.object(installer, "write_launchers"),
                 mock.patch.object(installer, "ensure_user_path") as path,
                 mock.patch.object(installer, "run") as run,

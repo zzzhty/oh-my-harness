@@ -15,6 +15,9 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+# A dry run from the managed checkout must not create local import caches.
+sys.dont_write_bytecode = True
+
 from harness_registry import HarnessRegistryError, load_harness_registry
 from manager_paths import (
     PRODUCT_NAME,
@@ -358,7 +361,7 @@ def validate_checkout_clean_and_remote(
     context: str,
 ) -> None:
     status = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
+        ["git", "--no-optional-locks", "-C", str(repo), "status", "--porcelain"],
         capture_output=True,
         text=True,
     )
@@ -658,14 +661,111 @@ def invoke_refresh(
     run(command)
 
 
-def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
-    """A repeated installer invocation repairs the owned instance, not a new install."""
-    receipt_path = state_path(home) / "install.json"
-    if args.adopt_current_checkout or args.resume_fast_forward:
-        return False  # Preserve the explicitly requested legacy recovery contracts.
-    if not path_exists_without_following(receipt_path):
+def _lifecycle_state(home: Path) -> tuple[dict, dict] | None:
+    """Validate existing lifecycle state without initializing or rewriting it."""
+    from manager_state import _validate_desired_payload, _validate_manager_payload
+    from omh_bootstrap import _load_json, _recorded_source
+
+    manager = _load_json(state_path(home) / "manager.json")
+    desired = _load_json(state_path(home) / "desired.json")
+    if manager is None and desired is None:
+        return None
+    if manager is None or desired is None:
+        raise SystemExit("manager lifecycle state is incomplete; restore both manager.json and desired.json")
+    _validate_manager_payload(manager, path=state_path(home) / "manager.json")
+    _validate_desired_payload(desired, path=state_path(home) / "desired.json")
+    _recorded_source(home)  # Require a full revision before any recovery mutation.
+    return manager, desired
+
+
+def _ready_install_state(home: Path, receipt: dict) -> tuple[dict, dict]:
+    """Legacy ready receipts describe initialization, not the current revision."""
+    from manager_state import derive_initial_state
+    from omh_bootstrap import _load_json, _ordinary
+    from plugin_package_identity import require_repository_identity
+
+    state = _lifecycle_state(home)
+    if state is not None:
+        if state[0]["repository"] != receipt["repository"]:
+            raise SystemExit("manager and installation receipt repositories disagree")
+        return state
+    _ordinary(state_path(home) / "operations", directory=True)
+    if _load_json(state_path(home) / "operations/current.json") is not None:
+        raise SystemExit("legacy installation has an interrupted operation; restore lifecycle state first")
+    repo = repo_path(home)
+    require_ordinary_directory(repo, label="legacy managed repository")
+    require_ordinary_directory(repo / ".git", label="legacy managed Git directory")
+    validate_checkout_clean_and_remote(repo=repo, repository=receipt["repository"], context="legacy migration")
+    revision = installed_revision(repo)
+    identity = require_repository_identity(repo)
+    return derive_initial_state(
+        home, repository=receipt["repository"], revision=revision,
+        release_version=str(identity["releaseVersion"]), bundle_identity=str(identity["bundleIdentity"]),
+        persist=False,
+    )
+
+
+def _interactive_stdin() -> bool:
+    if not sys.stdin.isatty():
         return False
-    require_ordinary_directory(state_path(home), label="managed state root")
+    if os.name != "nt":
+        return True
+    # Windows CRT isatty() also accepts NUL. Only a real console can answer
+    # recovery prompts; redirected input must retain the explicit-choice gate.
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    try:
+        handle = wintypes.HANDLE(msvcrt.get_osfhandle(sys.stdin.fileno()))
+        mode = wintypes.DWORD()
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
+    except (OSError, ValueError):
+        return False
+
+
+def _recovery_mode(args: argparse.Namespace) -> str:
+    if args.repair:
+        return "repair"
+    if args.reinstall:
+        return "reinstall"
+    if not _interactive_stdin():
+        raise SystemExit("installation already exists; choose --repair or --reinstall explicitly (--yes does not choose)")
+    print("Existing installation: [1] Repair  [2] Reinstall managed components  [Enter] Cancel")
+    try:
+        choice = input("Choice [Cancel]: ").strip().lower()
+    except EOFError:
+        choice = ""
+    if choice in {"1", "repair"}:
+        return "repair"
+    if choice in {"2", "reinstall"}:
+        return "reinstall"
+    if choice not in {"", "cancel", "3"}:
+        raise SystemExit("unknown recovery choice; installation unchanged")
+    print("installation cancelled; no changes made")
+    return "cancel"
+
+
+def _validate_recovery_paths(home: Path) -> None:
+    from omh_bootstrap import _ordinary
+
+    for path in (repo_path(home), repo_path(home) / ".git", venv_path(home),
+                 bin_path(home), home / "bootstrap", state_path(home) / "repair-backups",
+                 state_path(home) / "operations", state_path(home) / "harnesses"):
+        _ordinary(path, directory=True)
+    for path in (*launcher_paths(home), _bootstrap_script_path(home)):
+        _ordinary(path)
+
+
+def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
+    """Route ready installs to explicit lifecycle recovery; keep incomplete recovery exact."""
+    receipt_path = state_path(home) / "install.json"
+    if path_exists_without_following(state_path(home)):
+        require_ordinary_directory(state_path(home), label="managed state root")
+    if not path_exists_without_following(receipt_path):
+        if args.repair or args.reinstall:
+            raise SystemExit("--repair/--reinstall requires an existing owned installation receipt")
+        return False
     if path_exists_without_following(repo_path(home)):
         require_ordinary_directory(repo_path(home), label="managed repository root")
     if not is_ordinary_file(receipt_path):
@@ -678,6 +778,17 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
         raise SystemExit("refusing to repair an installation belonging to another product")
     if receipt.get("status") not in {"installing", "ready"}:
         raise SystemExit("unsupported installation state; no state was reset")
+    if receipt["status"] == "installing":
+        if args.repair or args.reinstall:
+            raise SystemExit("incomplete installation: repeat the exact original request; --repair/--reinstall requires ready state")
+        _lifecycle_state(home)
+        from omh_bootstrap import _load_json, _ordinary
+        _ordinary(state_path(home) / "operations", directory=True)
+        if _load_json(state_path(home) / "operations/current.json") is not None:
+            raise SystemExit("incomplete installation has an active operation; run omh recover first")
+        return False
+    if args.adopt_current_checkout or args.resume_fast_forward:
+        raise SystemExit("adoption/fast-forward resume requires an incomplete installation, not ready state")
     repository = receipt.get("repository")
     ref = receipt.get("ref")
     initial_harness = receipt.get("harness")
@@ -687,26 +798,73 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
         raise SystemExit("existing installation uses another repository; repair will not change its source")
     explicit_ref = any(arg == "--ref" or arg.startswith("--ref=") for arg in sys.argv[1:])
     explicit_harness = any(arg == "--harness" or arg.startswith("--harness=") for arg in sys.argv[1:])
-    if explicit_ref and args.ref != ref:
-        raise SystemExit("use omh update to change an existing installation's ref; reinstall only repairs")
-    if explicit_harness and not args.harness.strip():
-        raise SystemExit("harness must not be empty")
-    for path in (repo_path(home), venv_path(home), bin_path(home), home / "bootstrap"):
-        if path_exists_without_following(path):
-            require_ordinary_directory(path, label="manager-owned recovery path")
-    print(f"repair existing installation: {home}")
-    # Use this installer version to restore the independent bootstrap, even when repo is missing.
-    from contextlib import nullcontext
-    from omh_bootstrap import _mutation_lock
-
-    with nullcontext() if args.dry_run else _mutation_lock(home):
-        write_launchers(home=home, repo=SOURCE_ROOT, dry_run=args.dry_run)
-        if not args.no_path:
-            ensure_user_path(home, dry_run=args.dry_run)
-    if args.dry_run:
-        print("would repair the recorded runtime and installed harnesses; no state written")
+    _validate_recovery_paths(home)
+    state = _ready_install_state(home, receipt)
+    manager, desired = state
+    if explicit_ref and args.ref != manager.get("requestedRef", ref):
+        raise SystemExit("use omh update to change an existing installation's ref")
+    if explicit_harness and args.harness not in desired["harnesses"]:
+        raise SystemExit("recovery preserves the installed harness set; use omh install to add a harness")
+    expected_paths = {
+        "home": str(home), "repo": str(repo_path(home)), "venv": str(venv_path(home)),
+        "python": str(venv_python(venv_path(home))),
+        "launchers": [str(path) for path in launcher_paths(home)],
+    }
+    if receipt.get("paths") != expected_paths:
+        raise SystemExit("installation receipt does not prove ownership of this manager home's paths")
+    mode = _recovery_mode(args)
+    if mode == "cancel":
         return True
+    print(f"{mode} existing installation: {home}")
+    from contextlib import nullcontext
+    from manager_state import atomic_write_json
+    from omh_bootstrap import _load_json, _mutation_lock, _ordinary, _repair_checkout
+
+    runtime_backup = None
+    with nullcontext() if args.dry_run else _mutation_lock(home):
+        # Revalidate under the common lifecycle lock before the first write.
+        if _load_json(receipt_path) != receipt:
+            raise SystemExit("installation receipt changed during recovery selection; retry")
+        _validate_recovery_paths(home)
+        current = _ready_install_state(home, receipt)
+        # Legacy derivation includes a fresh timestamp; compare the owned fields.
+        for previous, latest in zip(state, current):
+            if ({k: v for k, v in previous.items() if k != "updatedAt"}
+                    != {k: v for k, v in latest.items() if k != "updatedAt"}):
+                raise SystemExit("installation state changed during recovery selection; retry")
+        legacy = _lifecycle_state(home) is None
+        if legacy:
+            print(f"{'would migrate' if args.dry_run else 'migrate'} legacy state at current managed revision {manager['revision']}")
+            if not args.dry_run:
+                atomic_write_json(state_path(home) / "manager.json", manager)
+                atomic_write_json(state_path(home) / "desired.json", desired)
+        if not legacy or not args.dry_run:
+            _repair_checkout(home, force=mode == "reinstall", dry_run=True)
+        if args.dry_run:
+            print(f"would {'reclone the exact recorded revision and rebuild tooling' if mode == 'reinstall' else 'repair the recorded checkout and tooling'}; repair and check installed harnesses")
+            if not args.no_path:
+                ensure_user_path(home, dry_run=True)
+            print("dry-run only; no installation state written")
+            return True
+        # Keep these immutable across repair by older manager revisions too.
+        receipt_bytes = receipt_path.read_bytes()
+        # Journaled rollback owns any desired-state transition. Do not undo it.
+        desired_path = state_path(home) / "desired.json"
+        desired_bytes = (
+            desired_path.read_bytes()
+            if _load_json(state_path(home) / "operations/current.json") is None else None
+        )
+        write_launchers(home=home, repo=SOURCE_ROOT, dry_run=args.dry_run)
+        if mode == "reinstall" and venv_path(home).exists():
+            backups = state_path(home) / "repair-backups"
+            _ordinary(backups, directory=True)
+            backups.mkdir(parents=True, exist_ok=True)
+            runtime_backup = backups / f"venv-{uuid.uuid4().hex}"
+            venv_path(home).rename(runtime_backup)
+            print(f"previous tooling venv preserved: {runtime_backup}")
     command = [str(bootstrap_python()), str(_bootstrap_script_path(home)), "--home", str(home), "repair"]
+    if mode == "reinstall":
+        command.extend(["--reclone", "--rebuild"])
     if args.no_path:
         command.append("--no-path")
     if args.codex_home:
@@ -715,15 +873,45 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
         command.append("--migrate-marketplace")
     if args.migrate_from_repo:
         command.extend(["--migrate-from-repo", args.migrate_from_repo])
-    run(command)
-    if explicit_harness:
-        invoke_refresh(
-            home=home, repo=repo_path(home), harness=args.harness,
-            codex_home=Path(args.codex_home).expanduser() if args.codex_home else None,
-            assume_yes=args.yes, migrate_marketplace=args.migrate_marketplace,
-            migrate_from_repo=Path(args.migrate_from_repo).expanduser() if args.migrate_from_repo else None,
-        )
-    print(f"installation repaired: {home}")
+    try:
+        run(command)
+    finally:
+        # Legacy repair rewrote these files. Restore the immutable receipt and
+        # desired policy, even when harness closure fails, using the same lock.
+        with _mutation_lock(home):
+            for path, original in ((receipt_path, receipt_bytes), (desired_path, desired_bytes)):
+                if original is None:
+                    continue
+                _ordinary(path)
+                if path.read_bytes() != original:
+                    current_payload = _load_json(path)
+                    if path == desired_path:
+                        original_fields = {k: v for k, v in desired.items() if k != "updatedAt"}
+                        legacy_fields = {
+                            "schemaVersion": desired["schemaVersion"],
+                            "harnesses": desired["harnesses"],
+                            "updatePolicy": {"channel": desired["updatePolicy"]["channel"]},
+                        }
+                        current_fields = {k: v for k, v in current_payload.items() if k != "updatedAt"}
+                        if current_fields != original_fields and current_fields != legacy_fields:
+                            raise SystemExit("recovery unexpectedly changed desired state; preserved for inspection")
+                    else:
+                        # Only the known legacy writer's revision/path rewrite is
+                        # reversible here. Never hide corrupt or foreign state.
+                        original_fields = {k: v for k, v in receipt.items() if k not in {"revision", "paths"}}
+                        current_fields = {k: v for k, v in current_payload.items() if k not in {"revision", "paths"}}
+                        if current_fields != original_fields:
+                            raise SystemExit("recovery unexpectedly changed the initial receipt; preserved for inspection")
+                    temporary = path.with_name(f".{path.name}.preserve-{uuid.uuid4().hex}")
+                    try:
+                        temporary.write_bytes(original)
+                        os.replace(temporary, path)
+                    finally:
+                        temporary.unlink(missing_ok=True)
+            if runtime_backup is not None and not path_exists_without_following(venv_path(home)):
+                runtime_backup.rename(venv_path(home))
+                print("restored previous tooling venv after failed reinstall")
+    print(f"installation {mode} completed: {home}")
     return True
 
 
@@ -738,8 +926,9 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         description=(
-            "First-time setup: create the oh-my-harness manager and install skills "
-            "and global instructions for one coding client. Install the client app separately."
+            "Set up the oh-my-harness manager, or explicitly repair/reinstall an existing "
+            "installation. First-time setup installs skills and instructions for one client; "
+            "install the client app separately."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -747,12 +936,14 @@ def main() -> None:
             "Examples (use .\\install.ps1 on Windows):\n"
             "  ./install.sh --harness copilot --dry-run\n"
             "  ./install.sh --harness copilot --yes\n\n"
+            "  ./install.sh --repair --dry-run\n"
+            "  ./install.sh --reinstall\n\n"
             "After setup, reopen your terminal to use the registered PATH, then run:\n"
             "  omh install claude        Add another harness\n"
             "  omh status                Show installed harnesses\n"
             "  omh --help                See the everyday commands\n"
             "Already installed? Use omh install to add harnesses, or omh repair to repair.\n"
-            "Rerunning setup repairs the existing installation and preserves its source."
+            "Existing installs require --repair or --reinstall (interactive default: Cancel)."
         ),
     )
     parser.add_argument(
@@ -805,9 +996,13 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="Preview setup or repair without writing installation files; does not validate harness contents.",
     )
-    parser.add_argument("--repair", action="store_true", help="Repair an owned installation; repeated installs already do this automatically.")
+    recovery_mode = parser.add_mutually_exclusive_group()
+    recovery_mode.add_argument("--repair", action="store_true", help="Repair an owned ready installation at its recorded version.")
+    recovery_mode.add_argument("--reinstall", action="store_true", help="Reclone the recorded version and rebuild tooling; preserve state and user data.")
     parser.add_argument("--no-path", action="store_true", help="Skip current-user PATH registration.")
     args = parser.parse_args()
+    if (args.repair or args.reinstall) and (args.adopt_current_checkout or args.resume_fast_forward):
+        parser.error("--repair/--reinstall cannot be combined with adoption/fast-forward resume")
 
     _require_supported_python()
     try:

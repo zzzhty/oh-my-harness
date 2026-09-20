@@ -4,6 +4,10 @@ status: accepted
 
 # Make `omh` the post-bootstrap lifecycle manager
 
+The explicit installer recovery adapter in [ADR 0017](0017-explicit-installer-recovery.md)
+extends the bootstrap-only entry-point boundary below; lifecycle authority stays
+with the manager.
+
 `install.sh` and `install.ps1` are standalone bootstrap-only entry points. When
 a companion Python installer is unavailable, they may clone a temporary
 bootstrap checkout from the canonical HTTPS repository or the explicit

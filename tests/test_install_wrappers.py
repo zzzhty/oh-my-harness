@@ -78,6 +78,7 @@ class UnixInstallerWrapperTests(unittest.TestCase):
                     "https://example.invalid/oh-my-harness.git",
                     "--ref",
                     "feature",
+                    "--reinstall",
                 ],
                 cwd=root,
                 env=environment,
@@ -95,6 +96,7 @@ class UnixInstallerWrapperTests(unittest.TestCase):
                 "https://example.invalid/oh-my-harness.git",
                 "--ref",
                 "feature",
+                "--reinstall",
             ],
         )
         self.assertNotIn("Cloning into", result.stderr)
@@ -114,6 +116,7 @@ class UnixInstallerWrapperTests(unittest.TestCase):
                 "--repository",
                 str(repository),
                 "--ref=main",
+                "--repair",
                 "--dry-run",
             ]
 
@@ -140,6 +143,27 @@ class UnixInstallerWrapperTests(unittest.TestCase):
     "Windows PowerShell wrapper test",
 )
 class PowerShellStreamedInstallerTests(unittest.TestCase):
+    def test_read_only_help_does_not_change_the_calling_session_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "manager"
+            (home / "bin").mkdir(parents=True)
+            (home / "bin/omh.cmd").write_text("@exit /b 0\n")
+            environment = {
+                **os.environ,
+                "OH_MY_HARNESS_HOME": str(home),
+                "OH_MY_HARNESS_BOOTSTRAP_PYTHON": sys.executable,
+                "TEST_INSTALL_WRAPPER": str(REPO_ROOT / "install.ps1"),
+            }
+            result = subprocess.run(
+                [shutil.which("powershell.exe") or "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-Command", "$before = $env:PATH; & $env:TEST_INSTALL_WRAPPER --help; "
+                 "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; "
+                 "if ($env:PATH -cne $before) { throw 'read-only installer changed PATH' }"],
+                env=environment, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((home / "state").exists())
+
     def test_streamed_wrapper_clones_bootstrap_source_and_preserves_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -155,7 +179,7 @@ class PowerShellStreamedInstallerTests(unittest.TestCase):
                 "$source = [Console]::In.ReadToEnd(); "
                 "$installer = [ScriptBlock]::Create($source); "
                 "& $installer --repository $env:TEST_BOOTSTRAP_REPOSITORY "
-                "--ref=main --dry-run; "
+                "--ref=main --repair --dry-run; "
                 "exit $LASTEXITCODE"
             )
 
@@ -181,7 +205,7 @@ class PowerShellStreamedInstallerTests(unittest.TestCase):
 
         self.assertEqual(
             payload["arguments"],
-            ["--repository", str(repository), "--ref=main", "--dry-run"],
+            ["--repository", str(repository), "--ref=main", "--repair", "--dry-run"],
         )
         self.assertIn("Cloning into", result.stderr)
         self.assertFalse(bootstrap_root.exists())

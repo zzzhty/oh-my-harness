@@ -10,6 +10,7 @@ the detailed evidence source.
 
 ## Development Timeline
 
+- **2026-09-20 — Installer recovery ([PR #21](https://github.com/zzzhty/oh-my-harness/pull/21)).** Completed explicit repair/reinstall and isolated local validation. After publication and closure, the user requested merging; [the handoff record](installer-recovery.md) retains native CI findings and fixes.
 - **2026-06-25 — Prompt-quality baseline.** Audited nine repository-owned skills, aligned orchestration metadata and maintainer helper paths, and routed high-risk compression through semantic inventories and independent review.
 - **2026-07-10 — First disclosure and compression pass.** Slimmed root `AGENTS.md`, `doc-alignment`, and `long-running-goal` while preserving report-only, Draft/Ready, supersession, YOLO, and runtime-hard-stop contracts; added disclosure tests and hardened goal/TODO checkers.
 - **2026-08-19 — Second-pass deep-skill design.** Established one-rule/one-owner, one-level disclosure, deterministic ownership, positive execution defaults, and proportional proof, with a low-risk-first rollout order.
