@@ -222,26 +222,5 @@ if ($installerExitCode -ne 0) {
     )
     exit $installerExitCode
 }
-if ($env:OS -eq "Windows_NT" -and
-    $forwardedInstallerArguments -notcontains "--dry-run" -and
-    $forwardedInstallerArguments -notcontains "--no-path") {
-    $managerHome = if ($env:OH_MY_HARNESS_HOME) {
-        $env:OH_MY_HARNESS_HOME
-    } else {
-        Join-Path $HOME ".oh-my-harness"
-    }
-    for ($index = 0; $index -lt $forwardedInstallerArguments.Count; $index++) {
-        $argument = $forwardedInstallerArguments[$index]
-        if ($argument -eq "--home" -and $index + 1 -lt $forwardedInstallerArguments.Count) {
-            $index++
-            $managerHome = $forwardedInstallerArguments[$index]
-        } elseif ($argument.StartsWith("--home=")) {
-            $managerHome = $argument.Substring("--home=".Length)
-        }
-    }
-    $bin = Join-Path $managerHome "bin"
-    if ((Test-Path -LiteralPath (Join-Path $bin "omh.cmd")) -and
-        @($env:PATH -split ";") -notcontains $bin) {
-        $env:PATH = $bin + ";" + $env:PATH
-    }
-}
+# Python owns persisted user PATH registration. Reopen the terminal after setup;
+# help and cancelled recovery must not change this PowerShell session's PATH.

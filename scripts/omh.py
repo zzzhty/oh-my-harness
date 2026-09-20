@@ -1251,7 +1251,7 @@ def command_manager_repair(args: argparse.Namespace) -> int:
                 _write_harness_state(home, harness)
                 if harness not in installed:
                     installed.append(harness)
-                write_desired(home, installed)
+                    write_desired(home, installed)
         if not dry_run:
             write_manager(
                 home, repository=manager["repository"], revision=manager["revision"],
@@ -1259,13 +1259,13 @@ def command_manager_repair(args: argparse.Namespace) -> int:
                 channel=manager["channel"], requested_ref=manager.get("requestedRef", "main"),
                 status="ready",
             )
-            if receipt is not None:
+            if receipt is not None and receipt.get("status") == "installing":
                 from install_oh_my_harness import launcher_paths, write_install_state
 
                 write_install_state(
                     home=home, repository=manager["repository"], ref=receipt.get("ref", "main"),
                     repo=REPO_ROOT, harness=receipt["harness"], launchers=launcher_paths(home),
-                    status="ready", revision=manager["revision"],
+                    status="ready", revision=receipt["revision"],
                 )
         print("repair plan complete" if dry_run else "manager and selected harnesses repaired and checked")
     return 0
