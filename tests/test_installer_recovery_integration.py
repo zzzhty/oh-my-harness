@@ -63,7 +63,9 @@ class PublicInstallerRecoveryTests(unittest.TestCase):
                      ("config", "user.email", "test@example.invalid"), ("add", "."), ("commit", "-m", "fixture")):
             self.git(self.origin, *args)
         self.initial = self.git(self.origin, "rev-parse", "HEAD")
-        self.install("--repository", str(self.origin), "--harness", "copilot", "--yes")
+        # Exercise Git's normal transport without network access. A path source
+        # uses loose-object copying, which failed in the Linux CI fixture.
+        self.install("--repository", self.origin.as_uri(), "--harness", "copilot", "--yes")
         self.receipt = (self.home / "state/install.json").read_bytes()
 
     def git(self, repo, *args):

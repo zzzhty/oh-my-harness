@@ -88,7 +88,7 @@ class InstallerRecoveryTests(unittest.TestCase):
 
     def test_ready_requires_choice_even_with_yes_and_flags_are_exclusive(self):
         before = self.contents()
-        with mock.patch.object(sys.stdin, "isatty", return_value=False), \
+        with mock.patch.object(installer, "_interactive_stdin", return_value=False), \
              self.assertRaisesRegex(SystemExit, "choose --repair or --reinstall"):
             self.invoke("--yes")
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
@@ -99,7 +99,7 @@ class InstallerRecoveryTests(unittest.TestCase):
     def test_interactive_default_and_eof_cancel_without_writes(self):
         before = self.contents()
         for answer in ("", "cancel", EOFError()):
-            with self.subTest(answer=answer), mock.patch.object(sys.stdin, "isatty", return_value=True), \
+            with self.subTest(answer=answer), mock.patch.object(installer, "_interactive_stdin", return_value=True), \
                  mock.patch("builtins.input", side_effect=[answer]), mock.patch.object(installer, "run") as run:
                 self.invoke("--yes")
                 run.assert_not_called()
@@ -208,7 +208,7 @@ class InstallerRecoveryTests(unittest.TestCase):
         git(self.home / "repo", "remote", "set-url", "origin", "foreign")
         with self.assertRaisesRegex(SystemExit, "remote does not match"):
             self.invoke("--repair")
-        shutil.rmtree(self.home / "repo")
+        (self.home / "repo").rename(self.root / "removed-repo")
         with self.assertRaisesRegex(SystemExit, "legacy managed repository"):
             self.invoke("--repair")
         self.assertFalse((self.home / "state/manager.json").exists())

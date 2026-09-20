@@ -1,8 +1,8 @@
 # Installer recovery (PR #21)
 
-Scope: complete the explicit installer repair/reinstall entry point, publish the
-feature branch and close PR #21 as requested. The real managed installation is
-not a test target; merge and managed activation are outside this handoff.
+Scope: complete the explicit installer repair/reinstall entry point and merge
+PR #21 after validation, following the user's subsequent merge request. The real
+managed installation is not a test target; managed activation remains separate.
 
 ## Plan
 
@@ -66,8 +66,25 @@ managed checkout remains clean and was not activated or changed.
 ## Handoff
 
 The implementation is on `fix/installer-repair-reinstall`, based on PR #21's
-`a42079e`. After local validation, the user requested committing and pushing the
-changes, then closing PR #21. Retain the feature branch; do not merge it or
-activate the managed installation. The PR records the resulting commit and
-publication status. Native cross-platform CI remains unverified unless a run
-against that published commit completes successfully.
+`a42079e`. The first requested publication/closure completed at `e1d696e` without
+merge. The user subsequently requested merging: PR #21 was reopened and marked
+ready, and native CI must pass before merge. Keep the feature branch and leave
+the managed installation at its existing revision.
+
+## Native CI follow-up
+
+Run `35506973784` on `e1d696e` passed both macOS configurations and Ubuntu/Python
+3.12, but failed Ubuntu/Python 3.11 and both Windows configurations.
+
+- Windows: the missing-checkout fixture used `shutil.rmtree` on read-only Git
+  objects. Move the disposable checkout aside instead, preserving the same
+  missing-path scenario without platform-specific deletion.
+- Windows: redirected empty input reached the interactive recovery prompt and
+  returned successful cancellation. Require `GetConsoleMode` to establish a real
+  Windows input console; CRT `isatty()` can accept the NUL character device.
+- Ubuntu/Python 3.11: Git's local-path clone failed copying a loose object with
+  `No such file or directory`. The precise trigger is unconfirmed. Use a local
+  `file://` Git transport for this fixture, retaining real offline clone/recovery
+  behavior while removing the failing direct-copy path. Native rerun is required.
+
+Local affected tests pass; native validation of these fixes is pending.

@@ -705,12 +705,31 @@ def _ready_install_state(home: Path, receipt: dict) -> tuple[dict, dict]:
     )
 
 
+def _interactive_stdin() -> bool:
+    if not sys.stdin.isatty():
+        return False
+    if os.name != "nt":
+        return True
+    # Windows CRT isatty() also accepts NUL. Only a real console can answer
+    # recovery prompts; redirected input must retain the explicit-choice gate.
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    try:
+        handle = wintypes.HANDLE(msvcrt.get_osfhandle(sys.stdin.fileno()))
+        mode = wintypes.DWORD()
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
+    except (OSError, ValueError):
+        return False
+
+
 def _recovery_mode(args: argparse.Namespace) -> str:
     if args.repair:
         return "repair"
     if args.reinstall:
         return "reinstall"
-    if not sys.stdin.isatty():
+    if not _interactive_stdin():
         raise SystemExit("installation already exists; choose --repair or --reinstall explicitly (--yes does not choose)")
     print("Existing installation: [1] Repair  [2] Reinstall managed components  [Enter] Cancel")
     try:
