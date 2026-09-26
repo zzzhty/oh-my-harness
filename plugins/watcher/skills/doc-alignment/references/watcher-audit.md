@@ -2,7 +2,13 @@
 
 Trigger: read this reference for configured, scheduled, commit-dependent, or one-repository Watcher document audits. `../SKILL.md` remains the owner of mode selection and the read-only boundary.
 
-## Configured Audit
+## Select The Evidence Branch
+
+If a current report already exists and no fresh audit was requested, review it directly under Report Review; do not generate or run fresh audit commands. Check its repository, revision or time window, profiles, and coverage against the requested scope, and disclose stale or missing evidence.
+
+Otherwise follow Fresh Audit, then review the resulting report.
+
+## Fresh Audit
 
 Before running config-driven commands, set `OH_MY_HARNESS_ROOT` to the
 canonical Git worktree. The example config consumes that explicit root so the
@@ -40,8 +46,6 @@ Configured `authority_paths` prove only that named entry points exist. They do n
 
 ## Report Review
 
-If a current report already exists and no fresh audit was requested, skip audit command generation and review that report directly.
-
 Review reports for:
 
 - stale active guidance or history mixed into current navigation;
@@ -51,6 +55,9 @@ Review reports for:
 - broken links and missing referenced files;
 - resolved skill-root selection and shadowing when repository skill roots participate in the profile.
 
-Keep scheduled and report-only target repositories non-mutating. Watcher output belongs under `$CODEX_HOME/watcher/doc/` or the explicit output path.
+Completion criterion: apply the selected evidence branch below.
 
-Completion criterion: doctor and the selected audit/report command complete or their exact failures are recorded, every due or skipped repository is accounted for, profile trust boundaries are explicit, and report findings are handed to the common review workflow without mutating report-only targets.
+- **Existing report review:** record the report source, applicability, findings, and coverage gaps. No new doctor or audit run is required; do not claim fresh verification.
+- **Fresh audit:** doctor and the selected audit/report command complete or their exact failures are recorded; every due or skipped repository is accounted for, and profile trust boundaries are explicit.
+
+Both branches hand findings to the common review workflow and preserve its target-repository read-only boundary.

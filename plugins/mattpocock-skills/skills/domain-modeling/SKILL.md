@@ -9,35 +9,7 @@ Actively build and sharpen the project's domain model as you design. This is the
 
 ## File structure
 
-Most repos have a single context:
-
-```
-/
-├── CONTEXT.md
-├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
-
-```
-/
-├── CONTEXT-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── CONTEXT.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── CONTEXT.md
-│       └── docs/adr/
-```
-
-These paths are defaults when the repository has no existing convention. First resolve the configured glossary, context map and ADR owners, including differently named files. Create a missing owner lazily, only when there is useful content and the document write is in scope.
+Resolve the existing glossary, context map, and ADR owners first, including differently named files. Defaults are a root `CONTEXT.md` and `docs/adr/`; for multiple contexts, follow the context map to each owner. Read [CONTEXT-FORMAT.md](CONTEXT-FORMAT.md) when creating or updating terminology or a context map. Create a missing owner lazily, only when useful content exists and the write is in scope.
 
 ## During the session
 

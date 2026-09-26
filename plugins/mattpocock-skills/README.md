@@ -1,6 +1,6 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 20 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 19 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
@@ -16,14 +16,16 @@ Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
 | --- | --- |
 | Discuss and design | grilling, grill-me, grill-with-docs, domain-modeling, codebase-design, improve-codebase-architecture |
 | Implement and verify | implement, code-review, tdd, diagnosing-bugs, resolving-merge-conflicts |
-| Work with issues and context | triage, to-spec, handoff, setup-matt-pocock-skills |
+| Work with issues and context | triage, to-spec, handoff |
 | Investigate, learn and maintain | research, prototype, teach, writing-for-agents |
 
 Core/specialized labels in the selection proposal are maintenance priorities, not additional activation modes. Skills and their referenced resources live under `skills/`; `agents/openai.yaml` retains native Codex metadata, and existing frontmatter flags support the other harnesses that consume them.
 
 `grill-with-docs` remains an explicit user entrypoint. A workflow with its own planning trigger, such as long-running-goal preflight, directly composes `grilling` and `domain-modeling`; it does not implicitly invoke the wrapper or obtain implementation authority from planning. Both methods must be available, and document creation follows domain-modeling's existing ownership and value rules.
 
-The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder and wizard. They are no longer callable in this distribution; their source remains in Git history and upstream. Existing user artifacts and historical logs are preserved.
+The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder, wizard and setup-matt-pocock-skills. They are no longer callable in this distribution; their source remains in Git history and upstream. Existing user artifacts and historical logs are preserved.
+
+The setup entrypoint and its tracker, triage-label and domain-convention templates are retired. Existing repository configuration remains usable by the retained workflows, and `ask-matt` continues to route to the remaining skills. Restore the retired source and its consumers from Git history if a rollback is needed, then follow the normal validation and generation workflow.
 
 ## Maintenance
 

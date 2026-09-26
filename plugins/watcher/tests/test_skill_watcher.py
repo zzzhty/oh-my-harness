@@ -575,10 +575,10 @@ class SkillWatcherTests(unittest.TestCase):
             "ask-matt", "code-review", "codebase-design", "diagnosing-bugs",
             "domain-modeling", "grill-me", "grill-with-docs", "grilling", "handoff",
             "implement", "improve-codebase-architecture", "prototype", "research",
-            "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "teach",
+            "resolving-merge-conflicts", "tdd", "teach",
             "to-spec", "triage", "writing-for-agents",
         }
-        self.assertEqual(len(watcher_identities), 30)
+        self.assertEqual(len(watcher_identities), 29)
         self.assertEqual(
             {name.split(":", 1)[1] for name in watcher_identities if name.startswith("mattpocock-skills:")},
             selected,
@@ -590,7 +590,7 @@ class SkillWatcherTests(unittest.TestCase):
                 {"value": full_name, "kind": "skill_name", "match": "phrase"},
                 aliases,
             )
-            if skill_name in {"code-review", "implement", "research", "resolving-merge-conflicts", "setup-matt-pocock-skills", "to-spec", "writing-for-agents"}:
+            if skill_name in {"code-review", "implement", "research", "resolving-merge-conflicts", "to-spec", "writing-for-agents"}:
                 self.assertIn(
                     {"value": skill_name, "kind": "slug", "match": "token"},
                     aliases,
@@ -603,7 +603,6 @@ class SkillWatcherTests(unittest.TestCase):
             "handoff",
             "implement",
             "improve-codebase-architecture",
-            "setup-matt-pocock-skills",
             "teach",
             "to-spec",
             "triage",
@@ -641,7 +640,6 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertNotIn("mattpocock-skills:to-prd", watcher_identities)
         self.assertNotIn("mattpocock-skills:to-issues", watcher_identities)
         self.assertNotIn("mattpocock-skills:writing-great-skills", watcher_identities)
-        self.assertIn("mattpocock-skills:setup-matt-pocock-skills", watcher_identities)
         self.assertEqual(
             set(metadata["skills"]["mattpocock-skills:implement"]["supporting_skills"]),
             {
@@ -690,7 +688,10 @@ class SkillWatcherTests(unittest.TestCase):
 
         retired_names = {
             f"mattpocock-skills:{name}"
-            for name in ("to-questionnaire", "to-tickets", "wait-what", "wayfinder", "wizard", "to-issues")
+            for name in (
+                "to-questionnaire", "to-tickets", "wait-what", "wayfinder", "wizard",
+                "to-issues", "setup-matt-pocock-skills",
+            )
         }
         self.assertTrue(retired_names.isdisjoint(watcher_identities))
         self.assertTrue(retired_names.isdisjoint(metadata["legacy_names"]))
@@ -722,7 +723,7 @@ class SkillWatcherTests(unittest.TestCase):
             f"{source.plugin}:{source.name}"
             for source in catalog.sources
         )
-        self.assertIn("mattpocock-skills:setup-matt-pocock-skills", watcher_identities)
+        self.assertIn("mattpocock-skills:ask-matt", watcher_identities)
         self.assertEqual(
             discover_watcher_skill_identities(REPO_ROOT),
             tuple(watcher_identities),

@@ -533,7 +533,7 @@ class RepositoryCatalogTests(unittest.TestCase):
         catalog = sync_agents_skills.load_repo_skill_catalog()
         plugins = {source.plugin for source in catalog.sources}
         self.assertEqual(plugins, {"watcher", "workflow", "mattpocock-skills"})
-        self.assertGreaterEqual(len(catalog.sources), 30)
+        self.assertGreaterEqual(len(catalog.sources), 29)
         for source in catalog.sources:
             self.assertEqual(source.name, source.path.name)
             self.assertTrue((source.path / "SKILL.md").is_file())

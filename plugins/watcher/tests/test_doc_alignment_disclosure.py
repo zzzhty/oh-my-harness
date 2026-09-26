@@ -37,7 +37,7 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
             "propose bounded fixes",
             text,
         )
-        self.assertIn("write only to a Watcher-owned report", text)
+        self.assertIn("under `$CODEX_HOME/watcher/doc/` or an explicit output path", text)
         self.assertIn("target repositories remain read-only", text)
         self.assertIn(
             "run only non-mutating commands against target repositories",
@@ -66,6 +66,15 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertIn("authority_paths", text)
         self.assertIn("commit-dependent", text)
         self.assertIn("Completion criterion:", text)
+        routing = text.split("## Select The Evidence Branch", 1)[1].split("## Fresh Audit", 1)[0]
+        self.assertIn("no fresh audit was requested", routing)
+        self.assertIn("do not generate or run fresh audit commands", routing)
+        completion = text.split("Completion criterion:", 1)[1]
+        review, fresh = completion.split("**Fresh audit:**", 1)
+        self.assertIn("report source, applicability, findings, and coverage gaps", review)
+        self.assertIn("No new doctor or audit run is required", review)
+        self.assertIn("doctor and the selected audit/report command", fresh)
+        self.assertIn("exact failures", fresh)
 
     def test_alignment_reference_owns_classification_surfaces_and_validation(self) -> None:
         text = ALIGNMENT.read_text(encoding="utf-8")

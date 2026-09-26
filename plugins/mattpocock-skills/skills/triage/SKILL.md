@@ -67,11 +67,11 @@ Show counts and a one-line summary per item. Let the maintainer pick.
 
 ## Triage a specific issue or PR
 
-1. **Gather context.** Read the full issue or PR (body, comments, labels, author, dates; for a PR, the diff too). Parse any prior triage notes so you don't re-ask resolved questions. Explore the codebase using the project's domain glossary, respecting ADRs in the area. Run two checks against the codebase: (a) **redundancy** — search for an existing implementation of the requested behavior by domain concept (not just the request's wording), and report where you looked. If found, it's an already-implemented `wontfix` (step 5). (b) **prior rejection** — read `.out-of-scope/*.md` and surface any that resembles this request.
+1. **Gather context.** Read the full issue or PR (body, comments, labels, author, dates; for a PR, the diff too). Parse prior triage notes to reuse resolved answers. Explore the codebase using its domain glossary and ADRs. Check (a) **possible redundancy** — search for the requested behavior by domain concept and report where you looked; related implementation is only a candidate for verification in step 3 — and (b) **prior rejection** — read `.out-of-scope/*.md` and surface similar requests.
 
-2. **Recommend.** Tell the maintainer your category and state recommendation with reasoning, plus a brief codebase summary relevant to the request — including whether it's already implemented. Use an already supplied direction; ask only when the next mutation needs a missing decision or authorization.
+2. **Recommend provisionally.** Explain the likely category and state, relevant implementation, and what remains to verify. Use an already supplied direction; ask only when the next mutation needs a missing decision or authorization.
 
-3. **Verify the claim.** Before any grilling, check that the claim holds up. For a bug, reproduce it from the reporter's steps. For a PR, confirm the diff does what it claims — inspect or use an isolated checkout when needed, preserving current user work, and run the relevant tests or commands. Report what happened: confirmed (with code path), failed, or insufficient detail (a strong `needs-info` signal). A confirmed verification makes a much stronger agent brief.
+3. **Verify the claim.** Before grilling or applying an outcome, reproduce bugs from the reporter's steps even when the feature already exists. For a PR, confirm the diff does what it claims; preserve current user work and use an isolated checkout when needed. For possible redundancy, check the full requested observable behavior, including reported failures and edge cases; finding related code alone cannot establish `already implemented`. Use relevant tests or commands within the authorized mode. Report confirmed behavior with evidence, failed checks, or insufficient detail (a strong `needs-info` signal), and revise the recommendation accordingly. Missing verification is not proof of redundancy.
 
 4. **Grill (if needed).** If the request needs fleshing out, use `/grilling` for open decisions. Use `/domain-modeling` when new durable knowledge needs recording and document changes are in scope.
 
@@ -80,7 +80,7 @@ Show counts and a one-line summary per item. Let the maintainer pick.
    - `ready-for-human` — same structure as an agent brief, but note why it can't be delegated (judgment calls, external access, design decisions, manual testing).
    - `needs-info` — post triage notes (template below).
    - `wontfix` — close, with the comment depending on *why*:
-     - **Already implemented** — the change already exists in the codebase. Point to where it lives; do **not** write to `.out-of-scope/` (that KB is for *rejected* requests, not built ones).
+     - **Already implemented** — step 3 verified that the existing implementation fully satisfies the request. Point to the implementation and evidence; do **not** write to `.out-of-scope/` (that KB is for *rejected* requests, not built ones).
      - **Rejected (bug)** — polite explanation, then close.
      - **Rejected (enhancement)** — write to `.out-of-scope/`, link to it from a comment, then close ([OUT-OF-SCOPE.md](OUT-OF-SCOPE.md)).
    - `needs-triage` — apply the role. Optional comment if there's partial progress.

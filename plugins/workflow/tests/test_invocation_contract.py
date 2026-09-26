@@ -150,6 +150,17 @@ class InvocationContractTests(unittest.TestCase):
         self.assertIn("confirm the top-level status is `Ready`", execute)
         self.assertIn("If the SOP is `Draft` or the check fails, do not execute it", execute)
 
+        modes = skill.split("## Select The Mode", 1)[1].split("## Create Or Update", 1)[0]
+        explain = modes.split("**Explain:**", 1)[1].split("**Dry-run:**", 1)[0]
+        preview = modes.split("**Dry-run:**", 1)[1].split("**Execute:**", 1)[0]
+        self.assertIn("unfinished `Draft`", explain)
+        self.assertIn("without running its steps", explain)
+        self.assertIn("authorized, non-mutating inspection", preview)
+        self.assertIn("inspecting their actual behavior and permissions", preview)
+        self.assertIn("Draft may be previewed but cannot authorize execution", preview)
+        update = skill.split("## Create Or Update", 1)[1].split("## Execute", 1)[0]
+        self.assertIn("Update an existing SOP in place, preserving unrelated content", update)
+
     def test_broad_review_authority_and_orchestration_invocation_are_separate(self) -> None:
         global_guidance = (
             REPO_ROOT / "agents" / "global-instructions.md"

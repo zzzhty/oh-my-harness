@@ -378,28 +378,6 @@
       ],
       "supporting_skills": []
     },
-    "mattpocock-skills:setup-matt-pocock-skills": {
-      "role": "specialized",
-      "logical_group": "explicit-workflows",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:setup-matt-pocock-skills",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "setup-matt-pocock-skills",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "setup matt pocock skills",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
     "mattpocock-skills:tdd": {
       "role": "specialized",
       "logical_group": "implicit-primitives",

@@ -35,3 +35,31 @@ Root 的 live projection 测试按 Git 索引枚举文件；首次在未暂存�
 完成源码和 owning tests 后，分发身份生成脚本运行一次；Watcher 和 Workflow 身份更新，Matt Pocock 源码与身份不变。受影响指令 Markdown 从 146211 降至 108522 UTF-8 字节（约 25.8%），此为文本体积，不是模型 token 或性能测量。
 
 优化验证阶段在本地 `codex/simplify-local-skill-workflows` 完成，本节记录提交前的验证结果；后续发布与安装状态以 Git 远端和 `omh status` 为准。
+
+## 2026-09-26 剩余 Skills 合并修复
+
+本轮基线为 `c9b5668`，叠加当时已获批准、尚未提交的 setup-matt-pocock-skills 退役修改。用户在合并 writing-for-agents 与 skill-compressor 审查方案后授权执行。此次扩展到八个 skill：triage、sop、long-running-goal、teach、improve-codebase-architecture、doc-alignment、codebase-design、domain-modeling；ask-matt 保留，不再删除其他入口。源码修复阶段不含提交、推送或受管安装激活；用户随后另行授权这三个发布步骤。
+
+候选仅比较“不修改”与“修复已发现分支并在原 owner 内去重”。Git 基线保留原文；模板、reference 与入口一起检查，不把缩短字数当作行为等价证据。
+
+修改前冻结的行为 oracle：
+
+- triage：找到相关实现不等于请求已满足；必须验证完整请求行为，已实现功能的 bug 仍进入复现流程。只有证实冗余的请求才走 already-implemented，且不写拒绝知识库；只读评审不产生 tracker 或仓库写入。brief 保留稳定路径合同，避免易失效的文件/行号实施指令。
+- SOP：先区分 create/update/explain/dry-run/execute。解释 Draft 不执行；dry-run 仅做已有授权下的安全预览；更新既有 owner 不覆盖无关内容；真实执行必须 Ready、权限明确，并在必需验证失败时停止。
+- long-running-goal：直接或恢复 Close 也必须经过完整 checkpoint；保留 staged/无关 dirty 隔离、无空提交、非 Git revision 分支。模板压缩不改变 Ready/Draft、序列寄存表及严格串行映射、预检来源、promotion drift、child/parent 独立权限和清理政策。手动 goal 可删未使用的九字段示例，真实自动化/编排/connector 仍须完整 harness 边界。
+- teach：入口明确持续多次会话的教学 workspace；复用已有 glossary owner，新 workspace 默认 GLOSSARY.md，HTML reference 不建立第二套定义权威。保留学习证据、mission 变更确认、知识来源、反馈与复习要求。
+- architecture HTML：可选输出遵循用户指定位置或 OS 临时目录；CSS 与图形随单文件交付，无 CDN/网络运行依赖。
+- doc-alignment：已有报告评审不强制新 audit；fresh audit 保留 doctor、所选命令、due/skipped/profile trust 的完整证据。目标仓库只读及失败披露合同不变。
+- codebase-design/domain-modeling：保留深度、接口、seam 与 adapter 区分、行为级测试、现有术语/ADR owner、懒创建与只读写入边界；删除重复图示、目录树和 ADR 条件副本。
+
+验证状态：本地源码修复完成。
+
+- 三路独立只读复核：Matt 五项、Workflow 两项及模板、跨技能权限/失败反例；均未发现行为或授权退化。Workflow reviewer 指出的旧 disclosure 断言已同步到同义规则，唯一状态源、历史 transition 与链接实例化覆盖保留。
+- Root catalog/projection/plugin-validator 测试 34 项通过；Watcher doc-alignment disclosure 11 项通过。Workflow 全套 94 项首轮 92 项通过、2 项旧文本断言失败；修正后定向复跑 disclosure 6 项全部通过，其余 88 项仍适用。SOP 分流和 Close 路由检查已包含在本轮结果中。
+- 初次 Watcher 检查因 `Completion criterion:` 标记改写而失败，恢复共同标记后 11 项复跑通过。setup 清理先前通过的 Skill Watcher 43 项结果继续适用：40 通过、3 个 Windows PowerShell 编码场景因当前为 macOS 跳过。
+- 22 份改动 Markdown 的相对链接、改动 Python 语法（无字节码）、三个实际插件验证及 `git diff --check HEAD` 均通过。首次误查不存在的根目录 `scripts/check_md_links.py` 后定位到 Workflow 所有的同名检查器，使用后者完成检查。
+- HTML scaffold 填入代表性内容后，以 Playwright offline context 检查桌面 1200px 和窄屏 390px：内联 CSS、两幅 SVG、页内跳转正常，无网络请求、页面错误或横向溢出；两张截图已人工检查。Playwright 自带 headless shell 不存在，使用本机 Chrome 的 Chromium 完成等价检查，未下载浏览器。
+- 全部插件源修改和 owner tests 完成后，本轮仅运行一次 `update_plugin_generations.py`；三个插件验证及 `check_plugin_generations.py` 通过。当前身份为 Matt `ac797c1b31ee7568`、Watcher `55b033fce5f3853b`、Workflow `6197204dc1b6fd44`；bundle 为 `sha256:1fe07fb45713200bf929e3969d0a4ce128b076c8db651085623b8d7deff7b163`。
+- 本轮 17 份受影响 skill Markdown 共从 107945 降至 98790 UTF-8 字节（8.5%），不含 setup 退役及 ask-matt 路由移除。未做真实模型 A/B 回放或 tracker 外部操作；静态语义复核、结构检查与离线渲染不能推导模型性能提升。
+
+源码验证结束时，修改基于 `c9b5668`，setup 的七个删除已暂存，其余修改未暂存，无未跟踪文件；受管 checkout 为干净的 `c9b5668`。这是发布前快照，后续发布和安装状态以实际 Git 远端及 `omh status` 为准。

@@ -19,7 +19,7 @@ When all milestones are done:
 6. Remove closed goals from active navigation, or archive/delete the goal file according to local convention.
 7. Validate index topology with `check_todo_index.py --mode closed --archived-goal <archive-path> <old-active-path> <index>...` after archiving, or `--mode absent <old-active-path> <index>...` after deletion without an archive.
 8. Run `git diff --check -- <changed-paths>` and `check_md_links.py` when Markdown links changed.
-9. Record close checkpoint evidence. If version control is active and expected, use the local close commit/revision format, such as `<goal_slug> close: <summary>`.
+9. Apply [the checkpoint component](../components/checkpoint.md) in full and record close checkpoint evidence. When its selected type is `git commit`, use the local close commit format, such as `<goal_slug> close: <summary>`.
 10. Only after every close gate and evidence check passes, set the Close row to `Done/Passed/Done` and the overall goal status to `Closed`.
 
 Completion criterion: every milestone is `Done`, close evidence and validation are recorded, the explicit or legacy task-temporary-cache disposition is recorded, durable current docs are synchronized, active navigation no longer points to closed work, and archive/delete handling follows local convention.

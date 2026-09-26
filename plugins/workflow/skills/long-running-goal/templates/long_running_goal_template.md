@@ -60,23 +60,17 @@ Housekeeping boundary：`<Enabled uses watcher:housekeeping only for inventoried
 
 ## 当前基线
 
-M0 设计冻结时的当前基线：
+M0 设计冻结时按实际情况填写，可增删条目；不为凑数量制造事实：
 
-1. `<当前代码 / 文档 / runtime 的事实 1。>`
-2. `<当前已交付或已验证的能力。>`
-3. `<当前仍保留的 compatibility / legacy surface。>`
-4. `<当前主要失败断点或风险。>`
-5. `<当前不属于本计划提交范围的运行产物或外部依赖。>`
+- `<当前代码 / 文档 / runtime、已交付或验证的能力、保留的 compatibility / legacy surface、失败断点与风险、范围外运行产物或依赖。>`
 
 已读取的当前事实源：
 
-1. `<root instructions / AGENTS.md / README / current guide / status doc。>`
-2. `<相关 architecture / contract / validation / runbook。>`
-3. `<现有 TODO / goal / archive / issue / PR。>`
+- `<实际使用的 instructions、README、current guide/status、architecture/contract/validation/runbook、TODO/goal/archive/issue/PR；按需列出可定位来源。>`
 
 ## Loop Blueprint / Harness 边界
 
-如果本 goal 是手动分阶段执行，明确写 `Not applicable: manual staged execution` 并说明原因。若本 goal 包含自动触发、重复循环、sub-agent 编排、worktree 并行、connector 读写或外部系统副作用，必须在执行前冻结以下 harness 边界，不能等执行过程中只依赖 LLM 自行判断。
+手动分阶段 goal 只保留执行模式及 `Not applicable: manual staged execution` 原因，删除下方未使用的九字段示例。包含自动触发、重复循环、sub-agent 编排、worktree 并行、connector 读写或外部系统副作用时，不能用 manual 分类省略边界：必须在执行前填写以下九字段；单个不适用字段说明原因。
 
 执行模式：`<Manual staged execution / Loop-shaped execution / Automated loop>`
 
@@ -143,34 +137,19 @@ Out-of-scope dirty changes: <none or excluded paths>
 
 ## 设计原则
 
-1. `<原则 1：领域 ownership 或模块边界。>`
-2. `<原则 2：API / UI / runtime 行为边界。>`
-3. `<原则 3：compatibility / legacy 处理原则。>`
-4. `<原则 4：failure handling 和 fail-fast 规则。>`
-5. `<原则 5：测试与验证边界。>`
+- `<按需列出领域 ownership/模块、API/UI/runtime、compatibility/legacy、failure handling/fail-fast、测试与验证边界；不适用项省略。>`
 
 ## 目标结构
 
-### `<Target Area 1>`
+### `<Target Area>`
 
-1. `<目标态 1。>`
-2. `<目标态 2。>`
-3. `<必须保留的兼容边界。>`
-4. `<必须移除或禁止恢复的旧行为。>`
+- `<本区域的目标行为、必须保留的兼容边界、必须移除的旧行为和 Future 边界。>`
 
-### `<Target Area 2>`
-
-1. `<目标态 1。>`
-2. `<目标态 2。>`
-3. `<风险或后续 Future 边界。>`
+按实际目标区域复制小节，不预设区域或条目数量。
 
 ## 非目标 / Future 边界
 
-本 goal 不处理：
-
-1. `<明确不处理的事项 1。>`
-2. `<明确不处理的事项 2。>`
-3. `<明确不处理的事项 3。>`
+- `<明确不处理的事项；按需扩展。>`
 
 ## 阶段计划
 
@@ -220,7 +199,7 @@ Close 前必须满足：
 8. 若存在 Loop Blueprint，所有触及 harness 的阶段都已记录对应证据。
 9. 已按显式 task temporary cache / housekeeping policy 处理：无 root 时明确记录“没有创建 task temporary cache roots”；concrete roots 记录每个 exact root 和处置动作；仅 Enabled 要求移除 / 保留 / 失败 / residual size，Disabled 的容量记录可省略或写 unknown 并说明原因；durable evidence 位于缓存根目录之外。
 10. 未解决风险已记录，并明确是否进入 Future。
-11. close checkpoint evidence 已记录；若项目已有 Git / version-control 工作流且要求 close commit，使用 `<goal_slug> close: <summary>` 或本项目约定格式。
+11. 已完整应用 `components/checkpoint.md` 并记录 close checkpoint evidence；当选用 git commit 时使用 `<goal_slug> close: <summary>` 或本项目约定格式。
 
 Close 执行证据：
 
@@ -255,9 +234,7 @@ Checkpoint evidence：
 
 ## 当前风险
 
-1. `<执行前已知风险 1。>`
-2. `<执行前已知风险 2。>`
-3. `<执行前已知风险 3。>`
+- `<执行前已知风险与处置；按实际情况扩展，未知不得填成无风险。>`
 
 ## 推荐 Goal Prompt
 
@@ -267,6 +244,4 @@ Checkpoint evidence：
 
 ## 相关文档
 
-1. `<相关 current doc 1>`
-2. `<相关 current doc 2>`
-3. `<相关 architecture / API / validation / runbook doc>`
+- `<实际相关的 current、architecture、API、validation 或 runbook 文档；按需扩展。>`

@@ -2,7 +2,7 @@
 
 Copy this template for a strict serial `Long-Running Goal Sequence`. `umbrella` is only an informal alias. Replace every `<...>` placeholder before authorization; never record project progress in this source template.
 
-This two-child shape is the minimum. To add children, add matching rows to both registers, insert one `M<Order> - Child <Child ID>` section per child, renumber Integration Acceptance to `M(n+1)`, and update the milestone table. Do not use this template for parallel or DAG execution.
+This two-child shape is the minimum. To add children, add matching rows to both registers, insert one `M<Order> - Child <Child ID>` section per child, renumber Integration Acceptance to `M(n+1)`, and update the milestone table.
 
 Overall status: `Draft`
 
@@ -56,13 +56,10 @@ Housekeeping boundary: `<Enabled uses watcher:housekeeping only for inventoried 
 
 ## Template Use
 
-1. Create each child from `long_running_goal_template.md`, complete its required preflight methods and authorization coverage through Close while reusing confirmed answers, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, task-temporary-cache housekeeping, and non-goal boundaries. Preserve sourced completion/reuse/explicit-skip evidence in each child; the register cannot replace it.
-2. Keep every child overall `Draft` with every atomic row `Not Started / Pending / Pending` until M0 or a predecessor handoff promotes it.
-3. Use relative Markdown links. Replace each backticked `Live goal` link example with an actual relative Markdown link when instantiating this template. A Closed row moves its complete atomic child goal from `Live goal` to the `Closeout evidence` archive link; do not replace it with a summary.
-4. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes frozen child preflight boundaries.
-5. Create only one active harness system goal for this parent. Never create nested system goals for children.
-6. Record a separate parent housekeeping choice only for sequence-owned orchestration/integration caches. Never add housekeeping columns to the child registers or use the parent policy to override a child policy.
-7. Use `references/sequence-child-goals.md` for serial state mapping and optional timing guidance.
+1. Create each child from `long_running_goal_template.md`, complete its required preflight methods and authorization coverage through Close, and freeze its scope, owner, compatibility, validation, rollback, permission, release/deploy, privacy, housekeeping, and non-goal boundaries. Reuse confirmed answers and preserve sourced completion/reuse/explicit-skip evidence in each child; the register cannot replace it.
+2. Use relative Markdown links, replacing the backticked examples with actual links. Follow the Sequence Execution Contract below for lifecycle and handoff.
+3. Run `check_goal_sequence.py --allow-draft` while drafting and without that flag before authorization or execution. Draft mode never relaxes frozen child preflight boundaries.
+4. Create only one active harness system goal for this parent, never nested system goals for children. Use `references/sequence-child-goals.md` for operational details and optional timing guidance.
 
 ## Child Preflight Register
 
@@ -80,9 +77,7 @@ Every marker, status, and source must exactly match the linked child. Existing d
 | 1 | `<child-a>` | `M1` | `[<child-a>](./<child-a>_long_running_goal_plan.md)` | `n/a` | `n/a` | `Draft` | `n/a` | `n/a` |
 | 2 | `<child-b>` | `M2` | `[<child-b>](./<child-b>_long_running_goal_plan.md)` | `n/a` | `<child-a>` | `Draft` | `n/a` | `n/a` |
 
-The `Child Execution Register` is the sole current-state authority for child lifecycle and milestone position. Do not add `Current child:`, `Active child:`, or `Current child milestone:` fields elsewhere. Keep transition evidence historical and keep the resume prompt free of copied current child or milestone values.
-
-Allowed `State` values are `Draft`, `Ready`, `In Progress`, and `Closed`. A promoted child records one exact atomic current row such as `M0 Ready`, `M1 In Progress`, or `M1 Blocked`; a Closed child records `Close Done`, `Live goal = n/a`, a relative archived atomic-goal link, and a close revision.
+Allowed `State` values are `Draft`, `Ready`, `In Progress`, and `Closed`. A promoted child records one exact atomic current row such as `M0 Ready`, `M1 In Progress`, or `M1 Blocked`. A Closed child records `Close Done`, `Live goal = n/a`, its complete archived atomic goal under `Closeout evidence` (never just a summary), and a close revision.
 
 ## Baseline And Frozen Boundaries
 
@@ -102,9 +97,6 @@ Frozen sequence boundaries:
 
 1. `<Child-a scope, owner, compatibility, dependency, permissions, and non-goals.>`
 2. `<Child-b scope, owner, compatibility, dependency, permissions, and non-goals.>`
-3. Strict child order is fixed by the Execution Register; v1 has no parallel, DAG, per-child authorization, or alternate promotion mode.
-4. Parent authorization permits automatic handoff only inside child-frozen boundaries and never expands release, deploy, destructive, privacy-sensitive, external-write, externally visible, or child task-temporary-cache housekeeping permission.
-5. Semantic changes to scope, owner, compatibility, dependency order, behavior, or external authorization invalidate affected markers and require revalidation of affected decisions; path, command, tool-version, or non-semantic baseline updates only rebaseline evidence.
 
 ## Loop Blueprint / Harness
 
@@ -139,17 +131,19 @@ Omit this section when no parent-owned actions await approval. Put child action 
 
 ## Sequence Execution Contract
 
-1. Parent and child preflight tuples must be complete, consistent, and match the register. `--allow-draft` relaxes lifecycle only.
-2. The Execution Register is the only child current-state source. Closed children form a prefix, at most one child is `Ready` or `In Progress`, and every later child remains `Draft / n/a`.
+1. Parent and child preflight tuples must be complete, consistent, and match the register. `--allow-draft` relaxes lifecycle only. V1 is strict serial: no parallel, DAG, per-child authorization, or alternate promotion mode.
+2. The Execution Register is the sole child current-state authority; do not copy `Current child:`, `Active child:`, or `Current child milestone:` fields into other sections or the resume prompt. Closed children form a prefix, at most one child is `Ready` or `In Progress`, and every later child remains `Draft / n/a` with atomic rows `Not Started / Pending / Pending`. Transition evidence is historical.
 3. Parent mapping is fixed: Draft child -> `Not Started`; Ready -> `In Progress`; In Progress -> `In Progress`; In Progress with a Blocked atomic milestone -> `Blocked`; Closed -> `Done`.
 4. Promotion-drift exception: a parent child stage may be `Blocked` while its child remains `Draft / n/a`, but that exact section must record real section-local runtime hard-stop evidence and no later child may start.
 5. In the all-Draft snapshot all parent milestones are Not Started. After every preflight and check passes, set only parent Overall status and M0 to Ready for the one authorization. When M0 starts, set parent Overall status to In Progress and keep it there until Closed; M0 Done promotes the first child, and promoted Ready children map to In Progress parent stages. Each `M<Order>` owns one child. Integration remains Not Started until all children are Closed; Close remains Not Started until integration is Done.
-6. After a predecessor Close, verify its archived atomic closeout and revision, parent review/checkpoint and milestone-scope exit gate, next-child preflight/boundaries, handoff inputs, and sequence checker; then promote automatically without another authorization.
+6. After a predecessor Close, verify its archived atomic closeout and revision, parent review/checkpoint and milestone-scope exit gate, next-child preflight/boundaries, handoff inputs, and sequence checker; then promote automatically within frozen child authority, without another authorization. Parent approval never expands release, deploy, destructive, privacy-sensitive, external-write, externally visible, or child housekeeping permission.
 7. A child hard stop remains at the owning child. Keep its overall state `In Progress`, mark its atomic current milestone and mapped parent stage `Blocked`, and put `Runtime hard-stop evidence:` in both owning sections with a date, child ID, and breakpoint or attempted diagnostics. Promotion drift additionally names semantic drift/failed handoff and the required decision revalidation/external decision. Parent-only M0, Integration, or Close evidence uses the same date and diagnostics rule plus the stage owner token `sequence`, `integration`, or `close`. Do not skip or reorder children.
 8. Apply `components/checkpoint.md` before every parent milestone or Close becomes Done. Record commands, behavior, docs, rollback, risks, harness evidence, revision, and out-of-scope dirt; after a parent milestone records checkpoint evidence, confirm `components/milestone-scope-gate.md` before marking it Done or promoting the next child.
 9. Do not widen gates, hide failure, use fallback or alternate backends, report partial work as success, or convert a permission boundary into a non-stop.
-10. Only an explicit `Enabled` policy may invoke `watcher:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If watcher is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent.
+10. Only an explicit `Enabled` policy may invoke `watcher:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If watcher is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent; parent policy covers only its orchestration/integration roots. Never add housekeeping columns to the child registers.
 11. Close only after every child is Closed, integration is Done, every parent/child housekeeping disposition is recorded, close evidence passes, current docs are synchronized, and active navigation is clean.
+
+12. Semantic changes to scope, owner, compatibility, dependency order, behavior, or external authorization invalidate affected markers and require decision revalidation; path, command, tool-version, or non-semantic baseline updates only rebaseline evidence.
 
 ## Transition Evidence
 
@@ -259,7 +253,7 @@ Close requirements:
 
 Close execution evidence: `<changed artifacts, final behavior, validation commands/results, docs sync, rollback, residual risk, archive outcome, and parent/child task temporary cache dispositions>`
 
-8. Temporary cache / housekeeping evidence:
+Temporary cache / housekeeping evidence:
 
 - Recorded policy: `<Enabled / Disabled / Not applicable>`
 - Exact parent roots / Roots outcome: `<repeat each sequence-owned absolute path / None created>`
@@ -277,7 +271,7 @@ Checkpoint evidence: `<components/checkpoint.md close result, revision, changed 
 ```text placeholder-example
 Use workflow:long-running-goal to resume <sequence-goal-path> as a Long-Running Goal Sequence.
 
-Re-read the parent and references/sequence-child-goals.md. Treat Child Execution Register as the sole child current-state authority; do not infer current state from transition history or this prompt. Run check_goal_sequence.py before mutation, follow the registered strict-serial child and parent mapping, promote only after the automatic-after-close handoff gate, keep hard stops at the owning child, preserve every child permission and housekeeping boundary, record checkpoint, transition, and temporary-cache disposition evidence, and close only after all children and integration are complete.
+Re-read the parent and references/sequence-child-goals.md. Run check_goal_sequence.py before mutation, resume from Child Execution Register, and apply the Sequence Execution Contract, frozen boundaries, and owning milestone gates. Do not infer current state from transition history or this prompt.
 ```
 
 ## Related Documents

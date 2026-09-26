@@ -152,7 +152,7 @@ class RepoSkillCatalogTests(unittest.TestCase):
 
     def test_live_catalog_matches_all_repository_skill_frontmatter_names(self) -> None:
         catalog = repo_skill_catalog.load_repo_skill_catalog()
-        self.assertGreaterEqual(len(catalog.sources), 30)
+        self.assertGreaterEqual(len(catalog.sources), 29)
         self.assertEqual(len(catalog.sources), len(catalog.by_name))
         self.assertEqual(
             set(catalog.plugin_names),

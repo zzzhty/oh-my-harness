@@ -88,6 +88,8 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("readiness and authorization checks in `execute-and-close.md`", close)
         self.assertIn("For direct or resumed Close, apply the matching", close)
         self.assertIn("recorded-root binding rule before any producer writes", close)
+        self.assertIn("[the checkpoint component](../components/checkpoint.md) in full", close)
+        self.assertLess(close.index("../components/checkpoint.md"), close.index("set the Close row to"))
         cutover = REFERENCES["cutover"].read_text(encoding="utf-8")
         self.assertIn("default/full-shadow/production comparison matrix", cutover)
 
@@ -115,8 +117,8 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "| Order | Child ID | Parent milestone | Live goal | Closeout evidence | Depends on | State | Current milestone | Close revision |",
             template,
         )
-        self.assertIn("sole current-state authority", template)
-        self.assertIn("transition evidence historical", template)
+        self.assertIn("sole child current-state authority", template)
+        self.assertIn("Transition evidence is historical", template)
         resume = template.split("## Reusable Resume Prompt", 1)[1].split(
             "## Related Documents", 1
         )[0]
@@ -136,7 +138,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
 
         self.assertEqual(missing_relative_links(SEQUENCE_TEMPLATE), [])
         self.assertIn(
-            "Replace each backticked `Live goal` link example with an actual relative Markdown link",
+            "Use relative Markdown links, replacing the backticked examples with actual links",
             template,
         )
         self.assertIn(

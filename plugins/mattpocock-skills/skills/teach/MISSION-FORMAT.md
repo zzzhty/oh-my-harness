@@ -26,6 +26,6 @@
 
 - **One mission per workspace.** If the user wants to learn two unrelated things, that is two workspaces.
 - **Concrete over abstract.** "Run a half marathon by October" beats "get fitter." "Ship a Rust CLI to my team" beats "learn Rust."
-- **Push back on vagueness.** If the user cannot articulate why, interview them before writing anything. A bad mission is worse than no mission.
-- **Revise when reality shifts.** Missions change. When the user's goal moves, update this file — don't leave a stale mission steering future sessions.
+- **Push back on vagueness.** Reuse the goal already stated in the request or learning records. Ask about the purpose only when it remains unclear; a missing file alone does not block a lesson.
+- **Revise when reality shifts.** Missions change. Confirm a changed mission with the user before updating this file and capture it in a learning record.
 - **Keep it short.** If `MISSION.md` runs past a screen, it has stopped being a compass and started being a plan.
