@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Keep public status, version, check, and doctor read-only and usable while a mutation lock is held; report degraded runtime failures without implicit repair.
+- Preserve pure JSON stdout for status/version and move command/bootstrap diagnostics to stderr.
+- Avoid creating or modifying manager locks during install, refresh, and remove dry-run previews.
+- Cover installed launchers with isolated-home regression tests for JSON, broken runtimes, concurrent locks, and no-write previews.
+
 ## 1.0.0 — 2026-08-24
 
 First formal release of `oh-my-harness`.

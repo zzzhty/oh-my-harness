@@ -1224,9 +1224,11 @@ class BootstrapHelpTests(unittest.TestCase):
                     self.assertEqual(omh_bootstrap.main(["--home", str(home), *arguments]), 0)
                     repair.assert_not_called()
                     run.assert_called_once_with([
-                        str(tooling), str(cli), "--home", str(home),
+                        str(tooling), "-B", str(cli), "--home", str(home),
                         *("--help" if arg == "-Help" else arg for arg in arguments),
-                    ])
+                    ], env=mock.ANY)
+                    self.assertEqual(run.call_args.kwargs["env"]["PYTHONDONTWRITEBYTECODE"], "1")
+                    self.assertEqual(run.call_args.kwargs["env"]["GIT_OPTIONAL_LOCKS"], "0")
             self.assertFalse(omh_bootstrap._is_help_request(["install", "--", "--help"]))
 
     def test_unsupported_python_rejects_repair_before_checkout_mutation(self) -> None:

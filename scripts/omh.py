@@ -15,6 +15,7 @@ import tempfile
 import textwrap
 import time
 import uuid
+from contextlib import nullcontext
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Iterable, Sequence
 
@@ -90,7 +91,7 @@ def _run(
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     rendered = [str(item) for item in command]
-    print("+ " + subprocess.list2cmdline(rendered), flush=True)
+    print("+ " + subprocess.list2cmdline(rendered), file=sys.stderr, flush=True)
     return subprocess.run(
         rendered,
         cwd=cwd,
@@ -644,7 +645,7 @@ def _write_harness_state(home: Path, harness: str) -> None:
 
 def command_install(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         manager, desired_state = _state_context(home, persist=not args.dry_run)
         desired = list(desired_harnesses(desired_state))
         targets = _target_set(args, desired=tuple(desired), mode="install")
@@ -668,7 +669,7 @@ def command_install(args: argparse.Namespace) -> int:
 
 def command_refresh(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         _manager, desired_state = _state_context(home, persist=not args.dry_run)
         targets = _target_set(
             args,
@@ -714,7 +715,7 @@ def _remove_one(args: argparse.Namespace, *, home: Path, harness: str) -> None:
 
 def command_remove(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         _manager, desired_state = _state_context(home, persist=not args.dry_run)
         desired = list(desired_harnesses(desired_state))
         targets = _target_set(args, desired=tuple(desired), mode="remove")
@@ -1209,8 +1210,6 @@ def command_manager_repair(args: argparse.Namespace) -> int:
             print("would roll back the interrupted update before repairing harnesses")
             return 0
         command_recover(args)
-    from contextlib import nullcontext
-
     with nullcontext() if dry_run else ManagerLock(home):
         manager, desired = _state_context(home, persist=not dry_run, allow_degraded=True)
         installed = list(desired_harnesses(desired))

@@ -549,6 +549,24 @@ Windows skill projection does not require file-symlink privilege. The projection
 
 A healthy tooling venv with unchanged requirements and importable dependencies is reused without recreating the venv or running pip. Changed requirements or failed dependency imports trigger dependency repair; `omh repair --rebuild` explicitly rebuilds the venv. The bootstrap resolves the selected base Python to its real executable before creating the venv. This prevents PATH aliases or uv-managed Python symlinks from producing a `pyvenv.cfg` that cannot locate the standard library. If an existing tooling venv cannot start, reports the wrong prefix, or was created from a different base interpreter, bootstrap rebuilds it and restores the previous directory if creation or dependency validation fails. `--dry-run` performs the same read-only health preflight and prints whether a rebuild would occur.
 
+Public `omh status`, `version`, `check`, and `doctor` never bootstrap or repair
+runtime dependencies, acquire the mutation lock, or create Python bytecode/Git
+index refresh files. They remain available while another lifecycle mutation
+holds the lock. They are observations, not an atomic snapshot of a concurrently
+changing installation. With a missing checkout, missing/unstartable tooling
+Python, or failed dependency imports, they exit nonzero and direct you to
+`omh repair`; they do not silently report a healthy installation. `status --json`
+and `version --json` return one JSON object on stdout (including a structured
+`runtime_unavailable` error when that read-only runtime preflight fails). Command
+traces and bootstrap progress go to stderr.
+
+`install`, `refresh`, and `remove --dry-run` do not create or update manager locks
+or receipts; `repair --dry-run` and `manager repair --dry-run` also remain
+no-write previews. Previewing does not repair a broken runtime, and can fail if
+its existing interpreter or dependencies are unavailable. `update --check` is
+different: it fetches remote Git metadata and is not a no-write preview.
+
+
 If a tooling command reports that `PyYAML` or the registry validator
 `jsonschema` is missing, refresh the shared tooling venv from the repository
 root:
