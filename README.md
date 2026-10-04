@@ -37,8 +37,9 @@ omh remove copilot --dry-run       # Preview removing managed Copilot resources
 ```
 
 Use `omh --help` for an overview and `omh COMMAND --help` for defaults,
-options, and examples. Names such as `copilot` and `copilot-cli` select the same
-harness; aliases work in setup, install, refresh, repair, check, doctor, and remove.
+options, and examples. `copilot` and `gemini` are canonical harness names;
+`copilot-cli` and `gemini-cli` remain aliases. Aliases work in setup, install,
+refresh, repair, check, doctor, and remove.
 
 ## Plugins
 
@@ -60,16 +61,29 @@ Each harness target selects one complete distribution. Public commands accept
 | `codex` | — | Exact `.agents/plugins/install-manifest.json` package set through Codex marketplace install | `$CODEX_HOME/AGENTS.md` |
 | `zcode` | — | `~/.zcode/skills` projection | `~/.zcode/AGENTS.md` |
 | `claude-code` | `claude` | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills` projection | `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md` |
-| `copilot-cli` | `copilot` | `${COPILOT_HOME:-~/.copilot}/skills` projection | `${COPILOT_HOME:-~/.copilot}/copilot-instructions.md` |
-| `gemini-cli` | `gemini` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
+| `copilot` | `copilot-cli` | `${COPILOT_HOME:-~/.copilot}/skills` projection | `${COPILOT_HOME:-~/.copilot}/copilot-instructions.md` |
+| `gemini` | `gemini-cli` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
 | `opencode` | — | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
 | `pi-agent` | `pi` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
 
 Aliases are exact lowercase input names declared once in the registry. They
 resolve to the canonical ID before selecting paths or writing state. For example,
 `omh install copilot copilot-cli` installs one distribution and records only
-`copilot-cli`. `--all` also selects each distribution once. Receipts, desired state,
-and existing harness directories retain their canonical identities.
+`copilot`. `--all` also selects each distribution once. The short names still
+select the GitHub Copilot CLI and Gemini CLI distributions; their native
+directories, environment variables, and instruction filenames are unchanged.
+
+Existing desired state may contain the old names or both spellings. The manager
+normalizes and deduplicates them in memory, then persists canonical names during
+a successful normal lifecycle mutation. New per-harness receipts use canonical
+names; obsolete alias-named receipts are removed only after ownership validation.
+`status`, `check`, `doctor`, `update --check`, and dry runs do not rewrite state to
+migrate names. The immutable initial `state/install.json` keeps its original
+name on disk, including `copilot-cli` or `gemini-cli` from an older installation.
+Managed updates and explicitly authorized downgrades translate rolling names
+for the target revision; manual checkout downgrades are unsupported.
+See [ADR 0018](docs/adr/0018-use-canonical-short-harness-names.md) for the migration
+scope and compatibility contract.
 
 `codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its exact-shape install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. The manifest has no independent schema-version field; its repository-owned reader rejects missing or unsupported fields. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
 

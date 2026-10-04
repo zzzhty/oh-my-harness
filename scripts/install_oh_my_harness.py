@@ -514,7 +514,14 @@ def validate_incomplete_adoption(
         "harness": harness,
         "paths": expected_paths,
     }
-    mismatched = sorted(key for key in expected if payload[key] != expected[key])
+    observed = dict(payload)
+    try:
+        registry = load_harness_registry()
+        observed["harness"] = registry.resolve_id(payload["harness"])
+        expected["harness"] = registry.resolve_id(harness)
+    except (HarnessRegistryError, TypeError) as exc:
+        raise SystemExit(f"incomplete installation harness is invalid: {target}: {exc}") from exc
+    mismatched = sorted(key for key in expected if observed[key] != expected[key])
     if mismatched:
         if mismatched == ["revision"] and resume_fast_forward:
             previous_revision = payload["revision"]
@@ -701,7 +708,7 @@ def _ready_install_state(home: Path, receipt: dict) -> tuple[dict, dict]:
     return derive_initial_state(
         home, repository=receipt["repository"], revision=revision,
         release_version=str(identity["releaseVersion"]), bundle_identity=str(identity["bundleIdentity"]),
-        persist=False,
+        persist=False, canonicalize=False,
     )
 
 
@@ -803,7 +810,9 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
     manager, desired = state
     if explicit_ref and args.ref != manager.get("requestedRef", ref):
         raise SystemExit("use omh update to change an existing installation's ref")
-    if explicit_harness and args.harness not in desired["harnesses"]:
+    from manager_state import desired_harnesses
+
+    if explicit_harness and args.harness not in desired_harnesses(desired):
         raise SystemExit("recovery preserves the installed harness set; use omh install to add a harness")
     expected_paths = {
         "home": str(home), "repo": str(repo_path(home)), "venv": str(venv_path(home)),
@@ -893,8 +902,25 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
                             "updatePolicy": {"channel": desired["updatePolicy"]["channel"]},
                         }
                         current_fields = {k: v for k, v in current_payload.items() if k != "updatedAt"}
+                        from manager_state import _validate_desired_payload
+
+                        try:
+                            _validate_desired_payload(current_payload, path=path)
+                        except SystemExit as exc:
+                            raise SystemExit(f"recovery desired state is invalid; preserved: {exc}") from exc
+                        # Permit only identity-equivalent alias convergence by a
+                        # newer child. Preserve policy extras and original bytes
+                        # when an older child keeps the old spelling.
+                        canonical = list(desired_harnesses(desired))
+                        original_fields["harnesses"] = canonical
+                        legacy_fields["harnesses"] = canonical
+                        current_fields["harnesses"] = list(desired_harnesses(current_payload))
                         if current_fields != original_fields and current_fields != legacy_fields:
                             raise SystemExit("recovery unexpectedly changed desired state; preserved for inspection")
+                        if current_payload["harnesses"] != desired["harnesses"]:
+                            preserved = json.loads(original)
+                            preserved["harnesses"] = current_payload["harnesses"]
+                            original = (json.dumps(preserved, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
                     else:
                         # Only the known legacy writer's revision/path rewrite is
                         # reversible here. Never hide corrupt or foreign state.
@@ -913,6 +939,20 @@ def resume_managed_install(args: argparse.Namespace, home: Path) -> bool:
                 print("restored previous tooling venv after failed reinstall")
     print(f"installation {mode} completed: {home}")
     return True
+
+
+def checkout_harness_name(repo: Path, harness: str) -> str:
+    """Use the actual installed ref's canonical ID, including pre-alias releases."""
+    path = repo / ".agents/harnesses/registry.json"
+    if not is_ordinary_file(path):
+        raise SystemExit(f"installed harness registry must be an ordinary file: {path}")
+    try:
+        target = json.loads(path.read_text(encoding="utf-8"))["harnesses"]
+        if not isinstance(target, dict):
+            raise ValueError("harnesses must be an object")
+        return load_harness_registry().id_for_target(harness, target)
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        raise SystemExit(f"installed harness selection is invalid: {exc}") from exc
 
 
 def main() -> None:
@@ -1092,6 +1132,8 @@ def main() -> None:
         repo = adopted_repo
         action = "resume" if resume_incomplete_install else "adopt"
         print(f"{action} managed checkout: {repo}")
+    if not args.dry_run:
+        args.harness = checkout_harness_name(repo, args.harness)
     launchers = write_launchers(home=home, repo=repo, dry_run=args.dry_run)
     if args.dry_run:
         print("dry-run only; no installation state written")

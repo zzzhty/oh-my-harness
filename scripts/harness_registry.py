@@ -8,7 +8,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from manager_paths import lexical_absolute
 from repo_skill_catalog import REPO_ROOT, SkillCatalog
@@ -153,6 +153,18 @@ class HarnessRegistry:
         if name in self.aliases:
             return self.aliases[name]
         raise HarnessRegistryError(f"unknown harness {name!r}; {self.selection_help()}")
+
+    def id_for_target(self, name: str, target_ids: Iterable[str]) -> str:
+        """Resolve a distribution into another revision's canonical vocabulary."""
+        canonical = self.resolve_id(name)
+        target_ids = set(target_ids)
+        equivalents = (canonical, *self.harnesses[canonical].aliases)
+        matches = [candidate for candidate in equivalents if candidate in target_ids]
+        if len(matches) != 1:
+            raise HarnessRegistryError(
+                f"target registry cannot represent installed harness {canonical!r}"
+            )
+        return matches[0]
 
     def selection_help(self) -> str:
         result = f"Available harnesses: {', '.join(self.choices)}."
