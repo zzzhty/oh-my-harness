@@ -52,13 +52,19 @@ class PublicLauncherContracts(unittest.TestCase):
         return subprocess.run([str(self.launcher), *args], env=self.env,
                               text=True, capture_output=True, timeout=30)
 
-    def snapshot(self):
+    def snapshot(self, lock=None):
         result = {}
         for path in self.user.rglob("*"):
             key = str(path.relative_to(self.user))
             stat = path.lstat()
-            content = os.readlink(path) if path.is_symlink() else (
-                hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "directory")
+            if lock is not None and path == lock.path:
+                # Windows byte-range locks deny reads through a second handle.
+                # Read via the owning handle so locked-file bytes stay covered.
+                lock.handle.seek(0)
+                content = hashlib.sha256(lock.handle.read()).hexdigest()
+            else:
+                content = os.readlink(path) if path.is_symlink() else (
+                    hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "directory")
             result[key] = (stat.st_mode, stat.st_mtime_ns, content)
         return result
 
@@ -92,13 +98,13 @@ class PublicLauncherContracts(unittest.TestCase):
                     self.assertEqual(self.snapshot(), before)
 
     def test_all_diagnostics_available_during_mutation(self):
-        with manager_state.ManagerLock(self.home):
-            before = self.snapshot()
+        with manager_state.ManagerLock(self.home) as lock:
+            before = self.snapshot(lock)
             for command in ("status", "version", "check", "doctor"):
                 with self.subTest(command=command):
                     result = self.run_cli(command)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(self.snapshot(), before)
+                    self.assertEqual(self.snapshot(lock), before)
 
     def test_broken_runtime_is_explicit_and_never_repaired(self):
         python = self.home / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -139,7 +145,9 @@ class PublicLauncherContracts(unittest.TestCase):
         shutil.rmtree(self.home / "venv")
         for missing_checkout in (False, True):
             if missing_checkout:
-                shutil.rmtree(self.repo)
+                # Move it outside the observed user tree. Git objects may be
+                # read-only on Windows; disappearance is the behavior under test.
+                self.repo.rename(self.root / "missing repo")
             before = self.snapshot()
             result = self.run_cli("status", "--json")
             self.assertEqual(result.returncode, 1)
@@ -158,12 +166,12 @@ class PublicLauncherContracts(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.snapshot(), before)
                 self.assertFalse((state / "manager.lock").exists())
-        with manager_state.ManagerLock(self.home):
-            before = self.snapshot()
+        with manager_state.ManagerLock(self.home) as lock:
+            before = self.snapshot(lock)
             for command in commands:
                 result = self.run_cli(*command, "--dry-run")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.snapshot(), before)
+                self.assertEqual(self.snapshot(lock), before)
 
 
 if __name__ == "__main__":
