@@ -18,7 +18,7 @@ import install_oh_my_harness as installer
 import manager_state
 
 
-@unittest.skipUnless(os.name != "nt" and shutil.which("git"), "requires POSIX launcher and Git")
+@unittest.skipUnless(shutil.which("git"), "requires Git")
 class PublicLauncherContracts(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -31,7 +31,7 @@ class PublicLauncherContracts(unittest.TestCase):
         shutil.copytree(ROOT, self.repo, ignore=shutil.ignore_patterns("__pycache__", ".venv"))
         venv.EnvBuilder(with_pip=False, system_site_packages=True).create(self.home / "venv")
         installer.write_launchers(home=self.home, repo=self.repo, dry_run=False)
-        self.launcher = self.home / "bin/omh"
+        self.launcher = self.home / "bin" / ("omh.cmd" if os.name == "nt" else "omh")
         self.env = dict(os.environ, HOME=str(self.user), USERPROFILE=str(self.user),
                         OH_MY_HARNESS_BOOTSTRAP_PYTHON=sys.executable,
                         CODEX_HOME=str(self.user / ".codex"))
@@ -81,6 +81,16 @@ class PublicLauncherContracts(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["product"], "oh-my-harness")
                 self.assertEqual(self.snapshot(), before)
 
+    def test_global_home_abbreviations_preserve_read_only_dispatch(self):
+        before = self.snapshot()
+        for option in ("--ho", "--hom", "--home"):
+            for arguments in ((option, str(self.home)), (f"{option}={self.home}",)):
+                with self.subTest(arguments=arguments):
+                    result = self.run_cli(*arguments, "status", "--json")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout)["home"], str(self.home))
+                    self.assertEqual(self.snapshot(), before)
+
     def test_all_diagnostics_available_during_mutation(self):
         with manager_state.ManagerLock(self.home):
             before = self.snapshot()
@@ -91,9 +101,10 @@ class PublicLauncherContracts(unittest.TestCase):
                     self.assertEqual(self.snapshot(), before)
 
     def test_broken_runtime_is_explicit_and_never_repaired(self):
-        python = self.home / "venv/bin/python"
+        python = self.home / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         python.unlink()
-        python.write_text("#!/bin/sh\necho broken-runtime >&2\nexit 91\n")
+        python.write_text("invalid executable" if os.name == "nt" else
+                          "#!/bin/sh\necho broken-runtime >&2\nexit 91\n")
         python.chmod(0o755)
         before = self.snapshot()
         for command in ("status", "version", "check", "doctor"):

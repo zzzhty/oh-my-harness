@@ -259,15 +259,19 @@ def main(argv: list[str] | None = None) -> int:
     command_arguments = arguments[2:]
     # A caller may override the launcher home using the public global option.
     while command_arguments:
-        if command_arguments[0] == "--home":
+        option, separator, value = command_arguments[0].partition("=")
+        # These are the unambiguous prefixes accepted by the public parser;
+        # --h is ambiguous with --help and must not select a manager home.
+        if option not in {"--ho", "--hom", "--home"}:
+            break
+        if not separator:
             if len(command_arguments) < 2:
                 raise SystemExit("--home requires an absolute path")
             selected_home = command_arguments[1]
             command_arguments = command_arguments[2:]
-        elif command_arguments[0].startswith("--home="):
-            selected_home = command_arguments.pop(0).split("=", 1)[1]
         else:
-            break
+            selected_home = value
+            command_arguments = command_arguments[1:]
     home = Path(selected_home).expanduser()
     if not home.is_absolute():
         raise SystemExit(f"manager home must be absolute: {home}")
