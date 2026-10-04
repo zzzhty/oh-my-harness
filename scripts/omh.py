@@ -15,6 +15,7 @@ import tempfile
 import textwrap
 import time
 import uuid
+from contextlib import nullcontext
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Iterable, Sequence
 
@@ -43,6 +44,8 @@ from manager_state import (
     load_current_operation,
     load_or_initialize,
     remove_harness_receipt,
+    translate_harness_receipts,
+    validate_harness_receipts,
     update_operation,
     write_desired,
     write_harness_receipt,
@@ -90,7 +93,7 @@ def _run(
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     rendered = [str(item) for item in command]
-    print("+ " + subprocess.list2cmdline(rendered), flush=True)
+    print("+ " + subprocess.list2cmdline(rendered), file=sys.stderr, flush=True)
     return subprocess.run(
         rendered,
         cwd=cwd,
@@ -552,14 +555,14 @@ def _target_set(
             raise SystemExit("do not combine explicit harness targets with --all")
         if mode == "install":
             return registry.choices
-        return desired
+        return _validate_targets(desired)
     if explicit:
         return _validate_targets(explicit)
     if mode == "install":
         return (registry.default_harness,)
     if mode == "remove":
         return ()
-    return desired
+    return _validate_targets(desired)
 
 
 def _common_refresh_args(args: argparse.Namespace, *, home: Path, harness: str) -> list[str]:
@@ -644,7 +647,7 @@ def _write_harness_state(home: Path, harness: str) -> None:
 
 def command_install(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         manager, desired_state = _state_context(home, persist=not args.dry_run)
         desired = list(desired_harnesses(desired_state))
         targets = _target_set(args, desired=tuple(desired), mode="install")
@@ -668,7 +671,7 @@ def command_install(args: argparse.Namespace) -> int:
 
 def command_refresh(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         _manager, desired_state = _state_context(home, persist=not args.dry_run)
         targets = _target_set(
             args,
@@ -687,6 +690,7 @@ def command_refresh(args: argparse.Namespace) -> int:
             )
             if not args.dry_run:
                 _write_harness_state(home, harness)
+                write_desired(home, desired_harnesses(desired_state))
     return 0
 
 
@@ -714,7 +718,7 @@ def _remove_one(args: argparse.Namespace, *, home: Path, harness: str) -> None:
 
 def command_remove(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    with ManagerLock(home):
+    with nullcontext() if args.dry_run else ManagerLock(home):
         _manager, desired_state = _state_context(home, persist=not args.dry_run)
         desired = list(desired_harnesses(desired_state))
         targets = _target_set(args, desired=tuple(desired), mode="remove")
@@ -726,6 +730,8 @@ def command_remove(args: argparse.Namespace) -> int:
                 "harness target is not installed according to desired state: "
                 + ", ".join(not_installed)
             )
+        for harness in targets:
+            validate_harness_receipts(home, harness)
         for harness in targets:
             _remove_one(args, home=home, harness=harness)
             if args.dry_run:
@@ -891,6 +897,41 @@ def _invoke_internal(repo: Path, home: Path, command: str, *extra: str) -> subpr
     )
 
 
+def _harness_names_at_revision(repo: Path, revision: str, harnesses: Iterable[str]) -> tuple[str, ...]:
+    """Translate only registry-owned names before handing state to another version."""
+    names = tuple(harnesses)
+    if not names:
+        return ()
+    try:
+        target = json.loads(_git_blob(repo, revision, INSTRUCTION_REGISTRY_PATH))["harnesses"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SystemExit("update target has an invalid harness registry") from exc
+    if not isinstance(target, dict):
+        raise SystemExit("update target has an invalid harness registry")
+    registry = _load_registry()
+    translated = set()
+    for name in names:
+        try:
+            translated.add(registry.id_for_target(name, target))
+        except HarnessRegistryError as exc:
+            raise SystemExit(str(exc)) from exc
+    return tuple(sorted(translated))
+
+
+def _finish_harness_name_migration(home: Path, desired: dict) -> None:
+    # Run only after closing the update journal: pre-alias managers must still be
+    # able to roll back an interrupted upgrade using their original desired IDs.
+    try:
+        for harness in desired_harnesses(desired):
+            _write_harness_state(home, harness)
+        write_desired(home, desired_harnesses(desired))
+    except (Exception, SystemExit) as exc:
+        # The update is already committed and aliases remain valid in this
+        # manager. Do not send an old caller into rollback with a closed journal.
+        print(f"update completed; harness-name state migration deferred: {exc}; "
+              "run `omh refresh` to retry", file=sys.stderr)
+
+
 def command_update(args: argparse.Namespace) -> int:
     shortcut = getattr(args, "target", None)
     if shortcut:
@@ -967,11 +1008,16 @@ def command_update(args: argparse.Namespace) -> int:
                     "use --allow-downgrade only after reviewing the requested transition"
                 )
         before_source, target_source = _instruction_transition(repo, old, target)
+        target_harnesses = _harness_names_at_revision(repo, target, desired_harnesses(desired))
         if args.check:
             return 0
+        # Refuse unsafe receipt evidence before creating a rollback obligation.
+        for harness in target_harnesses:
+            validate_harness_receipts(home, harness)
 
         before = dict(manager)
         before["instructionsSource"] = before_source
+        before["desiredHarnesses"] = desired["harnesses"]
         target_payload = {
             "repository": recorded_repository,
             "revision": target,
@@ -980,6 +1026,7 @@ def command_update(args: argparse.Namespace) -> int:
             "channel": channel,
             "requestedRef": requested_ref,
             "instructionsSource": target_source,
+            "desiredHarnesses": list(target_harnesses),
         }
         operation = begin_operation(
             home,
@@ -988,6 +1035,11 @@ def command_update(args: argparse.Namespace) -> int:
             target=target_payload,
         )
         try:
+            # Older target managers compare persisted IDs literally, even when
+            # their CLI supports aliases. Journal before translating for them.
+            if list(target_harnesses) != desired["harnesses"]:
+                write_desired(home, target_harnesses, canonicalize=False)
+            translate_harness_receipts(home, target_harnesses)
             _git(repo, "checkout", "--detach", target, capture=False)
             update_operation(home, phase="checkout-switched")
             _bootstrap_tooling(home)
@@ -1077,8 +1129,9 @@ def command_resume_update(args: argparse.Namespace) -> int:
     )
     write_desired(
         home,
-        desired_harnesses(desired),
+        desired["harnesses"],
         channel=target["channel"],
+        canonicalize=False,
     )
     update_operation(home, phase="refreshing-harnesses")
     refresh_args = argparse.Namespace(
@@ -1099,7 +1152,6 @@ def command_resume_update(args: argparse.Namespace) -> int:
     targets = desired_harnesses(desired)
     for harness in targets:
         _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
-        _write_harness_state(home, harness)
     from install_oh_my_harness import write_launchers
 
     # Profile validation may fail; keep the old shim intact until it succeeds.
@@ -1108,6 +1160,7 @@ def command_resume_update(args: argparse.Namespace) -> int:
     ensure_user_path(home)
     write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
     finish_operation(home, outcome="success")
+    _finish_harness_name_migration(home, desired)
     print(f"updated oh-my-harness to {release} ({target['revision'][:12]})")
     return 0
 
@@ -1159,6 +1212,7 @@ def command_resume_rollback(args: argparse.Namespace) -> int:
     # A rollback restores the executable entry points as well as the checkout.
     # Do not retry PATH integration: that may be the update's original failure.
     write_launchers(home=home, repo=REPO_ROOT, dry_run=False)
+    write_desired(home, desired_harnesses(desired), channel=before["channel"])
     finish_operation(home, outcome="rolled-back", detail=args.detail)
     print(f"restored oh-my-harness revision {before['revision'][:12]}")
     return 0
@@ -1209,8 +1263,6 @@ def command_manager_repair(args: argparse.Namespace) -> int:
             print("would roll back the interrupted update before repairing harnesses")
             return 0
         command_recover(args)
-    from contextlib import nullcontext
-
     with nullcontext() if dry_run else ManagerLock(home):
         manager, desired = _state_context(home, persist=not dry_run, allow_degraded=True)
         installed = list(desired_harnesses(desired))
@@ -1251,7 +1303,7 @@ def command_manager_repair(args: argparse.Namespace) -> int:
                 _write_harness_state(home, harness)
                 if harness not in installed:
                     installed.append(harness)
-                    write_desired(home, installed)
+                write_desired(home, installed)
         if not dry_run:
             write_manager(
                 home, repository=manager["repository"], revision=manager["revision"],
@@ -1346,6 +1398,8 @@ def command_manager_uninstall(args: argparse.Namespace) -> int:
                 yes=True,
                 dry_run=False,
             )
+            for harness in installed:
+                validate_harness_receipts(home, harness)
             for harness in list(installed):
                 _remove_one(remove_args, home=home, harness=harness)
                 installed.remove(harness)

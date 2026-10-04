@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import tempfile
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from harness_registry import load_harness_registry
 from manager_paths import PRODUCT_NAME, state_path
 
 STATE_SCHEMA_VERSION = "2026-08-24"
@@ -132,6 +134,7 @@ def derive_initial_state(
     release_version: str,
     bundle_identity: str,
     persist: bool,
+    canonicalize: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     receipt = install_receipt(home)
     recorded_repository = receipt.get("repository")
@@ -156,7 +159,7 @@ def derive_initial_state(
     }
     desired = {
         "schemaVersion": STATE_SCHEMA_VERSION,
-        "harnesses": sorted(set(harnesses)),
+        "harnesses": list(canonical_harnesses(harnesses)) if canonicalize else sorted(set(harnesses)),
         "updatePolicy": {"channel": channel},
         "updatedAt": _now(),
     }
@@ -198,11 +201,20 @@ def load_or_initialize(
     return manager, desired
 
 
+def canonical_harnesses(harnesses: Iterable[str]) -> tuple[str, ...]:
+    """Normalize persisted aliases in memory; unknown IDs remain visible to status."""
+    aliases = load_harness_registry().aliases
+    return tuple(sorted({aliases.get(name, name) for name in harnesses}))
+
+
 def desired_harnesses(desired: dict[str, Any]) -> tuple[str, ...]:
-    return tuple(desired["harnesses"])
+    return canonical_harnesses(desired["harnesses"])
 
 
-def write_desired(home: Path, harnesses: Iterable[str], *, channel: str | None = None) -> dict[str, Any]:
+def write_desired(
+    home: Path, harnesses: Iterable[str], *, channel: str | None = None,
+    canonicalize: bool = True,
+) -> dict[str, Any]:
     current = _load_object(desired_file(home), label="desired harness state")
     assert current is not None
     _validate_desired_payload(current, path=desired_file(home))
@@ -210,9 +222,10 @@ def write_desired(home: Path, harnesses: Iterable[str], *, channel: str | None =
     if selected_channel not in {"stable", "main"}:
         raise SystemExit(f"unsupported update channel: {selected_channel}")
     payload = {
+        **current,
         "schemaVersion": STATE_SCHEMA_VERSION,
-        "harnesses": sorted(set(harnesses)),
-        "updatePolicy": {"channel": selected_channel},
+        "harnesses": list(canonical_harnesses(harnesses)) if canonicalize else sorted(set(harnesses)),
+        "updatePolicy": {**current["updatePolicy"], "channel": selected_channel},
         "updatedAt": _now(),
     }
     atomic_write_json(desired_file(home), payload)
@@ -259,6 +272,9 @@ def write_harness_receipt(
     bundle_identity: str,
     root: str,
 ) -> None:
+    registry = load_harness_registry()
+    harness = registry.resolve_id(harness)
+    receipts = _harness_receipts(home, harness)
     payload = {
         "schemaVersion": STATE_SCHEMA_VERSION,
         "harness": harness,
@@ -269,14 +285,66 @@ def write_harness_receipt(
         "root": root,
         "updatedAt": _now(),
     }
-    atomic_write_json(harness_file(home, harness), payload)
+    target = harness_file(home, harness)
+    atomic_write_json(target, payload)
+    for path in receipts:
+        if path != target:
+            path.unlink()
+
+
+def _harness_receipts(home: Path, harness: str) -> tuple[Path, ...]:
+    """Validate every current/legacy receipt before replacing or deleting any."""
+    registry = load_harness_registry()
+    canonical = registry.resolve_id(harness)
+    parent = state_root(home) / HARNESS_STATE_DIR
+    if parent.exists() or parent.is_symlink():
+        metadata = parent.lstat()
+        if (not stat.S_ISDIR(metadata.st_mode)
+                or getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            raise SystemExit(f"harness receipt parent must be an ordinary directory: {parent}")
+    paths = []
+    for name in (canonical, *registry.harnesses[canonical].aliases):
+        path = harness_file(home, name)
+        if not path.exists() and not path.is_symlink():
+            continue
+        metadata = path.lstat()
+        if (not stat.S_ISREG(metadata.st_mode)
+                or getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            raise SystemExit(f"harness receipt is not an ordinary file: {path}")
+        payload = _load_object(path, label="harness receipt")
+        assert payload is not None
+        if (payload.get("schemaVersion") != STATE_SCHEMA_VERSION
+                or payload.get("harness") not in (canonical, *registry.harnesses[canonical].aliases)):
+            raise SystemExit(f"harness receipt identity is invalid; preserved: {path}")
+        paths.append(path)
+    return tuple(paths)
+
+
+def validate_harness_receipts(home: Path, harness: str) -> None:
+    _harness_receipts(home, harness)
+
+
+def translate_harness_receipts(home: Path, target_names: Iterable[str]) -> None:
+    """Prepare equivalent receipt names for a journaled handoff to an older CLI."""
+    registry = load_harness_registry()
+    for target_name in target_names:
+        canonical = registry.resolve_id(target_name)
+        if target_name == canonical:
+            continue
+        receipts = _harness_receipts(home, canonical)
+        if not receipts:
+            continue
+        payload = _load_object(receipts[0], label="harness receipt")
+        assert payload is not None
+        target = harness_file(home, target_name)
+        atomic_write_json(target, {**payload, "harness": target_name})
+        for path in receipts:
+            if path != target:
+                path.unlink()
 
 
 def remove_harness_receipt(home: Path, harness: str) -> None:
-    path = harness_file(home, harness)
-    if path.exists():
-        if path.is_symlink() or not path.is_file():
-            raise SystemExit(f"harness receipt is not an ordinary file: {path}")
+    for path in _harness_receipts(home, harness):
         path.unlink()
 
 

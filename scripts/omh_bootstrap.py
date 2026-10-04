@@ -77,11 +77,22 @@ def _is_manager_repair(arguments: list[str]) -> bool:
     return bool(arguments) and (arguments[0] == "repair" or arguments[:2] == ["manager", "repair"])
 
 
+def _has_long_option(arguments: list[str], option: str) -> bool:
+    """Recognize argparse's option prefixes, but not positional tokens after --."""
+    for argument in arguments:
+        if argument == "--":
+            break
+        if len(argument) > 2 and option.startswith(argument):
+            return True
+    return False
+
+
 def _is_help_request(arguments: list[str]) -> bool:
     for argument in arguments:
         if argument == "--":
             break
-        if argument in {"-h", "--help", "-Help"}:
+        if argument in {"-h", "--help", "-Help"} or (
+                len(argument) > 2 and "--help".startswith(argument)):
             return True
     return False
 
@@ -208,6 +219,38 @@ omh manager repair          Compatibility spelling of omh repair
 Runtime is not bootstrapped for help. Run omh repair to restore it.""")
 
 
+def _read_only_runtime(home: Path, cli: Path, arguments: list[str], env: dict[str, str]) -> int:
+    """Inspect with the existing runtime only; never repair as a side effect."""
+    python = _venv_python(home)
+    reason = None
+    if not cli.is_file():
+        reason = "managed checkout is unavailable"
+    elif not python.is_file():
+        reason = "tooling Python is unavailable"
+    else:
+        try:
+            probe = subprocess.run(
+                [str(python), "-B", "-c",
+                 "import sys, yaml, jsonschema; from pathlib import Path; "
+                 "sys.exit(sys.version_info < (3, 11) or "
+                 "Path(sys.prefix).resolve() != Path(sys.argv[1]).resolve())",
+                 str(home / "venv")],
+                env=env, capture_output=True, text=True,
+            )
+            if probe.returncode:
+                reason = "tooling Python or its dependencies failed the read-only health check"
+        except OSError:
+            reason = "tooling Python cannot start"
+    if reason:
+        message = reason + "; run `omh repair` to restore it. No runtime repair was attempted."
+        if _has_long_option(arguments, "--json") and arguments[0] in {"status", "version"}:
+            print(json.dumps({"product": "oh-my-harness", "home": str(home),
+                              "error": "runtime_unavailable", "message": message}, sort_keys=True))
+        print(message, file=sys.stderr)
+        return 1
+    return subprocess.run([str(python), "-B", str(cli), "--home", str(home), *arguments], env=env).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if len(arguments) < 2 or arguments[0] != "--home":
@@ -216,15 +259,19 @@ def main(argv: list[str] | None = None) -> int:
     command_arguments = arguments[2:]
     # A caller may override the launcher home using the public global option.
     while command_arguments:
-        if command_arguments[0] == "--home":
+        option, separator, value = command_arguments[0].partition("=")
+        # These are the unambiguous prefixes accepted by the public parser;
+        # --h is ambiguous with --help and must not select a manager home.
+        if option not in {"--ho", "--hom", "--home"}:
+            break
+        if not separator:
             if len(command_arguments) < 2:
                 raise SystemExit("--home requires an absolute path")
             selected_home = command_arguments[1]
             command_arguments = command_arguments[2:]
-        elif command_arguments[0].startswith("--home="):
-            selected_home = command_arguments.pop(0).split("=", 1)[1]
         else:
-            break
+            selected_home = value
+            command_arguments = command_arguments[1:]
     home = Path(selected_home).expanduser()
     if not home.is_absolute():
         raise SystemExit(f"manager home must be absolute: {home}")
@@ -237,23 +284,30 @@ def main(argv: list[str] | None = None) -> int:
     if help_request:
         if cli.is_file() and tooling_python.is_file():
             completed = subprocess.run([
-                str(tooling_python), str(cli), "--home", str(home),
+                str(tooling_python), "-B", str(cli), "--home", str(home),
                 *("--help" if arg == "-Help" else arg for arg in command_arguments),
-            ])
+            ], env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", GIT_OPTIONAL_LOCKS="0"))
             return completed.returncode
         _fallback_help()
         return 0
     _require_supported_python()
     repair = _is_manager_repair(command_arguments)
-    dry_run = "--dry-run" in command_arguments
+    # argparse accepts unambiguous long-option prefixes. Conservatively treat
+    # every dry-run prefix as read-only, leaving validity checks to the CLI.
+    dry_run = _has_long_option(command_arguments, "--dry-run")
     if repair and dry_run:
         _repair_checkout(home, force="--reclone" in command_arguments, dry_run=True)
         print("would check/rebuild tooling, restore launchers and user PATH, recover an interrupted update, then repair and check selected harnesses")
         return 0
+    read_only = bool(command_arguments) and command_arguments[0] in {"status", "version", "check", "doctor"}
+    if read_only or dry_run:
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", GIT_OPTIONAL_LOCKS="0")
+    if read_only:
+        return _read_only_runtime(home, cli, command_arguments, env)
     if dry_run:
         # A preview must not run pip, create a venv, or acquire a creating lock.
         executable = tooling_python if tooling_python.is_file() else Path(sys.executable)
-        return subprocess.run([str(executable), str(cli), "--home", str(home), *command_arguments]).returncode
+        return subprocess.run([str(executable), "-B", str(cli), "--home", str(home), *command_arguments], env=env).returncode
     with _mutation_lock(home):
         if repair:
             _repair_checkout(home, force="--reclone" in command_arguments)
@@ -262,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
         command = [sys.executable, str(bootstrap), "--venv", str(home / "venv")]
         if repair and "--rebuild" in command_arguments:
             command.append("--rebuild")
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, stdout=sys.stderr)
     if not tooling_python.is_file():
         raise SystemExit(f"tooling Python is unavailable after bootstrap: {tooling_python}")
     env = dict(os.environ)

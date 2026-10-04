@@ -124,6 +124,27 @@ class InstallerRecoveryTests(unittest.TestCase):
         self.assertEqual((self.home / "state/desired.json").read_bytes(), desired)
         self.path.assert_not_called()
 
+    def test_repair_and_reinstall_allow_alias_convergence_and_preserve_user_policy(self):
+        for mode in ("--repair", "--reinstall"):
+            path = self.home / "state/desired.json"
+            original = json.loads(path.read_text())
+            original["harnesses"] = ["copilot-cli", "gemini-cli", "zcode"]
+            original["note"] = "user metadata"
+            path.write_text(json.dumps(original))
+            receipt = (self.home / "state/install.json").read_bytes()
+
+            def child(command):
+                payload = json.loads(path.read_text())
+                payload["harnesses"] = ["copilot", "gemini", "zcode"]
+                payload["updatedAt"] = "changed"
+                path.write_text(json.dumps(payload))
+
+            with self.subTest(mode=mode), mock.patch.object(installer, "run", side_effect=child):
+                self.invoke(mode, "--harness", "copilot-cli", "--no-path")
+            expected = {**original, "harnesses": ["copilot", "gemini", "zcode"]}
+            self.assertEqual(json.loads(path.read_text()), expected)
+            self.assertEqual((self.home / "state/install.json").read_bytes(), receipt)
+
     def test_reinstall_preserves_user_files_and_legacy_rewritten_receipts(self):
         runtime = self.home / "venv"
         runtime.mkdir()
@@ -314,7 +335,10 @@ class InstallerRecoveryTests(unittest.TestCase):
             omh.command_manager_repair(args)
         self.assertEqual(refresh.call_count, 2)
         self.assertEqual((self.home / "state/install.json").read_bytes(), receipt)
-        self.assertEqual((self.home / "state/desired.json").read_bytes(), desired_bytes)
+        current = json.loads((self.home / "state/desired.json").read_bytes())
+        previous = json.loads(desired_bytes)
+        self.assertEqual(current["harnesses"], ["copilot", "zcode"])
+        self.assertEqual(current["updatePolicy"], previous["updatePolicy"])
 
 
 if __name__ == "__main__":
