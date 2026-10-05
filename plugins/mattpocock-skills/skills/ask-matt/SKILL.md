@@ -27,6 +27,7 @@ Recommend the smallest useful entrypoint for the user's task. Reuse the current 
 | Transfer context to another session, directory or person | `/handoff` |
 | Learn a subject over several sessions | `/teach` |
 | Write or revise agent instructions | `/writing-for-agents` |
+| Review a coding session for environment or process improvements | `/retro`, only when the user selects it |
 
 Choose documentation mode because decisions need to persist, not merely because a working directory exists. Use a prototype where its question and code belong; it does not require a new directory or a round-trip handoff.
 

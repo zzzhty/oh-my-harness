@@ -373,6 +373,23 @@
       ],
       "supporting_skills": []
     },
+    "mattpocock-skills:retro": {
+      "role": "specialized",
+      "logical_group": "explicit-workflows",
+      "aliases": [
+        {
+          "value": "mattpocock-skills:retro",
+          "kind": "skill_name",
+          "match": "phrase"
+        },
+        {
+          "value": "/retro",
+          "kind": "phrase",
+          "match": "token"
+        }
+      ],
+      "supporting_skills": []
+    },
     "mattpocock-skills:tdd": {
       "role": "specialized",
       "logical_group": "implicit-primitives",

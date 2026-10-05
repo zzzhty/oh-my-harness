@@ -22,3 +22,10 @@
 - 保留原始 v1.2.3 派生归因；新增 pr 单独记录 Matt / HumanLayer 来源和 MIT 通知。现有用户术语文件、历史记录、全工作树审阅及授权边界保持。
 - 源修改已在本地应用；独立静态语义/风险审查、受影响 catalog/projection 与插件测试、三包校验、现有分发身份检查通过。完整 root suite 剩 1 个在未修改基线同样复现的 zsh 空 PATH 环境失败，不能称全绿；详细命令、计数及限制见本轮记录。
 - 未解决：独立 `retro` 与 `implement-spec` 的 6 个原始路径继续 defer；完整 root 检查的宿主环境限制仍待复验或单独解决。不以审阅基线推进冒充采纳或验证完成。
+
+## 2026-10-05 补充：按用户选择加入显式 retro
+
+- 起点为 PR #23 的 `6fd0430819f5b6817b10b56a6521ecd1c17cd3f2`。用户明确选择后，将同一 v1.3.1 的三个 retro 路径从 defer 改为 adapt；上方初次检查点保留作历史证据。
+- 当前 114 条分类为 adopt 4、adapt 18、skip 89、defer 3；当前 Matt catalog 为 20。仅 implement-spec 的三个路径继续 defer。
+- retro 是授权会话证据上的可选提案/no-change 入口，与 Watcher skill-maintainer 职责不同；不搜索私有会话/cache，不自动改 source/hooks/CI/权限，不发布、不创建后台任务，不增加原交付门禁。来源、静态反例和补充验收见[详细记录](mattpocock-v1.3.1-review.md#2026-10-05-补充显式会话复盘-retro)。
+- 补充已通过独立静态语义/权限审查、全部 owning checks 及生成身份检查；root 353 tests 中剩 1 个既有 zsh 空 PATH 宿主失败（345 passed、7 skipped）。精确补充 head 的远端 CI 以 PR #23 Evidence 为准；未执行用户安装、合并或部署。

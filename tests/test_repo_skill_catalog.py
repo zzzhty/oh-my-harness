@@ -170,12 +170,12 @@ class RepoSkillCatalogTests(unittest.TestCase):
             source.name: source for source in catalog.sources
             if source.plugin == "mattpocock-skills"
         }
-        self.assertEqual(len(selected), 19)
+        self.assertEqual(len(selected), 20)
         self.assertNotIn("resolving-merge-conflicts", selected)
         self.assertIn("pr", selected)
         explicit_workflows = {
             "ask-matt", "grill-me", "grill-with-docs", "handoff", "implement",
-            "improve-codebase-architecture", "teach", "to-spec", "triage",
+            "improve-codebase-architecture", "retro", "teach", "to-spec", "triage",
         }
         for name, source in selected.items():
             with self.subTest(skill=name):

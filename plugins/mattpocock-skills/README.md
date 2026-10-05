@@ -1,6 +1,6 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 19 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 20 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
@@ -17,7 +17,7 @@ Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
 | Discuss and design | grilling, grill-me, grill-with-docs, domain-modeling, codebase-design, improve-codebase-architecture |
 | Implement and verify | implement, code-review, tdd, diagnosing-bugs, pr |
 | Work with issues and context | triage, to-spec, handoff |
-| Investigate, learn and maintain | research, prototype, teach, writing-for-agents |
+| Investigate, learn and maintain | research, prototype, teach, writing-for-agents, retro |
 
 Core/specialized labels in the selection proposal are maintenance priorities, not additional activation modes. Skills and their referenced resources live under `skills/`; `agents/openai.yaml` retains native Codex metadata, and existing frontmatter flags support the other harnesses that consume them.
 
@@ -27,7 +27,9 @@ The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder, 
 
 The setup entrypoint and its tracker, triage-label and domain-convention templates are retired. Existing repository configuration remains usable by the retained workflows, and `ask-matt` continues to route to the remaining skills. Restore the retired source and its consumers from Git history if a rollback is needed, then follow the normal validation and generation workflow.
 
-`pr` prepares concise PR content using the repository template, actual verification evidence, and proportional rollback/impact guidance. It does not authorize publication or impose a mandatory post-review workflow. Standalone `retro` and `implement-spec` remain deferred.
+`pr` prepares concise PR content using the repository template, actual verification evidence, and proportional rollback/impact guidance. It does not authorize publication or impose a mandatory post-review workflow. Standalone `implement-spec` remains deferred.
+
+`retro` is an explicit-only session retrospective adapted from Matt Pocock's v1.3.1 [skill](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/skills/engineering/retro/SKILL.md) and [guide](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/docs/engineering/retro.md), under the included MIT license. Invoke `/retro` to propose environment or process improvements from authorized session evidence. It can conclude no change is needed; it does not modify the environment, expand access, or become a mandatory delivery step. Watcher `skill-maintainer` retains ownership of target-skill proposals from Watcher logs.
 
 `domain-modeling` follows existing glossary and context-map owners, including `GLOSSARY.md`, `CONTEXT.md`, and custom paths. New owners default to `GLOSSARY.md` / `GLOSSARY-MAP.md`; existing user documents are not renamed by this update.
 

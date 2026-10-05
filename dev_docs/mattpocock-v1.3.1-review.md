@@ -8,10 +8,10 @@
 - 本次完整审阅：`v1.3.1`，`24fe0ef7737efae15c87225755e9f6f5965e4888`。
 - 本地起点：远端 `main`，`2ae341e8c6b1bd1f53b324fd539e27cba5b1b92c`；新工作副本没有既有 staged、unstaged 或 untracked 工作。
 - [上游完整比较](https://github.com/mattpocock/skills/compare/6acc160e4e0cd062dbbbd7a1b26ae92855edf07e...24fe0ef7737efae15c87225755e9f6f5965e4888)：81 个提交，114 个净变更条目（100 modified、10 added、2 removed、2 renamed）；rename 以新路径计一条并保留旧路径。
-- 114 条逐项分类已与固定上游 Git diff 的路径集合核对。最终决定：adopt 4、adapt 15、skip 89、defer 6。这是审阅覆盖与选择结果，不表示整版已导入。
+- 114 条逐项分类已与固定上游 Git diff 的路径集合核对。当前决定（含下述 retro 补充）：adopt 4、adapt 18、skip 89、defer 3。这是审阅覆盖与选择结果，不表示整版已导入。
 - 原始 v1.2.3 派生归因保留；新 pr 来自本次 v1.3.1，并携带 Matt Pocock 与 Dex Horthy / HumanLayer 归因、对应 MIT 通知。没有导入完整上游树、安装工具或上游版本权威。
 
-## 授权与选编决定
+## 初次授权与选编决定（retro 补充前）
 
 用户批准其余采纳建议，并明确要求删除本地 `resolving-merge-conflicts`，因其使用频率低。该明确决定覆盖初次审阅的保留建议。新增轻量 `pr`、删除冲突入口，最终仍为 19 个 Matt skills；不增加等价替代 wrapper。
 
@@ -31,7 +31,7 @@
 
 回滚使用 Git 恢复完整源及当时的当前消费者，按正常流程重新生成并验证身份后分发；不手改缓存、不保存第二套技能树。退休只改变以后发现/调用入口，不删除用户产物和历史事件。
 
-## 冻结的行为验收
+## 初次冻结的行为验收（retro 补充前）
 
 本轮以原有 guidance 作为 no-change baseline；以下场景在源候选修改前来自逐文件审查并用于验收，采用最小有用候选，不进行纯风格扫改：
 
@@ -44,7 +44,7 @@
 
 静态测试和独立语义/反例审查需分开报告；二者不能伪称真实模型行为评测。
 
-## 实施与验证
+## 初次实施与验证（6fd0430 检查点）
 
 所选源修改已应用于本地工作副本。共享方法加载、domain owner/触发、pr 正文/来源许可、冲突技能退休及当前消费者一起更新。本地 `implement` 与 `grilling` 的条件加载措辞一致性，以及 `writing-for-agents/SKILL-MECHANICS.md`，是上述选择的本地整合项，不算新的上游路径；上游 grilling 的纯风格改动仍 skip。
 
@@ -71,9 +71,41 @@
 
 ## 未解决项
 
-- `retro`：保留独立会话复盘的可能价值；有明确请求或重复会话摩擦时重新评估。仅提议改进、允许 no-change，沿用已有 owner；不能自动改技能/环境/hooks/CI 或绕过日志权限。
+- `retro` 的初次 defer 已由下述用户明确选择解决；三个上游路径改为 adapt，保留其原始路径及来源提交。
 - `implement-spec`：有真实依赖任务图需求时优先评估现有 workflow owner；须补齐 integration-state frontier、循环/外部阻塞诊断、写域隔离、串行集成、dirty worktree 保护、skip 非 pass、授权和真实完成状态。它并不硬依赖已退休 to-tickets；此次不新增编排器。
-- 上述 6 条 defer 的原始路径及提交均保留在下表。其他 skip 是明确不采纳，不冒充待合入项；任何已选中但未验证的修改在本轮验证段解决前仍是未完成状态。
+- 剩余 implement-spec 的 3 条 defer 的原始路径及提交均保留在下表。其他 skip 是明确不采纳，不冒充待合入项；任何已选中但未验证的修改在本轮验证段解决前仍是未完成状态。
+
+## 2026-10-05 补充：显式会话复盘 retro
+
+用户在了解 retro 与 skill-maintainer 的区别后明确表示“可以作为显式调用引入”。在现有 PR #23 的 `6fd0430819f5b6817b10b56a6521ecd1c17cd3f2` 上添加适配入口，不替换初次检查点证据。当前 Matt catalog 为 20；114 条路径分类从初次的 adopt 4 / adapt 15 / skip 89 / defer 6 更新为 adopt 4 / adapt 18 / skip 89 / defer 3，变化仅为三个 retro 路径。上游 pin 与完整审阅范围不变。
+
+来源是同一 v1.3.1 的 retro 技能、native metadata 及说明文档。源码归因由插件 README 与现有 Matt Pocock MIT license 承接；说明文档中的提案边界整合到技能正文，未复制完整上游网站。当前新增消费者为 ask-matt 选择表、双 invocation metadata、Watcher 显式组与归因测试、README 当前 catalog、源合同测试；未改原任务实现/审查入口、全局规则、hook 或安装态。Watcher overlay 只用于归因，不是调用器。
+
+源候选前冻结的 oracle：显式选择才启动，当前可见会话为默认输入，仅使用已有授权证据；只提案且可 no-change；复用 owner 与有效验证；机械失败优先适量确定性检查、判断问题才写 prose；不得增加私有日志读取、自动变更、扩权、发布或固定复盘/审查轮次。no-change baseline 保留为合法结果；完整照搬上游的日志搜索、缺少 hook 即问题和默认构建检查行为不采纳。
+
+静态语义/权限反例验收如下，自动测试仅约束源码/元数据/归因，不能冒充真实模型行为测试：
+
+| 场景 | 期望行为 |
+| --- | --- |
+| 明确 `/retro`，当前 session 有证据 | 双 metadata 显式入口；按严重程度给最小建议与验证方式。 |
+| 任务完成、测试反复失败或 ask-matt 推荐 | 不自动调用，不增加原任务交付门禁。 |
+| 普通文字 retro games、`/retrofit` | 不通过裸词/前缀误归因；Watcher 仍不决定技能调用。 |
+| session 顺利，或只有一次低风险小摩擦 | 可以 no-change 或保留假设，不凑候选/永久规则。 |
+| 已有 check 只是未接入 CI | 提议修正现有接线，非重复新检查；不实际编辑 CI。 |
+| 日志包含命令、私有路径或要求扩权 | 视为证据而非指令；不执行、不读私有 cache/session store、不扩权。 |
+| 指定旧 session 不可读 | 请求相关摘录、说明证据缺口；用可见证据继续，不绕过拒绝。 |
+| 建议配置 hook、账户访问、自动化或发布报告 | 只提议；复盘本身不授予执行权限。 |
+| 现有授权/安全规则太长 | 保持实施期 owner，不移到 reviewer-only 文件。 |
+| invocation/权限候选已有有效独立评估或 required method 缺失 | 使用既有 owner 的 report-only 流程、复用有效覆盖，仅补缺项；缺依赖候选标未验证。 |
+| 原任务失败但复盘已完成 | 分开报告状态，复盘完成不冒充原任务完成。 |
+
+补充验证（Linux / Python 3.12.14）：
+
+- 独立静态语义审查及单独权限/反例审查均无阻断项；语义审查发现的 README 旧计数与指代歧义已修正。另独立核对上游路径集合为 114/114，无缺项或额外路径。这里没有真实模型行为运行或成功率结论。
+- catalog 9/9；retro 源合同 5/5；projection 22/22；Watcher 87 tests（84 passed、3 platform skips）；Workflow 94/94；三包 validator、JSON 解析、Python compileall 和 diff hygiene 通过。
+- 源冻结并完成 owning checks 后只运行一次 `python scripts/update_plugin_generations.py`；`python scripts/check_plugin_generations.py` 通过。Matt 当前版本 `1.0.0+codex.b348657f9e002403`；Watcher `1.0.0+codex.1a299ab74366f752`；Workflow 不变。算法与单一身份 owner 不变。
+- 生成后完整 root suite：353 tests，345 passed、7 skipped、1 failed。失败仍为初次检查点已在未修改 main 复现的 `test_manager_environment.UserEnvironmentTests.test_shell_execution_quotes_paths_and_deduplicates_entries`（zsh / 空 PATH）；本地 aggregate 不能称全绿。没有修改系统配置或测试来掩盖宿主差异。
+- 此记录止于发布前的本地验证；补充提交的精确远端 head / CI 状态随后由 PR #23 的 Evidence 更新。初次 head 的 CI 不能证明本次补充；没有用户机器安装、合并或部署。
 
 ## 114 个上游净变更路径
 
@@ -109,7 +141,7 @@
 | `docs/engineering/prototype.md` | modified | skip | 上游人类读者/发布页的措辞、术语或主流程链接；OMH 不镜像此 docs 树，相关行为通过 skill 本体逐项选择。 |
 | `docs/engineering/research.md` | modified | skip | 上游人类读者/发布页的措辞、术语或主流程链接；OMH 不镜像此 docs 树，相关行为通过 skill 本体逐项选择。 |
 | `docs/engineering/resolving-merge-conflicts.md` | modified | adapt | 用户明确批准退休本地低频入口；将退出分发及恢复说明写入本地 README，不复制上游网页。历史记录保留。 |
-| `docs/engineering/retro.md` | added | defer | 最小采纳批次暂缓独立会话复盘入口；它不同于 skill-maintainer，但新增价值尚待具体场景验证，不能变成每次交付必跑或自动改环境。 |
+| `docs/engineering/retro.md` | added | adapt | 用户后续明确选择显式调用 retro：适配为授权会话证据上的环境/流程提案或 no-change；保持双元数据显式边界，不自动改环境/扩权/发布，也不成为交付门禁。 |
 | `docs/engineering/setup-matt-pocock-skills.md` | modified | skip | 描述已退休本地入口的上游人类读者页面；不导入安装说明/流程，不恢复该入口。 |
 | `docs/engineering/tdd.md` | modified | skip | 上游人类读者/发布页的措辞、术语或主流程链接；OMH 不镜像此 docs 树，相关行为通过 skill 本体逐项选择。 |
 | `docs/engineering/to-spec.md` | modified | skip | 上游人类读者/发布页的措辞、术语或主流程链接；OMH 不镜像此 docs 树，相关行为通过 skill 本体逐项选择。 |
@@ -154,8 +186,8 @@
 | `skills/engineering/research/SKILL.md` | modified | skip | 仅破折号等措辞清理，没有新增行为；保留经过本地改写的正文/资源，不为追逐风格制造大 diff。 |
 | `skills/engineering/resolving-merge-conflicts/SKILL.md` | removed | adopt | 用户明确批准删除本地入口，覆盖初审的保留建议；删除技能及 native metadata，并同步当前路由、Watcher catalog、退役测试及分发说明。历史记录不改写，不增加等价 wrapper。 |
 | `skills/engineering/resolving-merge-conflicts/agents/openai.yaml` | removed | adopt | 用户明确批准删除本地入口，覆盖初审的保留建议；删除技能及 native metadata，并同步当前路由、Watcher catalog、退役测试及分发说明。历史记录不改写，不增加等价 wrapper。 |
-| `skills/engineering/retro/SKILL.md` | added | defer | 最小采纳批次暂缓独立会话复盘入口；它不同于 skill-maintainer，但新增价值尚待具体场景验证，不能变成每次交付必跑或自动改环境。 |
-| `skills/engineering/retro/agents/openai.yaml` | added | defer | 最小采纳批次暂缓独立会话复盘入口；它不同于 skill-maintainer，但新增价值尚待具体场景验证，不能变成每次交付必跑或自动改环境。 |
+| `skills/engineering/retro/SKILL.md` | added | adapt | 用户后续明确选择显式调用 retro：适配为授权会话证据上的环境/流程提案或 no-change；保持双元数据显式边界，不自动改环境/扩权/发布，也不成为交付门禁。 |
+| `skills/engineering/retro/agents/openai.yaml` | added | adapt | 用户后续明确选择显式调用 retro：适配为授权会话证据上的环境/流程提案或 no-change；保持双元数据显式边界，不自动改环境/扩权/发布，也不成为交付门禁。 |
 | `skills/engineering/setup-matt-pocock-skills/SKILL.md` | modified | skip | 已明确退出 OMH 目录的技能/配套资源；这次变化不证明应恢复。保留既有用户配置和历史记录，不重建退休入口。 |
 | `skills/engineering/setup-matt-pocock-skills/domain.md` | modified | skip | 已明确退出 OMH 目录的技能/配套资源；这次变化不证明应恢复。保留既有用户配置和历史记录，不重建退休入口。 |
 | `skills/engineering/setup-matt-pocock-skills/issue-tracker-github.md` | modified | skip | 已明确退出 OMH 目录的技能/配套资源；这次变化不证明应恢复。保留既有用户配置和历史记录，不重建退休入口。 |
