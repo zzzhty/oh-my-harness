@@ -21,9 +21,9 @@ Recommend the smallest useful entrypoint for the user's task. Reuse the current 
 | Implement a spec or tickets | `/implement` |
 | Build a behavior test-first | `/tdd` |
 | Review changes against requirements and standards | `/code-review` |
+| Write a PR body from changes and verification evidence | `/pr` |
 | Answer a design question with runnable code | `/prototype` |
 | Gather primary-source evidence | `/research` |
-| Resolve an in-progress merge or rebase conflict | `/resolving-merge-conflicts` |
 | Transfer context to another session, directory or person | `/handoff` |
 | Learn a subject over several sessions | `/teach` |
 | Write or revise agent instructions | `/writing-for-agents` |

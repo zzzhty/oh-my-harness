@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -160,6 +161,48 @@ class RepoSkillCatalogTests(unittest.TestCase):
         )
         for source in catalog.sources:
             self.assertTrue((source.path / "SKILL.md").is_file())
+
+    def test_matt_selection_preserves_native_invocation_boundaries(self) -> None:
+        import yaml
+
+        catalog = repo_skill_catalog.load_repo_skill_catalog()
+        selected = {
+            source.name: source for source in catalog.sources
+            if source.plugin == "mattpocock-skills"
+        }
+        self.assertEqual(len(selected), 19)
+        self.assertNotIn("resolving-merge-conflicts", selected)
+        self.assertIn("pr", selected)
+        explicit_workflows = {
+            "ask-matt", "grill-me", "grill-with-docs", "handoff", "implement",
+            "improve-codebase-architecture", "teach", "to-spec", "triage",
+        }
+        for name, source in selected.items():
+            with self.subTest(skill=name):
+                frontmatter = yaml.safe_load(
+                    (source.path / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+                )
+                native = yaml.safe_load(
+                    (source.path / "agents/openai.yaml").read_text(encoding="utf-8")
+                )
+                explicit = name in explicit_workflows
+                self.assertEqual(frontmatter.get("disable-model-invocation", False), explicit)
+                self.assertEqual(
+                    native.get("policy", {}).get("allow_implicit_invocation", True),
+                    not explicit,
+                )
+
+    def test_domain_modeling_resolves_the_current_glossary_reference(self) -> None:
+        source = repo_skill_catalog.load_repo_skill_catalog().by_name["domain-modeling"]
+        text = (source.path / "SKILL.md").read_text(encoding="utf-8")
+        references = re.findall(r"\[GLOSSARY-FORMAT\.md\]\(([^)]+)\)", text)
+        self.assertTrue(references)
+        glossary_format = (source.path / "GLOSSARY-FORMAT.md").resolve(strict=True)
+        for reference in references:
+            with self.subTest(reference=reference):
+                self.assertEqual((source.path / reference).resolve(strict=True), glossary_format)
+        self.assertNotIn("CONTEXT-FORMAT.md", text)
+        self.assertFalse((source.path / "CONTEXT-FORMAT.md").exists())
 
 
 if __name__ == "__main__":

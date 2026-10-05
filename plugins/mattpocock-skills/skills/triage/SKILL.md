@@ -73,7 +73,7 @@ Show counts and a one-line summary per item. Let the maintainer pick.
 
 3. **Verify the claim.** Before grilling or applying an outcome, reproduce bugs from the reporter's steps even when the feature already exists. For a PR, confirm the diff does what it claims; preserve current user work and use an isolated checkout when needed. For possible redundancy, check the full requested observable behavior, including reported failures and edge cases; finding related code alone cannot establish `already implemented`. Use relevant tests or commands within the authorized mode. Report confirmed behavior with evidence, failed checks, or insufficient detail (a strong `needs-info` signal), and revise the recommendation accordingly. Missing verification is not proof of redundancy.
 
-4. **Grill (if needed).** If the request needs fleshing out, use `/grilling` for open decisions. Use `/domain-modeling` when new durable knowledge needs recording and document changes are in scope.
+4. **Grill (if needed).** If the request needs fleshing out, load `grilling` through the active harness's supported skill-loading mechanism for open decisions. Separately load `domain-modeling` when new durable knowledge needs recording and document changes are in scope. If a required method is unavailable, report it and the blocked step. Compose these methods directly; do not invoke the explicit `grill-with-docs` wrapper or infer write or implementation permission from planning.
 
 5. **Apply the outcome:**
    - `ready-for-agent` — post an agent brief comment ([AGENT-BRIEF.md](AGENT-BRIEF.md)).

@@ -574,8 +574,8 @@ class SkillWatcherTests(unittest.TestCase):
         selected = {
             "ask-matt", "code-review", "codebase-design", "diagnosing-bugs",
             "domain-modeling", "grill-me", "grill-with-docs", "grilling", "handoff",
-            "implement", "improve-codebase-architecture", "prototype", "research",
-            "resolving-merge-conflicts", "tdd", "teach",
+            "implement", "improve-codebase-architecture", "pr", "prototype", "research",
+            "tdd", "teach",
             "to-spec", "triage", "writing-for-agents",
         }
         self.assertEqual(len(watcher_identities), 29)
@@ -590,11 +590,18 @@ class SkillWatcherTests(unittest.TestCase):
                 {"value": full_name, "kind": "skill_name", "match": "phrase"},
                 aliases,
             )
-            if skill_name in {"code-review", "implement", "research", "resolving-merge-conflicts", "to-spec", "writing-for-agents"}:
+            if skill_name in {"code-review", "implement", "research", "to-spec", "writing-for-agents"}:
                 self.assertIn(
                     {"value": skill_name, "kind": "slug", "match": "token"},
                     aliases,
                 )
+
+        pr_aliases = metadata["skills"]["mattpocock-skills:pr"]["aliases"]
+        self.assertNotIn("pr", {alias["value"] for alias in pr_aliases})
+        self.assertIn(
+            {"value": "pull request body", "kind": "phrase", "match": "phrase"},
+            pr_aliases,
+        )
 
         explicit_workflows = {
             "ask-matt",
@@ -691,6 +698,7 @@ class SkillWatcherTests(unittest.TestCase):
             for name in (
                 "to-questionnaire", "to-tickets", "wait-what", "wayfinder", "wizard",
                 "to-issues", "setup-matt-pocock-skills",
+                "resolving-merge-conflicts",
             )
         }
         self.assertTrue(retired_names.isdisjoint(watcher_identities))

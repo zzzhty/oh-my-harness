@@ -307,21 +307,52 @@ class SyncLayerTests(unittest.TestCase):
         )
         self.assertEqual(with_prune, 1)
 
-    def test_prune_removes_stale_managed_links_and_keeps_unmanaged_entries(self) -> None:
+    def test_prune_retires_conflict_projection_and_preserves_user_files(self) -> None:
         target_root = self.sandbox.target_root
-        target_root.mkdir(parents=True)
-        ghost = target_root / "ghost"
-        sync_agents_skills.create_projection_link(ghost, self.sandbox.foo)
+        retired = write_skill(
+            self.sandbox.repo_root / "plugins" / "mattpocock-skills",
+            "resolving-merge-conflicts",
+        )
+        before = sync_agents_skills.load_repo_skill_catalog(self.sandbox.repo_root)
+        sync_agents_skills.sync_layer(
+            before, target_root=target_root, dry_run=False, prune=True
+        )
+        stale = target_root / retired.name
+        self.assertEqual(stale.resolve(), retired.resolve())
         user_skill = target_root / "user-skill"
         user_skill.mkdir()
-        (user_skill / "SKILL.md").write_text("---\nname: user-skill\n---\n", encoding="utf-8")
+        sentinel = user_skill / "SKILL.md"
+        sentinel.write_text("user content", encoding="utf-8")
+        note = target_root / "notes.txt"
+        note.write_text("unrelated notes", encoding="utf-8")
+        (retired / "SKILL.md").unlink()
+        retired.rmdir()
+        after = sync_agents_skills.load_repo_skill_catalog(self.sandbox.repo_root)
+
+        self.assertNotIn(retired.name, after.by_name)
+        report = io.StringIO()
+        with contextlib.redirect_stdout(report):
+            status = sync_agents_skills.check_layer(
+                after, target_root=target_root, prune=True
+            )
+            sync_agents_skills.sync_layer(
+                after, target_root=target_root, dry_run=True, prune=True
+            )
+        self.assertEqual(status, 1)
+        self.assertIn(f"extra-managed: {stale}", report.getvalue())
+        self.assertTrue(sync_agents_skills.is_projection_link(stale))
 
         status = sync_agents_skills.sync_layer(
-            self.sandbox.catalog, target_root=target_root, dry_run=False, prune=True
+            after, target_root=target_root, dry_run=False, prune=True
         )
         self.assertEqual(status, 0)
-        self.assertFalse(ghost.exists() or sync_agents_skills.is_projection_link(ghost))
-        self.assertTrue(user_skill.is_dir())
+        self.assertFalse(os.path.lexists(stale))
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "user content")
+        self.assertEqual(note.read_text(encoding="utf-8"), "unrelated notes")
+        self.assertEqual(
+            sync_agents_skills.check_layer(after, target_root=target_root, prune=True),
+            0,
+        )
 
     def test_cleanup_removes_all_managed_links_and_exact_empty_residues(self) -> None:
         sync_agents_skills.sync_layer(
@@ -538,17 +569,23 @@ class RepositoryCatalogTests(unittest.TestCase):
             self.assertEqual(source.name, source.path.name)
             self.assertTrue((source.path / "SKILL.md").is_file())
 
-    def test_live_projection_exposes_every_tracked_skill_tree_entry(self) -> None:
+    def test_live_projection_exposes_every_present_skill_tree_entry(self) -> None:
         catalog = sync_agents_skills.load_repo_skill_catalog()
-        tracked = subprocess.run(
-            ["git", "-C", str(catalog.repo_root), "ls-files", "-z", "--", "plugins"],
+        listed = subprocess.run(
+            [
+                "git", "-C", str(catalog.repo_root), "ls-files", "-z",
+                "--cached", "--others", "--exclude-standard", "--", "plugins",
+            ],
             check=True,
             capture_output=True,
         ).stdout
-        tracked_paths = tuple(
+        # Validate the working source, including new files and excluding deletions,
+        # without changing the user's index or staging state.
+        present_paths = tuple(
             catalog.repo_root / raw.decode("utf-8")
-            for raw in tracked.split(b"\0")
+            for raw in listed.split(b"\0")
             if raw and b"/skills/" in raw
+            and os.path.lexists(catalog.repo_root / raw.decode("utf-8"))
         )
         with tempfile.TemporaryDirectory() as tmp:
             temporary_root = Path(tmp)
@@ -571,7 +608,7 @@ class RepositoryCatalogTests(unittest.TestCase):
                 )
                 self.assertEqual(projected_root.resolve(strict=True), source.path)
                 source_entries = tuple(
-                    path for path in tracked_paths if path.is_relative_to(source.path)
+                    path for path in present_paths if path.is_relative_to(source.path)
                 )
                 self.assertTrue(source_entries, source.path)
                 for source_entry in source_entries:
@@ -582,7 +619,7 @@ class RepositoryCatalogTests(unittest.TestCase):
                     self.assertEqual(projected_entry.resolve(strict=True), resolved_source)
                     checked_entries += 1
 
-        self.assertEqual(checked_entries, len(tracked_paths))
+        self.assertEqual(checked_entries, len(present_paths))
         self.assertGreater(checked_entries, len(catalog.sources))
 
 

@@ -297,6 +297,28 @@
         "mattpocock-skills:codebase-design"
       ]
     },
+    "mattpocock-skills:pr": {
+      "role": "specialized",
+      "logical_group": "implicit-primitives",
+      "aliases": [
+        {
+          "value": "mattpocock-skills:pr",
+          "kind": "skill_name",
+          "match": "phrase"
+        },
+        {
+          "value": "write a pr body",
+          "kind": "phrase",
+          "match": "phrase"
+        },
+        {
+          "value": "pull request body",
+          "kind": "phrase",
+          "match": "phrase"
+        }
+      ],
+      "supporting_skills": []
+    },
     "mattpocock-skills:prototype": {
       "role": "specialized",
       "logical_group": "implicit-primitives",
@@ -345,33 +367,6 @@
         },
         {
           "value": "primary source research",
-          "kind": "phrase",
-          "match": "phrase"
-        }
-      ],
-      "supporting_skills": []
-    },
-    "mattpocock-skills:resolving-merge-conflicts": {
-      "role": "specialized",
-      "logical_group": "implicit-primitives",
-      "aliases": [
-        {
-          "value": "mattpocock-skills:resolving-merge-conflicts",
-          "kind": "skill_name",
-          "match": "phrase"
-        },
-        {
-          "value": "resolving-merge-conflicts",
-          "kind": "slug",
-          "match": "token"
-        },
-        {
-          "value": "resolve merge conflicts",
-          "kind": "phrase",
-          "match": "phrase"
-        },
-        {
-          "value": "resolve rebase conflicts",
           "kind": "phrase",
           "match": "phrase"
         }

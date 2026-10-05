@@ -27,7 +27,7 @@ Give each designer the same raw problem evidence and a bounded technical brief (
 - Agent 3: "Optimise for the most common caller — make the default case trivial."
 - Agent 4 (if applicable): "Design around ports & adapters for cross-seam dependencies."
 
-Include both [SKILL.md](SKILL.md) vocabulary and CONTEXT.md vocabulary in the brief so each sub-agent names things consistently with the architecture language and the project's domain language.
+Include both [SKILL.md](SKILL.md) vocabulary and vocabulary from the project's existing domain terminology owner in the brief so each sub-agent names things consistently with the architecture language and the project's domain language. Follow the repository's glossary or context map and custom owner paths; reading this vocabulary does not require active domain modeling or document writes.
 
 Each alternative includes:
 
