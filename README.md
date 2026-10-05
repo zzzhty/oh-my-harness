@@ -45,7 +45,7 @@ refresh, repair, check, doctor, and remove.
 
 - `watcher`: observes Codex skill usage, audits documentation drift, and packages `doc-alignment`, `housekeeping`, `skill-maintainer`, and `skill-compressor` workflows.
 - `workflow`: packages reusable workflow skills, including continuation-ready long-running goal plans with frozen YOLO non-stops and runtime hard stops, SOP execution harnesses, prompt/strategy loops, explicit subagent orchestration, and standalone summaries.
-- `mattpocock-skills`: packages 19 locally maintained engineering skills derived from `mattpocock/skills`, with upstream attribution and native Codex metadata.
+- `mattpocock-skills`: packages 20 locally maintained engineering skills derived from `mattpocock/skills`, with upstream attribution and native Codex metadata.
 
 The old `plugins/doc-watcher` and `plugins/skill-watcher` source trees were removed after the Watcher migration. Git history remains the recovery path for those retired plugin sources.
 
@@ -230,11 +230,11 @@ $ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
 
 ## Matt Pocock Local Selection
 
-`plugins/mattpocock-skills/` is a locally maintained selection of 19 skills, derived from upstream v1.2.3. The plugin [README](plugins/mattpocock-skills/README.md) records attribution and the selected entrypoints; [ADR 0012](docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the migration from the complete upstream mirror.
+`plugins/mattpocock-skills/` is a locally maintained selection of 20 skills, originally derived from upstream v1.2.3 with selected v1.3.1 changes. The plugin [README](plugins/mattpocock-skills/README.md) records attribution and the selected entrypoints; [ADR 0012](docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the migration from the complete upstream mirror.
 
 Edit the selected source skills directly. For upstream releases, follow the [comparison and selection workflow](plugins/mattpocock-skills/README.md#upstream-updates) and retain review progress and deferred changes in the [upstream review record](dev_docs/mattpocock-upstream-review.md). `omh update` distributes the resulting local edition; it does not import Matt upstream releases. The complete-tree importer and upstream lock remain retired. Source catalog checks preserve cross-harness invocation policy consistency, and the shared plugin validator and distribution identity gates apply to Matt as to every other package.
 
-The selection removes to-questionnaire, to-tickets, wait-what, wayfinder, wizard and setup-matt-pocock-skills from installed discovery. Their direct entrypoints are no longer available; Git history and upstream retain their source. Existing logs and user-created artifacts are preserved. The remaining skill names and invocation policies are unchanged. All three plugins use repository `VERSION` plus their own content generation; activation must select that exact identity even though Matt's base changes from upstream 1.2.3 to local 1.0.0.
+The selection removes to-questionnaire, to-tickets, wait-what, wayfinder, wizard, setup-matt-pocock-skills and resolving-merge-conflicts from installed discovery. The lightweight `pr` helper replaces the retired conflict entry; it prepares content without granting publication authority. The explicit-only `retro` entrypoint adds optional session-level environment and process proposals, bringing the catalog to 20. The retired entrypoints are no longer available; Git history and upstream retain their source. Existing logs and user-created artifacts are preserved. The remaining skill names and invocation policies are unchanged. All three plugins use repository `VERSION` plus their own content generation; activation must select that exact identity even though Matt's base changes from upstream 1.2.3 to local 1.0.0.
 
 After reviewing the source diff, reconcile the complete Codex harness distribution:
 

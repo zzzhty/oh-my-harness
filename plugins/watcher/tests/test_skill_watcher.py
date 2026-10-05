@@ -574,11 +574,11 @@ class SkillWatcherTests(unittest.TestCase):
         selected = {
             "ask-matt", "code-review", "codebase-design", "diagnosing-bugs",
             "domain-modeling", "grill-me", "grill-with-docs", "grilling", "handoff",
-            "implement", "improve-codebase-architecture", "prototype", "research",
-            "resolving-merge-conflicts", "tdd", "teach",
+            "implement", "improve-codebase-architecture", "pr", "prototype", "research",
+            "retro", "tdd", "teach",
             "to-spec", "triage", "writing-for-agents",
         }
-        self.assertEqual(len(watcher_identities), 29)
+        self.assertEqual(len(watcher_identities), 30)
         self.assertEqual(
             {name.split(":", 1)[1] for name in watcher_identities if name.startswith("mattpocock-skills:")},
             selected,
@@ -590,11 +590,18 @@ class SkillWatcherTests(unittest.TestCase):
                 {"value": full_name, "kind": "skill_name", "match": "phrase"},
                 aliases,
             )
-            if skill_name in {"code-review", "implement", "research", "resolving-merge-conflicts", "to-spec", "writing-for-agents"}:
+            if skill_name in {"code-review", "implement", "research", "to-spec", "writing-for-agents"}:
                 self.assertIn(
                     {"value": skill_name, "kind": "slug", "match": "token"},
                     aliases,
                 )
+
+        pr_aliases = metadata["skills"]["mattpocock-skills:pr"]["aliases"]
+        self.assertNotIn("pr", {alias["value"] for alias in pr_aliases})
+        self.assertIn(
+            {"value": "pull request body", "kind": "phrase", "match": "phrase"},
+            pr_aliases,
+        )
 
         explicit_workflows = {
             "ask-matt",
@@ -603,6 +610,7 @@ class SkillWatcherTests(unittest.TestCase):
             "handoff",
             "implement",
             "improve-codebase-architecture",
+            "retro",
             "teach",
             "to-spec",
             "triage",
@@ -691,6 +699,7 @@ class SkillWatcherTests(unittest.TestCase):
             for name in (
                 "to-questionnaire", "to-tickets", "wait-what", "wayfinder", "wizard",
                 "to-issues", "setup-matt-pocock-skills",
+                "resolving-merge-conflicts",
             )
         }
         self.assertTrue(retired_names.isdisjoint(watcher_identities))
@@ -716,6 +725,32 @@ class SkillWatcherTests(unittest.TestCase):
             self.assertEqual(rows[name]["logical_group"], "")
         self.assertEqual(rows["mattpocock-skills:code-review"]["supporting_turns"], len(events))
         self.assertEqual(events, original_events)
+
+    def test_retro_attribution_is_narrow_and_does_not_compose_other_workflows(self) -> None:
+        metadata = discover_skill_metadata(REPO_ROOT)
+        retro = "mattpocock-skills:retro"
+        self.assertEqual(metadata["skills"][retro]["logical_group"], "explicit-workflows")
+        self.assertEqual(metadata["skills"][retro]["supporting_skills"], [])
+        for name, skill in metadata["skills"].items():
+            self.assertNotIn(retro, skill["supporting_skills"], name)
+        for prompt in ("Use $mattpocock-skills:retro for this session", "/retro", "Run /retro on this session"):
+            with self.subTest(prompt=prompt):
+                event = normalize_hook_payload(
+                    {"hook_event_name": "UserPromptSubmit", "prompt": prompt},
+                    repo_root=REPO_ROOT,
+                )
+                self.assertEqual(event["skill_attribution"]["primary"]["name"], retro)
+        # These checks cover attribution, not a model's decision to invoke a skill.
+        for prompt in (
+            "The task is complete", "The test failed again", "I like retro games",
+            "Review this coding session", "Open /retrospective or /retrofit",
+        ):
+            with self.subTest(prompt=prompt):
+                event = normalize_hook_payload(
+                    {"hook_event_name": "UserPromptSubmit", "prompt": prompt},
+                    repo_root=REPO_ROOT,
+                )
+                self.assertNotEqual((event["skill_attribution"]["primary"] or {}).get("name"), retro)
 
     def test_codex_hook_lifecycle_filters_summarizes_and_guards_skill_list(self) -> None:
         catalog = load_repo_skill_catalog(REPO_ROOT)

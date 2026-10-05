@@ -1,21 +1,23 @@
 ---
 name: domain-modeling
-description: Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.
+description: Build and sharpen a project's domain model. Use when discussing codebase domain terminology or a ubiquitous language, writing or editing a glossary, or recording or editing an architectural decision record (ADR).
 ---
 
 # Domain Modeling
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. Merely reading the project's existing domain terminology owner for vocabulary does not activate this skill or authorize documentation changes.
 
 ## File structure
 
-Resolve the existing glossary, context map, and ADR owners first, including differently named files. Defaults are a root `CONTEXT.md` and `docs/adr/`; for multiple contexts, follow the context map to each owner. Read [CONTEXT-FORMAT.md](CONTEXT-FORMAT.md) when creating or updating terminology or a context map. Create a missing owner lazily, only when useful content exists and the write is in scope.
+Resolve the existing glossary, context map, and ADR owners first. Follow repository configuration and links, including `GLOSSARY.md` / `GLOSSARY-MAP.md`, `CONTEXT.md` / `CONTEXT-MAP.md`, and custom paths. For multiple contexts, follow the map to the owner of the current topic. If files claim the same domain and the repository does not resolve ownership, clarify the owner before writing; in read-only work, report the ambiguity. Do not fork or synchronize competing glossaries.
+
+Read [GLOSSARY-FORMAT.md](GLOSSARY-FORMAT.md) when creating or updating terminology or a context map. Preserve existing document names, links and formats; renaming user documents requires a separately authorized migration. Only when no existing owner or convention applies, default to a root `GLOSSARY.md`, `GLOSSARY-MAP.md` for multiple contexts, and `docs/adr/` for decisions. Create a missing owner lazily, only when useful content exists and the write is in scope.
 
 ## During the session
 
 ### Challenge against the glossary
 
-When the user uses a term that conflicts with the existing language in `CONTEXT.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
+When the user uses a term that conflicts with the existing domain terminology owner, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
 
 ### Sharpen fuzzy language
 
@@ -29,15 +31,17 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
-### Update CONTEXT.md inline
+### Update the glossary owner inline
 
-When documentation changes are in scope and a term is resolved, update its existing glossary owner. In a read-only task, report the proposed term instead of writing. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When documentation changes are in scope and a term is resolved, update its existing glossary owner. In a read-only task, report the proposed term instead of writing. Follow the existing format, using [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md) for guidance.
 
-`CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
+Keep glossary definitions focused on domain language, without implementation details, specs or scratch notes. Preserve unrelated sections when the existing owner is a mixed-purpose document; do not repurpose or rewrite it as a pure glossary.
 
 ### Offer ADRs sparingly
 
-Record or propose an ADR when all three are true; reuse existing authorization to write one:
+For requested edits to an existing ADR, follow its owner, template and history/status conventions. In read-only work, propose the change instead of writing.
+
+Record or propose a new ADR when all three are true; reuse existing authorization to write one:
 
 1. **Hard to reverse** — the cost of changing your mind later is meaningful
 2. **Surprising without context** — a future reader will wonder "why did they do it this way?"

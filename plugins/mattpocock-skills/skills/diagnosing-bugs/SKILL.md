@@ -25,7 +25,7 @@ Use debugger inspection, targeted temporary instrumentation, or a measured exper
 
 ## Fix and verify
 
-Once the evidence supports a cause, apply the smallest fix. When a persistent regression test protects a distinct failure mode, first make it fail on the original behavior and then pass with the fix. Use the interface that reproduces the real failure pattern; a shallow test that cannot trigger it gives no assurance. Consult `/codebase-design` when the test boundary itself needs design.
+Once the evidence supports a cause, apply the smallest fix. When a persistent regression test protects a distinct failure mode, first make it fail on the original behavior and then pass with the fix. Use the interface that reproduces the real failure pattern; a shallow test that cannot trigger it gives no assurance. When the test boundary itself needs design, load `codebase-design` through the active harness's supported skill-loading mechanism. If unavailable, report the dependency and the blocked design step; independent read-only investigation can continue.
 
 Recheck the original scenario, not only a reduced fixture. If that verification is blocked, report the exact limit and available evidence instead of declaring the bug resolved. Preserve useful user artifacts and remove only the temporary instrumentation and disposable files created for this investigation.
 

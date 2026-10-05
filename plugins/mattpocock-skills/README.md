@@ -1,12 +1,12 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 19 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 20 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
-Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release `v1.2.3`, commit `6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`. Matt Pocock's original work remains attributed under the included [MIT license](LICENSE). Local revisions are maintained in this repository.
+Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release `v1.2.3`, commit `6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`. Matt Pocock's original work remains attributed under the included [MIT license](LICENSE). Local revisions are maintained in this repository. Selected changes from `v1.3.1` (`24fe0ef7737efae15c87225755e9f6f5965e4888`) are applied as recorded in the [upstream review record](../../dev_docs/mattpocock-upstream-review.md); this does not replace the original derivation baseline or mean the complete release was adopted. The new `pr` helper also retains [Dex Horthy / HumanLayer attribution and MIT notice](skills/pr/CREDITS.md).
 
-[ADR 0012](../../docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the ownership and distribution migration. Local versioning follows the repository `VERSION` plus the package content generation; the upstream release above records provenance, not the current package version.
+[ADR 0012](../../docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the ownership and distribution migration. Local versioning follows the repository `VERSION` plus the package content generation; the upstream revisions above record provenance and review coverage, not the current package version.
 
 ## Entry points
 
@@ -15,17 +15,23 @@ Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
 | Use | Skills |
 | --- | --- |
 | Discuss and design | grilling, grill-me, grill-with-docs, domain-modeling, codebase-design, improve-codebase-architecture |
-| Implement and verify | implement, code-review, tdd, diagnosing-bugs, resolving-merge-conflicts |
+| Implement and verify | implement, code-review, tdd, diagnosing-bugs, pr |
 | Work with issues and context | triage, to-spec, handoff |
-| Investigate, learn and maintain | research, prototype, teach, writing-for-agents |
+| Investigate, learn and maintain | research, prototype, teach, writing-for-agents, retro |
 
 Core/specialized labels in the selection proposal are maintenance priorities, not additional activation modes. Skills and their referenced resources live under `skills/`; `agents/openai.yaml` retains native Codex metadata, and existing frontmatter flags support the other harnesses that consume them.
 
 `grill-with-docs` remains an explicit user entrypoint. A workflow with its own planning trigger, such as long-running-goal preflight, directly composes `grilling` and `domain-modeling`; it does not implicitly invoke the wrapper or obtain implementation authority from planning. Both methods must be available, and document creation follows domain-modeling's existing ownership and value rules.
 
-The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder, wizard and setup-matt-pocock-skills. They are no longer callable in this distribution; their source remains in Git history and upstream. Existing user artifacts and historical logs are preserved.
+The local selection retires to-questionnaire, to-tickets, wait-what, wayfinder, wizard, setup-matt-pocock-skills and resolving-merge-conflicts. They are no longer callable in this distribution; their source remains in Git history and upstream. Existing user artifacts and historical logs are preserved.
 
 The setup entrypoint and its tracker, triage-label and domain-convention templates are retired. Existing repository configuration remains usable by the retained workflows, and `ask-matt` continues to route to the remaining skills. Restore the retired source and its consumers from Git history if a rollback is needed, then follow the normal validation and generation workflow.
+
+`pr` prepares concise PR content using the repository template, actual verification evidence, and proportional rollback/impact guidance. It does not authorize publication or impose a mandatory post-review workflow. Standalone `implement-spec` remains deferred.
+
+`retro` is an explicit-only session retrospective adapted from Matt Pocock's v1.3.1 [skill](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/skills/engineering/retro/SKILL.md) and [guide](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/docs/engineering/retro.md), under the included MIT license. Invoke `/retro` to propose environment or process improvements from authorized session evidence. It can conclude no change is needed; it does not modify the environment, expand access, or become a mandatory delivery step. Watcher `skill-maintainer` retains ownership of target-skill proposals from Watcher logs.
+
+`domain-modeling` follows existing glossary and context-map owners, including `GLOSSARY.md`, `CONTEXT.md`, and custom paths. New owners default to `GLOSSARY.md` / `GLOSSARY-MAP.md`; existing user documents are not renamed by this update.
 
 ## Maintenance
 
