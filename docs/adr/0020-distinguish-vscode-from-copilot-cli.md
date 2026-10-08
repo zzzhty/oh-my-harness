@@ -47,8 +47,12 @@ be discarded merely because Codex uses the marketplace driver. It retains
 shared resources, validates the existing changed/unmanaged ownership checks even
 when retaining them, and cleans resources when the last consumer is removed.
 Receipts are evidence checked against current plans, never trusted deletion paths.
-Path comparisons normalize parent aliases and platform case without resolving an
-instruction symlink to its source. Existing root safety checks still apply.
+Path comparisons use existing-directory filesystem identity for parent aliases,
+root drift and containment, with normalized lexical fallback for absent paths.
+This respects case-insensitive macOS filesystems without case-folding distinct
+Linux paths. Instruction identity compares the parent and directory entry, never
+following a final instruction symlink to its source. Existing root safety checks
+still apply.
 
 The manager removes consumers sequentially, so normal bulk removal and uninstall
 naturally clean up on the last consumer. A dry-run-only preview of previously

@@ -381,6 +381,64 @@ class VSCodeHarnessTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, 'receipt identity is invalid'):
             self.remove('editor-x')
 
+    def test_case_insensitive_parent_identity_simulation_retains_shared_files(self):
+        # Linux CI cannot create native APFS case aliases. Simulate only the
+        # samefile answers for one case-variant directory; leave path spelling
+        # untouched so the old POSIX normcase comparison would miss the share.
+        self.install('vscode', 'copilot')
+        alias = self.user / '.CoPiLoT'
+        original_samefile = os.path.samefile
+        def case_alias(left, right):
+            def actual(path):
+                return Path(str(path).replace('.CoPiLoT', '.copilot'))
+            return original_samefile(actual(left), actual(right))
+        with mock.patch.dict(os.environ, {'COPILOT_HOME': str(alias)}), \
+             mock.patch.object(os.path, 'samefile', side_effect=case_alias):
+            self.assertIn('retain shared', self.remove('vscode'))
+        self.assertTrue(self.plan('vscode').instructions_target.exists())
+        self.assertTrue(any(self.plan('vscode').skills_root.iterdir()))
+
+    def test_native_case_insensitive_alias_lifecycle(self):
+        self.install('vscode', 'copilot')
+        alias = self.user / '.CoPiLoT'
+        if not alias.is_dir():
+            self.skipTest('temporary filesystem is case-sensitive; native alias exercised on macOS/Windows CI')
+        target = self.plan('vscode').instructions_target
+        self.assertTrue(remove_harness._same_resource(target, target.with_name(target.name.upper())))
+        with mock.patch.dict(os.environ, {'COPILOT_HOME': str(alias)}):
+            self.assertIn('retain shared', self.remove('vscode'))
+            manager_state.write_desired(self.home, ['copilot'])
+            manager_state.remove_harness_receipt(self.home, 'vscode')
+            self.remove('copilot')
+        self.assertFalse(self.plan('vscode').instructions_target.exists())
+        self.assertFalse(any(self.plan('vscode').skills_root.iterdir()))
+
+    def test_case_sensitive_distinct_directories_are_not_shared(self):
+        first, second = self.user / 'CaseSensitive', self.user / 'casesensitive'
+        first.mkdir()
+        if second.exists():
+            self.skipTest('temporary filesystem is case-insensitive')
+        second.mkdir()
+        for root in (first, second):
+            root.joinpath('instructions.md').write_text('same bytes')
+        self.assertFalse(remove_harness._same_directory(first, second))
+        self.assertFalse(remove_harness._same_resource(first / 'instructions.md', second / 'instructions.md'))
+
+    def test_distinct_final_symlinks_to_one_source_are_not_one_resource(self):
+        source = self.user / 'source.md'
+        source.write_text('instructions')
+        first, second = self.user / 'one', self.user / 'two'
+        first.mkdir(); second.mkdir()
+        try:
+            (first / 'AGENTS.md').symlink_to(source)
+            (second / 'AGENTS.md').symlink_to(source)
+            (first / 'OTHER.md').symlink_to(source)
+        except OSError:
+            self.skipTest('file symlinks unavailable on this test host')
+        self.assertTrue(os.path.samefile(first / 'AGENTS.md', second / 'AGENTS.md'))
+        self.assertFalse(remove_harness._same_resource(first / 'AGENTS.md', second / 'AGENTS.md'))
+        self.assertFalse(remove_harness._same_resource(first / 'AGENTS.md', first / 'OTHER.md'))
+
     def test_public_install_records_two_identities_and_refreshes_them(self):
         import omh
         self.install()

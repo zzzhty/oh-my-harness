@@ -212,6 +212,37 @@ def _directory_path(path: Path) -> str:
     return os.path.normcase(str(path.resolve(strict=False)))
 
 
+def _same_directory(left: Path, right: Path) -> bool:
+    """Use the filesystem's case/alias rules, retaining absent-path fallback."""
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return _directory_path(left) == _directory_path(right)
+
+
+def _same_resource(left: Path, right: Path) -> bool:
+    # Match directory entries, not the destinations of final-component symlinks.
+    # Two instruction links to the same source in different roots are distinct.
+    if not _same_directory(left.parent, right.parent):
+        return False
+    if left.name == right.name:
+        return True
+    try:
+        return os.path.samestat(left.lstat(), right.lstat())
+    except OSError:
+        return _resource_path(left) == _resource_path(right)
+
+
+def _resource_within_root(path: Path, root: Path, *, directory: bool = False) -> bool:
+    if Path(_resource_path(path)).is_relative_to(Path(_directory_path(root))):
+        return True
+    if directory and _same_directory(path, root):
+        return True
+    # Walk only the selected path's ancestors, never scan a user's directory.
+    parent = path.parent.resolve(strict=False)
+    return any(_same_directory(root, ancestor) for ancestor in (parent, *parent.parents))
+
+
 def shared_resources(plan, *, registry, home: Path, environment: dict,
                      preview_removed: tuple[str, ...] = ()) -> tuple[bool, bool]:
     """Protect each physical resource while another installed consumer needs it.
@@ -227,7 +258,7 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
 
     def overlaps_root(root: Path) -> bool:
         return any(
-            Path(_resource_path(path)).is_relative_to(Path(_directory_path(root)))
+            _resource_within_root(path, root, directory=path == plan.skills_root)
             for path in selected_paths
         )
 
@@ -238,7 +269,7 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
         current_root = resolve_harness_root(registry, name, environ=environment)
         spec = registry.harnesses[registry.resolve_id(name)].instructions
         if (name != plan.harness_id and spec.driver == "settings-derived-file"
-                and any(_directory_path(lexical_absolute(root)) != _directory_path(current_root) for root in roots)):
+                and any(not _same_directory(lexical_absolute(root), current_root) for root in roots)):
             # The old dynamic filename was not recorded; a nested alias may have
             # pointed outside that root. Current settings cannot prove it unused.
             keep_instructions = True
@@ -261,14 +292,14 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
                     keep_instructions = True
                     print(f"warning: retain instructions because {name} configured targets cannot be determined")
                 else:
-                    if any(_resource_path(path) == _resource_path(plan.instructions_target) for path in candidates):
+                    if any(_same_resource(path, plan.instructions_target) for path in candidates):
                         keep_instructions = True
                         print(f"warning: retain instructions referenced by {name} multi-target settings")
                 continue
             raise
         shares_skills = (plan.skills_root is not None and other.skills_root is not None
-                         and _resource_path(plan.skills_root) == _resource_path(other.skills_root))
-        shares_instructions = _resource_path(plan.instructions_target) == _resource_path(other.instructions_target)
+                         and _same_resource(plan.skills_root, other.skills_root))
+        shares_instructions = _same_resource(plan.instructions_target, other.instructions_target)
         relevant = name == plan.harness_id or shares_skills or shares_instructions or recorded_overlap
         if not relevant:
             continue
@@ -278,7 +309,7 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
         if (other.harness.skills.driver == "directory-projection"
                 or (name != plan.harness_id and recorded_overlap)):
             for root in roots:
-                if _directory_path(lexical_absolute(root)) != _directory_path(other.root):
+                if not _same_directory(lexical_absolute(root), other.root):
                     raise SystemExit(
                         f"recorded root for {name} differs from current resolution; "
                         "restore the recorded root configuration before removal"
