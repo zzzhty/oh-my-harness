@@ -82,7 +82,11 @@ resources share `~/.copilot`. Removing one retains each resource still used by
 the other; removing the last consumer performs the existing ownership-checked
 cleanup. Bulk remove, dry runs, and manager uninstall follow the same rule.
 Changed/unmanaged files remain protected. If the environment no longer resolves
-a recorded root, removal asks you to restore that configuration first.
+a relevant recorded root, removal asks you to restore that configuration first.
+If another client's dynamic instruction configuration cannot be inspected,
+removal warns and retains the potentially shared instruction file while still
+removing unrelated managed skills and the selected client's logical state. This
+can leave a safe residual instruction file; it is not complete physical cleanup.
 
 VS Code discovers personal skills under `~/.copilot/skills`. The
 `copilot-instructions.md` global file is supported by **Copilot Agent Host**;

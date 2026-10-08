@@ -30,9 +30,20 @@ Sharing is determined per resolved skill root and instruction target, not by
 client name or whole-root equality. The removal helper itself consults the
 installed desired set and validated receipts. It rejects relevant recorded/current projection-root drift and missing overlapping
 consumer receipts before deleting resources. Unrelated consumers do not require
-refresh merely to remove another client. Legacy Codex receipts did not honor
-`--codex-home`, so their root field is not used as a drift gate; existing Codex
-source/ownership validation remains binding. It retains
+refresh merely to remove another client. Dynamic-settings errors from disjoint consumers are inspected using both
+recorded/current roots and the declared instruction candidates. Valid plans and
+readable multi-target candidates still compare concrete paths, including parent
+aliases. If dynamic candidates cannot be read safely, or a retained dynamic consumer
+changed roots and its former filename is unknown, removal warns and retains
+the potentially shared instruction file while allowing unrelated skill cleanup
+and logical removal. This bounded preservation adds no new receipt schema or
+recursive scan of user directories. Uncertainty may leave a safe residual
+managed instruction file; output explicitly reports retention rather than
+claiming complete physical cleanup. Legacy Codex receipts did not honor `--codex-home`,
+so removing the selected Codex target retains its existing source/ownership
+checks rather than treating that root as authoritative. An overlapping receipt
+for a Codex consumer that remains installed still blocks drift; it must never
+be discarded merely because Codex uses the marketplace driver. It retains
 shared resources, validates the existing changed/unmanaged ownership checks even
 when retaining them, and cleans resources when the last consumer is removed.
 Receipts are evidence checked against current plans, never trusted deletion paths.

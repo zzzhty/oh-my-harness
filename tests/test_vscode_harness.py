@@ -198,6 +198,100 @@ class VSCodeHarnessTests(unittest.TestCase):
                 self.remove('vscode')
         self.assertTrue(self.plan('vscode').instructions_target.exists())
 
+    def test_remaining_codex_recorded_overlap_blocks_root_drift(self):
+        self.install('zcode')
+        manager_state.write_desired(self.home, ['codex', 'zcode'])
+        manager_state.write_harness_receipt(self.home, harness='codex',
+            manager_revision='a'*40, release_version='1.0.0', bundle_identity='fixture',
+            root=str(self.plan('zcode').root))
+        with mock.patch.dict(os.environ, {'CODEX_HOME': str(self.user / 'new-codex')}):
+            with self.assertRaisesRegex(SystemExit, 'recorded root for codex'):
+                self.remove('zcode')
+        self.assertTrue(self.plan('zcode').instructions_target.exists())
+
+    def test_disjoint_invalid_gemini_settings_do_not_block_removal(self):
+        self.install('gemini', 'vscode')
+        gemini = self.plan('gemini')
+        gemini.root.joinpath('settings.json').write_text(json.dumps({
+            'context': {'fileName': ['GEMINI.md', 'OTHER.md']}}))
+        self.remove('vscode')
+        self.assertFalse(self.plan('vscode').instructions_target.exists())
+        self.assertTrue(gemini.instructions_target.exists())
+
+    def test_overlapping_invalid_gemini_settings_still_block_removal(self):
+        self.install('gemini', 'vscode')
+        gemini = self.plan('gemini')
+        gemini.root.joinpath('settings.json').write_text(json.dumps({
+            'context': {'fileName': ['GEMINI.md', 'OTHER.md']}}))
+        manager_state.write_harness_receipt(self.home, harness='gemini',
+            manager_revision='a'*40, release_version='1.0.0', bundle_identity='fixture',
+            root=str(self.plan('vscode').root))
+        with self.assertRaises(HarnessRegistryError):
+            self.remove('vscode')
+        self.assertTrue(self.plan('vscode').instructions_target.exists())
+
+    def test_current_gemini_root_drift_into_target_does_not_ignore_settings_error(self):
+        new_home = self.user / 'new-home'
+        with mock.patch.dict(os.environ, {'COPILOT_HOME': str(new_home / '.gemini')}):
+            self.install('gemini', 'copilot')
+            self.plan('copilot').root.joinpath('settings.json').write_text(json.dumps({
+                'context': {'fileName': ['GEMINI.md', 'OTHER.md']}}))
+            with mock.patch.dict(os.environ, {'GEMINI_CLI_HOME': str(new_home)}):
+                with self.assertRaises(HarnessRegistryError):
+                    self.remove('copilot')
+            self.assertTrue(self.plan('copilot').instructions_target.exists())
+
+    def test_valid_dynamic_parent_alias_still_preserves_shared_instructions(self):
+        self.install('gemini', 'vscode')
+        gemini = self.plan('gemini')
+        create_projection_link(gemini.root / 'linked', self.plan('vscode').root)
+        gemini.root.joinpath('settings.json').write_text(json.dumps({
+            'context': {'fileName': 'linked/copilot-instructions.md'}}))
+        self.assertIn('retain shared instructions', self.remove('vscode'))
+        self.assertTrue(self.plan('vscode').instructions_target.exists())
+
+    def test_bulk_preview_skips_already_removed_legacy_codex_consumer(self):
+        self.install('zcode')
+        manager_state.write_desired(self.home, ['codex', 'zcode'])
+        manager_state.write_harness_receipt(self.home, harness='codex',
+            manager_revision='a'*40, release_version='1.0.0', bundle_identity='fixture',
+            root=str(self.plan('zcode').root))
+        with mock.patch.dict(os.environ, {'CODEX_HOME': str(self.user / 'new-codex')}):
+            output = self.remove('zcode', dry=True, preview=('codex',))
+            self.assertIn('would remove', output)
+            self.assertNotIn('retain shared', output)
+        self.assertTrue(self.plan('zcode').instructions_target.exists())
+
+    def test_multi_target_parent_alias_preserves_previously_shared_instructions(self):
+        self.install('gemini', 'zcode')
+        gemini = self.plan('gemini')
+        create_projection_link(gemini.root / 'linked', self.plan('zcode').root)
+        settings = gemini.root / 'settings.json'
+        settings.write_text(json.dumps({'context': {'fileName': 'linked/AGENTS.md'}}))
+        self.assertEqual(self.plan('gemini').instructions_target.resolve(), self.plan('zcode').instructions_target)
+        settings.write_text(json.dumps({'context': {'fileName': ['linked/AGENTS.md', 'OTHER.md']}}))
+        self.assertIn('retain instructions', self.remove('zcode'))
+        self.assertTrue(self.plan('zcode').instructions_target.exists())
+        self.assertFalse(any(self.plan('zcode').skills_root.iterdir()))
+
+    def test_unreadable_dynamic_targets_preserve_instructions_without_blocking_skills(self):
+        self.install('gemini', 'vscode')
+        self.plan('gemini').root.joinpath('settings.json').write_text('{invalid json')
+        self.assertIn('cannot be determined', self.remove('vscode'))
+        self.assertTrue(self.plan('vscode').instructions_target.exists())
+        self.assertFalse(any(self.plan('vscode').skills_root.iterdir()))
+
+    def test_changed_dynamic_root_preserves_unknown_recorded_alias_target(self):
+        self.install('gemini', 'zcode')
+        gemini = self.plan('gemini')
+        create_projection_link(gemini.root / 'linked', self.plan('zcode').root)
+        gemini.root.joinpath('settings.json').write_text(json.dumps({
+            'context': {'fileName': 'linked/AGENTS.md'}}))
+        with mock.patch.dict(os.environ, {'GEMINI_CLI_HOME': str(self.user / 'new-home')}):
+            self.assertIn('recorded dynamic root has changed', self.remove('zcode'))
+        self.assertTrue(self.plan('zcode').instructions_target.exists())
+        self.assertFalse(any(self.plan('zcode').skills_root.iterdir()))
+
     def test_public_install_records_two_identities_and_refreshes_them(self):
         import omh
         self.install()

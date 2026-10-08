@@ -17,6 +17,8 @@ from harness_registry import (
     HarnessRegistryError,
     load_harness_registry,
     resolve_harness_plan,
+    resolve_harness_root,
+    configured_instruction_targets,
 )
 from manager_paths import lexical_absolute, manager_home, venv_path, venv_python
 from manager_state import removal_consumers, recorded_harness_roots
@@ -219,35 +221,69 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
     """
     installed = removal_consumers(home)
     keep_skills = keep_instructions = False
+    selected_paths = [plan.instructions_target]
+    if plan.skills_root is not None:
+        selected_paths.append(plan.skills_root)
+
+    def overlaps_root(root: Path) -> bool:
+        return any(
+            Path(_resource_path(path)).is_relative_to(Path(_directory_path(root)))
+            for path in selected_paths
+        )
+
     for name in dict.fromkeys((*installed, plan.harness_id)):
-        other = resolve_harness_plan(registry, name, repo_root=REPO_ROOT, environ=environment)
+        if name != plan.harness_id and name in preview_removed:
+            continue
+        roots = recorded_harness_roots(home, name)
+        current_root = resolve_harness_root(registry, name, environ=environment)
+        spec = registry.harnesses[registry.resolve_id(name)].instructions
+        if (name != plan.harness_id and spec.driver == "settings-derived-file"
+                and any(_directory_path(lexical_absolute(root)) != _directory_path(current_root) for root in roots)):
+            # The old dynamic filename was not recorded; a nested alias may have
+            # pointed outside that root. Current settings cannot prove it unused.
+            keep_instructions = True
+            print(f"warning: retain instructions because {name} recorded dynamic root has changed")
+        recorded_overlap = any(overlaps_root(lexical_absolute(root)) for root in roots)
+        try:
+            other = resolve_harness_plan(registry, name, repo_root=REPO_ROOT, environ=environment)
+        except HarnessRegistryError:
+            # A disjoint client's broken dynamic settings are not a prerequisite
+            # for this removal. Check current AND recorded roots before ignoring
+            # the failure; environment drift may have moved it into this target.
+            if (name != plan.harness_id and not recorded_overlap
+                    and not overlaps_root(current_root) and spec.driver == "settings-derived-file"):
+                try:
+                    candidates = configured_instruction_targets(spec, root=current_root)
+                except HarnessRegistryError:
+                    # Without readable candidates, roots alone cannot exclude an
+                    # intermediate directory alias into the selected file. Keep
+                    # that file, but let unrelated skills/logical removal proceed.
+                    keep_instructions = True
+                    print(f"warning: retain instructions because {name} configured targets cannot be determined")
+                else:
+                    if any(_resource_path(path) == _resource_path(plan.instructions_target) for path in candidates):
+                        keep_instructions = True
+                        print(f"warning: retain instructions referenced by {name} multi-target settings")
+                continue
+            raise
         shares_skills = (plan.skills_root is not None and other.skills_root is not None
                          and _resource_path(plan.skills_root) == _resource_path(other.skills_root))
         shares_instructions = _resource_path(plan.instructions_target) == _resource_path(other.instructions_target)
-        roots = recorded_harness_roots(home, name)
-        # Only relevant consumers can veto this removal. A recorded old root
-        # containing a selected resource is also relevant when environment drift
-        # makes the current plans look disjoint.
-        selected_paths = [plan.instructions_target]
-        if plan.skills_root is not None:
-            selected_paths.append(plan.skills_root)
-        recorded_overlap = any(
-            Path(_resource_path(path)).is_relative_to(Path(_directory_path(lexical_absolute(root))))
-            for root in roots for path in selected_paths
-        )
         relevant = name == plan.harness_id or shares_skills or shares_instructions or recorded_overlap
         if not relevant:
             continue
-        # Older Codex receipts ignored --codex-home. They cannot establish a
-        # reliable Codex root boundary; keep its existing source/ownership checks.
-        if other.harness.skills.driver == "directory-projection":
+        # Older Codex receipts ignored --codex-home. Allow removing that selected
+        # Codex target through its existing ownership checks, but never disregard
+        # an overlapping receipt for a Codex consumer that will remain installed.
+        if (other.harness.skills.driver == "directory-projection"
+                or (name != plan.harness_id and recorded_overlap)):
             for root in roots:
                 if _directory_path(lexical_absolute(root)) != _directory_path(other.root):
                     raise SystemExit(
                         f"recorded root for {name} differs from current resolution; "
                         "restore the recorded root configuration before removal"
                     )
-        if name == plan.harness_id or name in preview_removed:
+        if name == plan.harness_id:
             continue
         if not roots and (shares_skills or shares_instructions):
             raise SystemExit(f"installed consumer {name} has no receipt; run omh refresh before removal")
@@ -332,6 +368,8 @@ def remove_harness(
 
     if dry_run:
         print(f"dry-run only; {plan.harness_id} distribution was not removed")
+    elif keep_skills or keep_instructions:
+        print(f"finished {plan.harness_id} removal; shared or uncertain resources retained")
     else:
         print(f"removed oh-my-harness distribution from {plan.harness_id}")
 

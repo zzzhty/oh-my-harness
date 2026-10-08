@@ -823,7 +823,8 @@ def _repo_owned_path(root: Path, relative: Path, *, label: str) -> Path:
     return target
 
 
-def _settings_instruction_path(spec: InstructionsSpec, *, root: Path) -> Path:
+def configured_instruction_targets(spec: InstructionsSpec, *, root: Path) -> tuple[Path, ...]:
+    """Inspect declared candidates without accepting a multi-target distribution."""
     assert spec.settings_path is not None
     assert spec.default_relative_path is not None
     settings_file = root / spec.settings_path
@@ -843,20 +844,42 @@ def _settings_instruction_path(spec: InstructionsSpec, *, root: Path) -> Path:
         raw_target = None
 
     if raw_target is None:
-        relative = spec.default_relative_path
+        relatives = (spec.default_relative_path,)
     elif isinstance(raw_target, str):
-        relative = _relative_path(raw_target, label="configured instructions target")
+        relatives = (_relative_path(raw_target, label="configured instructions target"),)
     elif isinstance(raw_target, list):
-        if spec.multiple_targets_policy == "reject" and len(raw_target) != 1:
-            raise HarnessRegistryError(
-                "configured instructions target lists multiple filenames; registry policy rejects duplicate distribution"
-            )
-        relative = _relative_path(raw_target[0], label="configured instructions target")
+        relatives = tuple(_relative_path(item, label="configured instructions target") for item in raw_target)
     else:
         raise HarnessRegistryError(
             "configured instructions target must be a string or a single-item string array"
         )
-    return _join_within(root, relative, label="configured instructions target")
+    return tuple(_join_within(root, relative, label="configured instructions target") for relative in relatives)
+
+
+def _settings_instruction_path(spec: InstructionsSpec, *, root: Path) -> Path:
+    targets = configured_instruction_targets(spec, root=root)
+    if len(targets) != 1:
+        raise HarnessRegistryError(
+            "configured instructions target lists multiple filenames; registry policy rejects duplicate distribution"
+        )
+    return targets[0]
+
+
+def resolve_harness_root(
+    registry: HarnessRegistry,
+    harness_id: str,
+    *,
+    environ: Mapping[str, str] | None = None,
+    user_home: Path | None = None,
+) -> Path:
+    """Resolve a client's resource boundary without reading dynamic settings."""
+    harness = registry.harnesses[registry.resolve_id(harness_id)]
+    return _resolve_root(
+        harness.root_candidates,
+        label=f"harness {harness.harness_id!r}",
+        environ=environ if environ is not None else os.environ,
+        user_home=lexical_absolute(user_home or Path.home()),
+    )
 
 
 def resolve_harness_plan(
@@ -872,11 +895,8 @@ def resolve_harness_plan(
     harness = registry.harnesses[selected]
     environment = environ if environ is not None else os.environ
     home = lexical_absolute(user_home or Path.home())
-    root = _resolve_root(
-        harness.root_candidates,
-        label=f"harness {harness.harness_id!r}",
-        environ=environment,
-        user_home=home,
+    root = resolve_harness_root(
+        registry, selected, environ=environment, user_home=home,
     )
     platform_materialization = "windows" if os_name == "nt" else "posix"
 
