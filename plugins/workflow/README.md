@@ -20,6 +20,6 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 - `Milestone scope gate`: the `long-running-goal` adapter that applies the shared scope-discipline necessity gate only to material scope or validation expansion, while preserving all work already frozen by the milestone and owner contracts.
 - `YOLO non-stops`: authorized local continuation inside a Ready goal; see [execution authority and hard stops](skills/long-running-goal/SKILL.md).
 - `Task temporary cache root`: an exact goal/sequence-owned temporary namespace; [execution](skills/long-running-goal/references/execute-and-close.md) binds it and [Close](skills/long-running-goal/references/close.md) applies its recorded housekeeping policy.
-- `Runtime hard stops`: conditions that stop affected goal work; see the [goal contract](skills/long-running-goal/SKILL.md).
+- `Runtime hard stops`: authorization boundaries stop the affected action immediately; technical recovery changes strategy after the first two runtime-reported native Goal failures and honors the third native Codex Goal stop; see the [goal contract](skills/long-running-goal/SKILL.md).
 
 [Planning preflight](skills/long-running-goal/components/planning-preflight.md) owns required methods, sourced completion/reuse/skip evidence, and authorization coverage. [Sequence child goals](skills/long-running-goal/references/sequence-child-goals.md) applies that contract to the parent and child registers. `grill-with-docs` remains the explicit Matt entrypoint; Workflow composes its underlying methods.

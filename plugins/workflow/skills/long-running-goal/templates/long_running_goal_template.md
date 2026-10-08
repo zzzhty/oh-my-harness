@@ -89,7 +89,7 @@ M0 设计冻结时按实际情况填写，可增删条目；不为凑数量制�
 7. Independent verification / 独立验收：
    - `<由哪个 sub-agent、脚本、测试、reviewer 或 gate 检查 producer 的输出；不得只信自评。>`
 8. Runtime hard stops / 运行时硬停止：
-   - `<只有哪些技术失败、缺失凭据/事实源、隐私、破坏性动作、未预授权外部写入或连续阻塞会真正停止循环并询问用户；普通 gate / checkpoint / rebuild / refresh / 可本地修复失败不应列为停止点。>`
+   - `<授权或语义决策边界立即停止受影响动作；技术失败按 skill 的 adaptive recovery 执行，原生 Goal 明确报告的前两次失败依据证据改变策略，第三次关联原生 Codex Goal hard stop，普通命令失败不可直接计为原生失败；不得重置原生计数或绕过访问拒绝。>`
 9. Durable learning / 经验沉淀：
    - `<哪些结果要写回 skill、TODO、report、validation log、runbook、automation memory 或 current doc。>`
 
@@ -104,7 +104,7 @@ Authorization evidence：`<可定位 Markdown 链接或带日期的 user request
 2. Pre-approved external reads/writes / 预授权外部读写：
    - `<已允许读取或写入的 connector、API、issue、PR、CI、automation、hook、message surface；无外部写入时写 Not applicable。>`
 3. Runtime hard stops / 运行时硬停止：
-   - `<仅列真正会停止执行的条件：通常本地诊断/修复至少三次或三种方式后仍无法继续（已有决定性证据时可提前停止）、必需凭据/文件/工具/事实源无法通过已授权方式取得或恢复、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。>`
+   - `<授权或语义决策边界立即停止受影响动作；技术失败按 skill 的 adaptive recovery 执行，原生 Goal 明确报告的前两次失败依据证据改变策略，第三次关联原生 Codex Goal hard stop，普通命令失败不可直接计为原生失败；不得重置原生计数或绕过访问拒绝。>`
 4. Non-stops / 不应中断的事项：
    - `<普通阶段边界、checkpoint、耗时区间超出后的 rebaseline、可记录风险、rebuild、refresh、reinstall、失败但有明确本地下一步的验证、策略合同更新、docs sync 等。>`
 
