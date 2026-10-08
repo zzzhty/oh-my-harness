@@ -40,6 +40,33 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(installer.launcher_help_invocation("nt"), "omh --help")
         self.assertEqual(installer.launcher_help_invocation("posix"), "omh --help")
 
+    @unittest.skipUnless(os.name == "nt", "Windows batch execution")
+    def test_running_launcher_preserves_exit_code_when_update_replaces_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "manager home (test)&!"
+            env = {**os.environ, "OH_MY_HARNESS_BOOTSTRAP_PYTHON": sys.executable}
+            for exit_code in (0, 7):
+                with self.subTest(exit_code=exit_code), contextlib.redirect_stdout(io.StringIO()):
+                    launcher = installer.write_launchers(home=home, repo=REPO_ROOT, dry_run=False)[1]
+                    # A changed future launcher must not be read by this running CMD.
+                    replacement = "@echo off\r\n" + "rem future launcher padding\r\n" * 120 + "exit /b 91\r\n"
+                    shim = (
+                        "import sys\nfrom pathlib import Path\nfrom unittest import mock\n"
+                        f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r})\n"
+                        "import install_oh_my_harness as installer\n"
+                        "assert sys.argv[4] == 'argument with spaces (test)&!'\n"
+                        "assert sys.argv[5] == 'literal|<>^'\n"
+                        f"with mock.patch.object(installer, 'expected_launcher_content', return_value={replacement!r}):\n"
+                        f"    installer.write_launchers(home=Path(sys.argv[2]), repo=Path({str(REPO_ROOT)!r}), dry_run=False)\n"
+                        "sys.exit(int(sys.argv[3]))\n"
+                    )
+                    installer._bootstrap_script_path(home).write_text(shim, encoding="utf-8")
+                    completed = subprocess.run(
+                        f'cmd.exe /d /s /c ""{launcher}" {exit_code} "argument with spaces (test)&!" "literal|<>^""',
+                        env=env, capture_output=True, text=True, timeout=15,
+                    )
+                    self.assertEqual(completed.returncode, exit_code, completed.stdout + completed.stderr)
+
     def test_unsupported_python_is_rejected_before_manager_home_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / ".oh-my-harness"

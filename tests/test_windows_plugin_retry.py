@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import json
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,15 @@ COMMAND = ["codex", "plugin", "add", "alpha@test"]
 
 def result(code: int, *, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(COMMAND, code, stdout=stdout, stderr=stderr)
+
+
+def write_staged_copy(fixture: HarnessFixture, name: str, *, plugin: str = "alpha",
+                      version: str | None = None) -> Path:
+    staging = fixture.codex_home / "plugins" / "cache" / "test" / name
+    manifest = staging / plugin / (version or fixture.source_versions[plugin]) / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_bytes(b"")
+    return staging
 
 
 class WindowsPluginRetryTests(unittest.TestCase):
@@ -195,6 +205,7 @@ class WindowsPluginRetryTests(unittest.TestCase):
                 nonlocal attempts
                 attempts += 1
                 if attempts == 1:
+                    write_staged_copy(fixture, "plugin-install-abc123")
                     return result(1, stderr=COPY_DENIED)
                 fixture.run(command, env={}, dry_run=False)
                 return result(0)
@@ -213,13 +224,316 @@ class WindowsPluginRetryTests(unittest.TestCase):
                     fixture.catalog, codex="codex", codex_home=fixture.codex_home,
                     marketplace_name="test", excluded_skill_roots=(fixture.target,),
                     marketplace_source_binding=refresh.MarketplaceSourceBinding("local", str(fixture.repo)),
-                    env={}, dry_run=False,
+                    env={"CODEX_HOME": str(fixture.codex_home)}, dry_run=False,
                 ))
             self.assertEqual(attempts, 3)
             sleep.assert_called_once_with(0.5)
             closure.assert_called_once()
             self.assertEqual(fixture.enabled, {"alpha", "beta"})
             self.assertEqual(fixture.events, ["add:alpha", "add:beta"])
+            cache = fixture.codex_home / "plugins" / "cache" / "test"
+            self.assertEqual({path.name for path in cache.iterdir()}, {"alpha", "beta"})
+            kept = fixture.codex_home / "plugins" / "omh-install-residue" / "test" / "plugin-install-abc123"
+            self.assertEqual((kept / "cache-entry" / "alpha" / fixture.source_versions["alpha"] / ".codex-plugin" / "plugin.json").read_bytes(), b"")
+            context = json.loads((kept / "context.json").read_text(encoding="utf-8"))
+            self.assertEqual((context["plugin"], context["failedAttempt"]), ("alpha@test", 1))
+
+    def test_residue_quarantine_preserves_existing_foreign_and_unrecognized_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            previous = write_staged_copy(fixture, "plugin-install-old123")
+            fixture._write_cache("alpha")
+            cache_manifest = fixture.codex_home / "plugins" / "cache" / "test" / "alpha" / fixture.source_versions["alpha"] / ".codex-plugin" / "plugin.json"
+            installed_bytes = cache_manifest.read_bytes()
+            attempts = 0
+
+            def add_with_residue(command, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    write_staged_copy(fixture, "plugin-install-abc123")
+                    write_staged_copy(fixture, "plugin-install-other1", plugin="beta")
+                    write_staged_copy(fixture, "plugin-install-other2", version="0.0.0")
+                    unknown = write_staged_copy(fixture, "plugin-install-other3")
+                    (unknown / "user.txt").write_text("keep", encoding="utf-8")
+                    write_staged_copy(fixture, "plugin-backup-old123")
+                    return result(1, stderr=COPY_DENIED)
+                return result(0)
+
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=add_with_residue),
+                mock.patch.object(refresh.time, "sleep"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                refresh.add_codex_plugin(
+                    "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                    dry_run=False, version=fixture.source_versions["alpha"],
+                    source_root=fixture.repo / "plugins" / "alpha",
+                )
+            self.assertEqual(cache_manifest.read_bytes(), installed_bytes)
+            self.assertTrue(previous.is_dir())
+            cache = fixture.codex_home / "plugins" / "cache" / "test"
+            self.assertEqual({path.name for path in cache.iterdir()}, {
+                "alpha", "plugin-install-old123", "plugin-install-other1",
+                "plugin-install-other2", "plugin-install-other3", "plugin-backup-old123",
+            })
+            self.assertEqual((cache / "plugin-install-other3" / "user.txt").read_text(encoding="utf-8"), "keep")
+
+    def test_staging_reparse_points_are_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            outside.joinpath("user.txt").write_text("keep", encoding="utf-8")
+            staging = fixture.codex_home / "plugins" / "cache" / "test" / "plugin-install-abc123"
+            attempts = 0
+
+            def add_with_link(command, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    version = write_staged_copy(fixture, staging.name) / "alpha" / fixture.source_versions["alpha"]
+                    link = version / "skills"
+                    if os.name == "nt":
+                        # Use the original runner while the Codex transport is mocked.
+                        linked = native_run(["cmd.exe", "/c", "mklink", "/J", str(link), str(outside)], capture_output=True)
+                        self.assertEqual(linked.returncode, 0, linked.stderr)
+                    else:
+                        link.symlink_to(outside, target_is_directory=True)
+                    return result(1, stderr=COPY_DENIED)
+                return result(0)
+
+            native_run = subprocess.run
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=add_with_link),
+                mock.patch.object(refresh.time, "sleep"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                refresh.add_codex_plugin(
+                    "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                    dry_run=False, version=fixture.source_versions["alpha"],
+                    source_root=fixture.repo / "plugins" / "alpha",
+                )
+            self.assertTrue(staging.is_dir())
+            self.assertEqual(outside.joinpath("user.txt").read_text(encoding="utf-8"), "keep")
+
+    def test_quarantine_failure_stops_success_and_preserves_residue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            attempts = 0
+
+            def add_with_residue(command, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    write_staged_copy(fixture, "plugin-install-abc123")
+                    return result(1, stderr=COPY_DENIED)
+                return result(0)
+
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=add_with_residue),
+                mock.patch.object(refresh.time, "sleep"),
+                mock.patch.object(Path, "rename", side_effect=PermissionError("still locked")),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                with self.assertRaisesRegex(SystemExit, "failed to quarantine.*still locked"):
+                    refresh.add_codex_plugin(
+                        "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                        dry_run=False, version=fixture.source_versions["alpha"],
+                        source_root=fixture.repo / "plugins" / "alpha",
+                    )
+            self.assertEqual(attempts, 2)
+            self.assertTrue((fixture.codex_home / "plugins" / "cache" / "test" / "plugin-install-abc123").is_dir())
+
+    def test_multiple_matching_candidates_are_ambiguous_and_not_moved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            def failed_add(*args, **kwargs):
+                for name in ("plugin-install-ours", "plugin-install-external"):
+                    write_staged_copy(fixture, name)
+                return result(7, stdout="original stdout", stderr=COPY_DENIED)
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=failed_add) as run,
+                mock.patch.object(refresh.time, "sleep") as sleep,
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()) as diagnostic,
+            ):
+                with self.assertRaises(subprocess.CalledProcessError) as raised:
+                    refresh.add_codex_plugin(
+                        "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                        dry_run=False, version=fixture.source_versions["alpha"],
+                        source_root=fixture.repo / "plugins" / "alpha",
+                    )
+            run.assert_called_once()
+            sleep.assert_not_called()
+            self.assertEqual(raised.exception.returncode, 7)
+            self.assertEqual(raised.exception.output, "original stdout")
+            self.assertIn("ambiguous", diagnostic.getvalue())
+            self.assertEqual(len(list((fixture.codex_home / "plugins/cache/test").iterdir())), 2)
+            self.assertFalse((fixture.codex_home / "plugins/omh-install-residue").exists())
+
+    def test_later_ambiguity_preserves_earlier_candidate_too(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            attempts = 0
+            def add(*args, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                names = ("first",) if attempts == 1 else ("second", "external")
+                for name in names:
+                    write_staged_copy(fixture, f"plugin-install-{name}")
+                return result(7, stderr=COPY_DENIED)
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=add),
+                mock.patch.object(refresh.time, "sleep"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    refresh.add_codex_plugin(
+                        "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                        dry_run=False, version=fixture.source_versions["alpha"],
+                        source_root=fixture.repo / "plugins/alpha",
+                    )
+            self.assertEqual(attempts, 2)
+            self.assertEqual(len(list((fixture.codex_home / "plugins/cache/test").iterdir())), 3)
+            self.assertFalse((fixture.codex_home / "plugins/omh-install-residue").exists())
+
+    def test_changed_residue_after_retry_is_preserved_and_stops_success(self) -> None:
+        for mutation in ("content", "replacement", "layout"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
+                fixture = HarnessFixture(Path(tmp))
+                staging = fixture.codex_home / "plugins/cache/test/plugin-install-changed"
+                attempts = 0
+                def add(*args, **kwargs):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        write_staged_copy(fixture, staging.name)
+                        return result(1, stderr=COPY_DENIED)
+                    if mutation == "content":
+                        (staging / "alpha" / fixture.source_versions["alpha"] / ".codex-plugin/plugin.json").write_bytes(b"changed")
+                    elif mutation == "replacement":
+                        staging.rename(staging.with_name("saved-original"))
+                        write_staged_copy(fixture, staging.name)
+                    else:
+                        (staging / "user.txt").write_text("keep", encoding="utf-8")
+                    return result(0)
+                with (
+                    mock.patch.object(refresh.sys, "platform", "win32"),
+                    mock.patch.object(refresh.subprocess, "run", side_effect=add),
+                    mock.patch.object(refresh.time, "sleep"),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    with self.assertRaisesRegex(SystemExit, "residue changed"):
+                        refresh.add_codex_plugin(
+                            "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                            dry_run=False, version=fixture.source_versions["alpha"],
+                            source_root=fixture.repo / "plugins" / "alpha",
+                        )
+                self.assertTrue(staging.is_dir())
+                self.assertFalse((fixture.codex_home / "plugins/omh-install-residue").exists())
+
+    def test_version_root_reparse_point_is_not_a_staging_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            (outside / "user.txt").write_text("keep", encoding="utf-8")
+            staging = fixture.codex_home / "plugins/cache/test/plugin-install-junction"
+            plugin = staging / "alpha"
+            plugin.mkdir(parents=True)
+            version = plugin / fixture.source_versions["alpha"]
+            if os.name == "nt":
+                linked = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(version), str(outside)], capture_output=True)
+                self.assertEqual(linked.returncode, 0, linked.stderr)
+            else:
+                version.symlink_to(outside, target_is_directory=True)
+            self.assertIsNone(refresh._expected_staging_tree(
+                staging, plugin="alpha", version=version.name,
+                source_root=fixture.repo / "plugins/alpha",
+            ))
+            self.assertEqual((outside / "user.txt").read_text(encoding="utf-8"), "keep")
+            self.assertTrue(version.is_dir())
+
+    def test_observation_failures_preserve_original_cli_failure(self) -> None:
+        # Before first add, after failure, before retry, and final quarantine
+        # observations are distinct failure boundaries.
+        for failing_scan in (2, 3, 4):
+            with self.subTest(failing_scan=failing_scan), tempfile.TemporaryDirectory() as tmp:
+                fixture = HarnessFixture(Path(tmp))
+                attempts = 0
+                scans = 0
+                original_scan = refresh._staging_entries
+                def scan(root):
+                    nonlocal scans
+                    scans += 1
+                    if scans == failing_scan:
+                        raise PermissionError("scan blocked")
+                    return original_scan(root)
+                def add(*args, **kwargs):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        write_staged_copy(fixture, "plugin-install-scan")
+                    return result(7, stdout="original stdout", stderr=COPY_DENIED if attempts == 1 else "other failure")
+                with (
+                    mock.patch.object(refresh.sys, "platform", "win32"),
+                    mock.patch.object(refresh.subprocess, "run", side_effect=add),
+                    mock.patch.object(refresh, "_staging_entries", side_effect=scan),
+                    mock.patch.object(refresh.time, "sleep"),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()) as diagnostic,
+                ):
+                    with self.assertRaises(subprocess.CalledProcessError) as raised:
+                        refresh.add_codex_plugin(
+                            "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                            dry_run=False, version=fixture.source_versions["alpha"],
+                            source_root=fixture.repo / "plugins/alpha",
+                        )
+                self.assertEqual(raised.exception.returncode, 7)
+                self.assertEqual(raised.exception.output, "original stdout")
+                self.assertEqual(raised.exception.stderr, COPY_DENIED if attempts == 1 else "other failure")
+                self.assertIn("scan blocked", diagnostic.getvalue())
+
+    def test_quarantine_never_overwrites_existing_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = HarnessFixture(Path(tmp))
+            retained = fixture.codex_home / "plugins/omh-install-residue/test/plugin-install-collision"
+            retained.mkdir(parents=True)
+            (retained / "context.json").write_text("existing evidence", encoding="utf-8")
+            attempts = 0
+            def add(*args, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    write_staged_copy(fixture, retained.name)
+                    return result(1, stderr=COPY_DENIED)
+                return result(0)
+            with (
+                mock.patch.object(refresh.sys, "platform", "win32"),
+                mock.patch.object(refresh.subprocess, "run", side_effect=add),
+                mock.patch.object(refresh.time, "sleep"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                with self.assertRaisesRegex(SystemExit, "failed to quarantine"):
+                    refresh.add_codex_plugin(
+                        "codex", "alpha@test", env={"CODEX_HOME": str(fixture.codex_home)},
+                        dry_run=False, version=fixture.source_versions["alpha"],
+                        source_root=fixture.repo / "plugins/alpha",
+                    )
+            self.assertEqual((retained / "context.json").read_text(encoding="utf-8"), "existing evidence")
+            self.assertTrue((fixture.codex_home / "plugins/cache/test" / retained.name).is_dir())
 
     def test_exhausted_add_rolls_back_newly_activated_plugins_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -228,11 +542,15 @@ class WindowsPluginRetryTests(unittest.TestCase):
             fixture.configure_plugins()
             fixture._write_cache("alpha")
             source_cache = fixture.codex_home / "plugins" / "cache" / "test" / "alpha"
+            attempts = 0
 
             def fail_after_partial_activation(command, **kwargs):
+                nonlocal attempts
+                attempts += 1
                 self.assertEqual(command, ["codex", "plugin", "add", "beta@test"])
                 fixture.enabled.add("beta")
                 fixture.events.append("add:beta")
+                write_staged_copy(fixture, f"plugin-install-fail{attempts}", plugin="beta")
                 return result(1, stderr=COPY_DENIED)
 
             with (
@@ -252,7 +570,7 @@ class WindowsPluginRetryTests(unittest.TestCase):
                         marketplace_name="test",
                         excluded_skill_roots=(fixture.target,),
                         marketplace_source_binding=refresh.MarketplaceSourceBinding("local", str(fixture.repo)),
-                        env={},
+                        env={"CODEX_HOME": str(fixture.codex_home)},
                         dry_run=False,
                     )
             self.assertEqual(run.call_count, 3)
@@ -260,6 +578,10 @@ class WindowsPluginRetryTests(unittest.TestCase):
             self.assertEqual(fixture.enabled, {"alpha"})
             self.assertTrue(source_cache.is_dir())
             self.assertEqual(fixture.events, ["add:beta", "add:beta", "add:beta", "remove:beta"])
+            cache = fixture.codex_home / "plugins" / "cache" / "test"
+            self.assertEqual({path.name for path in cache.iterdir()}, {"alpha"})
+            retained = fixture.codex_home / "plugins" / "omh-install-residue" / "test"
+            self.assertEqual(len(list(retained.iterdir())), 3)
 
 
     def test_closure_failure_after_retry_success_still_rolls_back(self) -> None:
@@ -272,6 +594,7 @@ class WindowsPluginRetryTests(unittest.TestCase):
                 nonlocal attempts
                 attempts += 1
                 if attempts == 1:
+                    write_staged_copy(fixture, "plugin-install-abc123")
                     return result(1, stderr=COPY_DENIED)
                 fixture.run(command, env={}, dry_run=False)
                 return result(0)
@@ -290,7 +613,7 @@ class WindowsPluginRetryTests(unittest.TestCase):
                         fixture.catalog, codex="codex", codex_home=fixture.codex_home,
                         marketplace_name="test", excluded_skill_roots=(fixture.target,),
                         marketplace_source_binding=refresh.MarketplaceSourceBinding("local", str(fixture.repo)),
-                        env={}, dry_run=False,
+                        env={"CODEX_HOME": str(fixture.codex_home)}, dry_run=False,
                     )
             self.assertEqual(attempts, 3)
             sleep.assert_called_once_with(0.5)

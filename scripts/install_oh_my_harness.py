@@ -287,6 +287,9 @@ exec "$bootstrap_python" "$omh_home/bootstrap/omh_bootstrap.py" --home "$omh_hom
 
 
 def windows_launcher(*, home: Path, repo: Path) -> str:
+    # CMD must parse the invocation and exit together before an update replaces
+    # this file. CALL expands the child's status after it returns; arguments keep
+    # delayed expansion disabled so literal exclamation marks survive.
     return r'''@echo off
 setlocal DisableDelayedExpansion
 for %%I in ("%~dp0..") do set "OMH_HOME=%%~fI"
@@ -309,8 +312,10 @@ for %%P in (python py python3) do (
 echo error: Python 3.11 or newer not found; set OH_MY_HARNESS_BOOTSTRAP_PYTHON 1>&2
 exit /b 1
 :run
+(
 "%OHM_PY%" "%OMH_HOME%\bootstrap\omh_bootstrap.py" --home "%OMH_HOME%" %*
-exit /b %ERRORLEVEL%
+call exit /b %%ERRORLEVEL%%
+)
 '''.replace("\n", "\r\n")
 
 
