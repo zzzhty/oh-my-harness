@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -16,7 +18,8 @@ from harness_registry import (
     load_harness_registry,
     resolve_harness_plan,
 )
-from manager_paths import manager_home, venv_path, venv_python
+from manager_paths import lexical_absolute, manager_home, venv_path, venv_python
+from manager_state import removal_consumers, recorded_harness_roots
 from repo_skill_catalog import load_repo_skill_catalog
 from sync_agents_skills import remove_all_managed_entries
 from sync_codex_agents import is_managed as is_managed_agent_support
@@ -197,6 +200,62 @@ def _remove_codex(
     _remove_watcher_hooks(tooling_python, codex_home=plan.root, dry_run=dry_run)
 
 
+def _resource_path(path: Path) -> str:
+    # Keep the final component lexical: instruction symlinks target source files.
+    # Resolve parent aliases and normalize Windows case for resource identity.
+    return os.path.normcase(str(path.parent.resolve(strict=False) / path.name))
+
+
+def _directory_path(path: Path) -> str:
+    return os.path.normcase(str(path.resolve(strict=False)))
+
+
+def shared_resources(plan, *, registry, home: Path, environment: dict,
+                     preview_removed: tuple[str, ...] = ()) -> tuple[bool, bool]:
+    """Protect each physical resource while another installed consumer needs it.
+
+    Receipts are evidence of resolved roots, never arbitrary deletion targets.
+    Resolve current plans and reject root drift before trusting shared ownership.
+    """
+    installed = removal_consumers(home)
+    keep_skills = keep_instructions = False
+    for name in dict.fromkeys((*installed, plan.harness_id)):
+        other = resolve_harness_plan(registry, name, repo_root=REPO_ROOT, environ=environment)
+        shares_skills = (plan.skills_root is not None and other.skills_root is not None
+                         and _resource_path(plan.skills_root) == _resource_path(other.skills_root))
+        shares_instructions = _resource_path(plan.instructions_target) == _resource_path(other.instructions_target)
+        roots = recorded_harness_roots(home, name)
+        # Only relevant consumers can veto this removal. A recorded old root
+        # containing a selected resource is also relevant when environment drift
+        # makes the current plans look disjoint.
+        selected_paths = [plan.instructions_target]
+        if plan.skills_root is not None:
+            selected_paths.append(plan.skills_root)
+        recorded_overlap = any(
+            Path(_resource_path(path)).is_relative_to(Path(_directory_path(lexical_absolute(root))))
+            for root in roots for path in selected_paths
+        )
+        relevant = name == plan.harness_id or shares_skills or shares_instructions or recorded_overlap
+        if not relevant:
+            continue
+        # Older Codex receipts ignored --codex-home. They cannot establish a
+        # reliable Codex root boundary; keep its existing source/ownership checks.
+        if other.harness.skills.driver == "directory-projection":
+            for root in roots:
+                if _directory_path(lexical_absolute(root)) != _directory_path(other.root):
+                    raise SystemExit(
+                        f"recorded root for {name} differs from current resolution; "
+                        "restore the recorded root configuration before removal"
+                    )
+        if name == plan.harness_id or name in preview_removed:
+            continue
+        if not roots and (shares_skills or shares_instructions):
+            raise SystemExit(f"installed consumer {name} has no receipt; run omh refresh before removal")
+        keep_skills |= shares_skills
+        keep_instructions |= shares_instructions
+    return keep_skills, keep_instructions
+
+
 def remove_harness(
     harness: str,
     *,
@@ -207,6 +266,7 @@ def remove_harness(
     tooling_python: Path,
     dry_run: bool,
     assume_yes: bool,
+    preview_removed: tuple[str, ...] = (),
 ) -> None:
     environment = dict(os.environ)
     if codex_home is not None:
@@ -221,6 +281,24 @@ def remove_harness(
         )
     except HarnessRegistryError as exc:
         raise SystemExit(str(exc)) from exc
+
+    if preview_removed and not dry_run:
+        raise SystemExit("preview-removed is only valid with --dry-run")
+    keep_skills, keep_instructions = shared_resources(
+        plan, registry=registry, home=home, environment=environment,
+        preview_removed=preview_removed,
+    )
+    # Even retained resources must pass the existing ownership checks. Preflight
+    # both before deleting either, so edited instructions cannot cause half-removal.
+    catalog = load_repo_skill_catalog()
+    with contextlib.redirect_stdout(io.StringIO()):
+        if plan.skills_root is not None:
+            remove_all_managed_entries(catalog, target_root=plan.skills_root, dry_run=True)
+        remove_instruction_sync(plan, dry_run=True)
+    if keep_skills:
+        print(f"retain shared skills for another installed harness: {plan.skills_root}")
+    if keep_instructions:
+        print(f"retain shared instructions for another installed harness: {plan.instructions_target}")
 
     print(f"Remove oh-my-harness distribution from {plan.harness.display_name}:")
     if plan.skills_root is not None:
@@ -240,8 +318,7 @@ def remove_harness(
             tooling_python=tooling_python,
             dry_run=dry_run,
         )
-    else:
-        catalog = load_repo_skill_catalog()
+    elif not keep_skills:
         if plan.skills_root is None:
             raise SystemExit(f"harness {plan.harness_id} has no skill projection root")
         remove_all_managed_entries(
@@ -250,7 +327,8 @@ def remove_harness(
             dry_run=dry_run,
         )
 
-    remove_instruction_sync(plan, dry_run=dry_run)
+    if not keep_instructions:
+        remove_instruction_sync(plan, dry_run=dry_run)
 
     if dry_run:
         print(f"dry-run only; {plan.harness_id} distribution was not removed")
@@ -268,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--yes", action="store_true")
+    parser.add_argument("--preview-removed", action="append", default=[], help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     home = manager_home(args.home).resolve(strict=False)
@@ -285,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         tooling_python=tooling_python,
         dry_run=args.dry_run,
         assume_yes=args.yes,
+        preview_removed=tuple(args.preview_removed),
     )
     return 0
 

@@ -203,6 +203,43 @@
       },
       "extras": []
     },
+    "vscode": {
+      "displayName": "VS Code (GitHub Copilot)",
+      "root": {
+        "candidates": [
+          {
+            "source": "user-home",
+            "append": ".copilot"
+          }
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {
+        "driver": "managed-file",
+        "relativePath": "copilot-instructions.md",
+        "materialization": {
+          "posix": "copy",
+          "windows": "copy"
+        },
+        "confirmation": {
+          "create": "assume-yes-or-interactive",
+          "replace": "interactive"
+        },
+        "shadowPaths": []
+      },
+      "extras": []
+    },
     "gemini": {
       "displayName": "Gemini CLI",
       "aliases": ["gemini-cli"],

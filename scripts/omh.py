@@ -711,6 +711,8 @@ def _remove_one(args: argparse.Namespace, *, home: Path, harness: str) -> None:
         command.extend(["--codex", args.codex])
     if getattr(args, "dry_run", False):
         command.append("--dry-run")
+        for removed in getattr(args, "preview_removed", ()):
+            command.extend(["--preview-removed", removed])
     if getattr(args, "yes", False):
         command.append("--yes")
     _run(command)
@@ -732,9 +734,11 @@ def command_remove(args: argparse.Namespace) -> int:
             )
         for harness in targets:
             validate_harness_receipts(home, harness)
+        args.preview_removed = []
         for harness in targets:
             _remove_one(args, home=home, harness=harness)
             if args.dry_run:
+                args.preview_removed.append(harness)
                 continue
             desired.remove(harness)
             write_desired(home, desired)

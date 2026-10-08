@@ -324,6 +324,32 @@ def validate_harness_receipts(home: Path, harness: str) -> None:
     _harness_receipts(home, harness)
 
 
+def removal_consumers(home: Path) -> tuple[str, ...]:
+    """Read the installed set without initializing or migrating manager state."""
+    path = desired_file(home)
+    payload = _load_object(path, label="desired harness state", required=False)
+    if payload is not None:
+        _validate_desired_payload(payload, path=path)
+        return desired_harnesses(payload)
+    initial = state_path(home) / "install.json"
+    if initial.exists() or initial.is_symlink():
+        receipt = install_receipt(home)
+        if receipt.get("status") == "ready":
+            return canonical_harnesses([receipt["harness"]])
+    return ()
+
+
+def recorded_harness_roots(home: Path, harness: str) -> tuple[str, ...]:
+    roots = []
+    for path in _harness_receipts(home, harness):
+        payload = _load_object(path, label="harness receipt")
+        root = payload.get("root")
+        if payload.get("status") != "ready" or not isinstance(root, str) or not Path(root).is_absolute():
+            raise SystemExit(f"harness receipt root/status is invalid; preserved: {path}")
+        roots.append(root)
+    return tuple(roots)
+
+
 def translate_harness_receipts(home: Path, target_names: Iterable[str]) -> None:
     """Prepare equivalent receipt names for a journaled handoff to an older CLI."""
     registry = load_harness_registry()

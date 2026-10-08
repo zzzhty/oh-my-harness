@@ -14,12 +14,12 @@ instructions to it; it does not install Copilot, Claude Code, or the other apps.
 For a first installation from this checkout:
 
 ```bash
-./install.sh --harness copilot --yes
+./install.sh --harness vscode --yes
 # Reopen the terminal after setup, then:
 omh status
 ```
 
-On Windows, use `.\install.ps1 --harness copilot --yes`. Setup registers the
+On Windows, use `.\install.ps1 --harness vscode --yes`. Setup registers the
 manager's `bin` in the current user's PATH; reopen the terminal afterward.
 See [Local Install](#local-install) for a streamed installation,
 custom locations, and recovery of an incomplete setup.
@@ -62,6 +62,7 @@ Each harness target selects one complete distribution. Public commands accept
 | `zcode` | — | `~/.zcode/skills` projection | `~/.zcode/AGENTS.md` |
 | `claude-code` | `claude` | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills` projection | `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md` |
 | `copilot` | `copilot-cli` | `${COPILOT_HOME:-~/.copilot}/skills` projection | `${COPILOT_HOME:-~/.copilot}/copilot-instructions.md` |
+| `vscode` | — | `~/.copilot/skills` projection | `~/.copilot/copilot-instructions.md` (Copilot Agent Host; see below) |
 | `gemini` | `gemini-cli` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
 | `opencode` | — | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
 | `pi-agent` | `pi` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
@@ -72,6 +73,35 @@ resolve to the canonical ID before selecting paths or writing state. For example
 `copilot`. `--all` also selects each distribution once. The short names still
 select the GitHub Copilot CLI and Gemini CLI distributions; their native
 directories, environment variables, and instruction filenames are unchanged.
+
+`vscode` selects **VS Code (GitHub Copilot)** independently of `copilot`
+(GitHub Copilot CLI). Use `omh install vscode`, `omh check vscode`, or
+`omh remove vscode` without having to choose a CLI you do not use. Selecting
+both records two consumers, even though their default skill and instruction
+resources share `~/.copilot`. Removing one retains each resource still used by
+the other; removing the last consumer performs the existing ownership-checked
+cleanup. Bulk remove, dry runs, and manager uninstall follow the same rule.
+Changed/unmanaged files remain protected. If the environment no longer resolves
+a recorded root, removal asks you to restore that configuration first.
+
+VS Code discovers personal skills under `~/.copilot/skills`. The
+`copilot-instructions.md` global file is supported by **Copilot Agent Host**;
+VS Code local-agent user instructions are profile-managed and are not installed
+by this target. Select/configure the appropriate agent and profile in VS Code;
+`omh check vscode` checks the managed files, not whether every VS Code agent
+mode loads them. See the official [agent skills][vscode-skills] and
+[custom instructions][vscode-instructions] documentation.
+
+`COPILOT_HOME` remains a **CLI-only** override in this registry. The `vscode`
+target uses the current user's `~/.copilot`; it does not assume VS Code honors
+that CLI variable. This root is the present skills/instructions distribution
+location, not a universal VS Code settings directory. MCP is not managed today.
+A future MCP feature must resolve VS Code's own user/profile configuration
+separately from Copilot CLI's configuration; sharing these two resources does
+not merge client identity or imply that MCP or other settings share paths.
+
+[vscode-skills]: https://code.visualstudio.com/docs/agent-customization/agent-skills
+[vscode-instructions]: https://code.visualstudio.com/docs/agent-customization/custom-instructions
 
 Existing desired state may contain the old names or both spellings. The manager
 normalizes and deduplicates them in memory, then persists canonical names during
