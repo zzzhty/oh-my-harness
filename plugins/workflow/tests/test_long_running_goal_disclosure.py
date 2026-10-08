@@ -38,9 +38,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "suggesting this skill does not authorize creating its contract",
             "Explicit pause, stop, redirect or scope change overrides every continuation case",
             "without milestone commands, goal-evidence edits or native goal-status updates",
-            "After each failure, apply [Failure Recovery]",
-            "The third native Codex Goal failure",
-            "Authorization problems stop the affected action immediately",
+            "The third runtime-reported native Goal failure reaches the native Codex Goal hard stop",
             "Ask only at a runtime hard stop",
             "Never infer cleanup consent",
             "Use native goal tools only on an explicit active-conversation request",
@@ -54,6 +52,29 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "Templates and readiness checkers own field shape and structural completeness",
         ):
             self.assertIn(semantic, create)
+
+    def test_adaptive_recovery_preserves_native_stop_and_authority_boundaries(self) -> None:
+        # Instruction-contract regressions, not a simulation of native Goal counting.
+        skill = SKILL.read_text(encoding="utf-8")
+        execute = REFERENCES["execute"].read_text(encoding="utf-8")
+        for clause in (
+            "After the first runtime-reported native Goal failure:", "After the second runtime-reported native Goal failure:",
+            "At the third runtime-reported native Goal failure/stop:", "Once that native boundary occurs, do not launch another recovery attempt",
+            "Keep the first two recoverable native Goal failures `In Progress`",
+            "Three ordinary failed commands alone do not establish this boundary",
+            "if its count is unavailable", "not automatically one native Goal failure",
+            "not a new ledger or mandatory schema", "Read it on resume",
+            "cause has changed", "stops the affected action immediately",
+            "without pointless attempts", "do not skip a child",
+        ):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, execute)
+        self.assertIn("neither implements a second counter", skill)
+        self.assertIn("Native stop signals take precedence", skill)
+        self.assertNotIn("at least three attempts or distinct approaches", skill)
+        for template in (ATOMIC_TEMPLATE, SEQUENCE_TEMPLATE):
+            self.assertIn("adaptive recovery", template.read_text(encoding="utf-8"))
+        self.assertIn("first two recoverable native Goal failures do not block", REFERENCES["sequence"].read_text(encoding="utf-8"))
 
     def test_each_conditional_branch_has_a_strong_pointer_and_completion_criterion(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")

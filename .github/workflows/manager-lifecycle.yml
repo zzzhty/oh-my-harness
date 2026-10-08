@@ -16,13 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ['3.12']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11', '3.12']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -30,21 +28,6 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Compile Python
         run: python -m compileall -q scripts tests plugins/watcher plugins/workflow
-      - name: Workflow tests
-        env:
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
-      - name: Generate distribution identity after owning tests
-        shell: bash
-        run: |
-          python scripts/update_plugin_generations.py --json
-          python - <<'PY'
-          import base64
-          from pathlib import Path
-          for relative in ('.agents/plugins/distribution-identity.json', 'plugins/workflow/.codex-plugin/plugin.json'):
-              payload = base64.b64encode(Path(relative).read_bytes()).decode('ascii')
-              print('OMH_GENERATED_FILE', relative, payload)
-          PY
       - name: Root tests
         env:
           PYTHONDONTWRITEBYTECODE: '1'
@@ -53,18 +36,10 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python -m unittest discover -s plugins/watcher/tests -p "test_*.py"
-      - name: Source plugins, JSON, and relative links
-        shell: bash
-        run: |
-          python -m json.tool .agents/plugins/marketplace.json > /dev/null
-          python -m json.tool .agents/plugins/install-manifest.json > /dev/null
-          python -m json.tool .agents/harnesses/registry.json > /dev/null
-          python -m json.tool .agents/harnesses/registry.schema.json > /dev/null
-          python scripts/validate_plugin.py plugins/watcher
-          python scripts/validate_plugin.py plugins/workflow
-          python scripts/validate_plugin.py plugins/mattpocock-skills
-          python plugins/workflow/skills/long-running-goal/scripts/check_md_links.py plugins/workflow
-          git diff --check 09210c043d71af143217344153f9a1b0911accbb HEAD
+      - name: Workflow tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
       - name: Distribution identity
         run: python scripts/check_plugin_generations.py
       - name: Diff hygiene

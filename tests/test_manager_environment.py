@@ -173,11 +173,22 @@ class UserEnvironmentTests(unittest.TestCase):
             executable = shutil.which(shell)
             if executable is None:
                 continue
-            for existing in ("", "/usr/bin:/bin", "/usr/bin:" + entry + ":/bin"):
+            for existing in (None, "", ":", "/bin:/usr/bin", "/usr/bin:/bin",
+                             "/usr/bin:" + entry + ":/bin"):
                 with self.subTest(shell=shell, existing=existing):
-                    process = subprocess.run([executable, "-c", code + code + '\nprintf "%s" "$PATH"'],
-                                             env={"PATH": existing}, capture_output=True, text=True, check=True)
-                    expected = existing if entry in existing.split(":") else entry + (":" + existing if existing else "")
+                    # zsh's system zshenv may replace an empty inherited PATH even
+                    # with -f. Set the block's input after shell startup, without
+                    # interpolating literal path characters into shell source.
+                    setup = "unset PATH\n" if existing is None else 'export PATH="$1"\n'
+                    process = subprocess.run(
+                        [executable, "-c", setup + code + code + '\nprintf "%s" "$PATH"',
+                         "omh-path-test", existing or ""],
+                        env={"PATH": existing or "", "HOME": str(self.user),
+                             "ZDOTDIR": str(self.user)},
+                        capture_output=True, text=True, check=True,
+                    )
+                    initial = existing or ""
+                    expected = initial if entry in initial.split(":") else entry + (":" + initial if initial else "")
                     self.assertEqual(process.stdout, expected)
 
     def test_unsafe_posix_path_entries_rejected(self):
