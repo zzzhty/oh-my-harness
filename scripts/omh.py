@@ -416,6 +416,17 @@ def _journal_instruction_transition(
                 f"journaled {label} instruction source changed after update preflight"
             )
         side["instructionsSource"] = source
+        from sync_harness_instructions import materialized_instruction_digest
+
+        materialized = materialized_instruction_digest(
+            REPO_ROOT, side["revision"], str(source["path"])
+        )
+        recorded_materialized = side.get("instructionsMaterializedSha256")
+        if recorded_materialized is not None and recorded_materialized != materialized:
+            raise SystemExit(
+                f"journaled {label} instruction materialization changed after update preflight"
+            )
+        side["instructionsMaterializedSha256"] = materialized
     return update_operation(
         home,
         phase=str(operation.get("phase", "prepared")),
@@ -1021,6 +1032,11 @@ def command_update(args: argparse.Namespace) -> int:
 
         before = dict(manager)
         before["instructionsSource"] = before_source
+        from sync_harness_instructions import materialized_instruction_digest
+
+        before["instructionsMaterializedSha256"] = materialized_instruction_digest(
+            repo, old, str(before_source["path"])
+        )
         before["desiredHarnesses"] = desired["harnesses"]
         target_payload = {
             "repository": recorded_repository,
@@ -1030,6 +1046,9 @@ def command_update(args: argparse.Namespace) -> int:
             "channel": channel,
             "requestedRef": requested_ref,
             "instructionsSource": target_source,
+            "instructionsMaterializedSha256": materialized_instruction_digest(
+                repo, target, str(target_source["path"])
+            ),
             "desiredHarnesses": list(target_harnesses),
         }
         operation = begin_operation(
@@ -1116,6 +1135,113 @@ def command_resume_update(args: argparse.Namespace) -> int:
     if release != target["releaseVersion"] or bundle != target["bundleIdentity"]:
         raise SystemExit("live update target identity changed after validation")
 
+    try:
+        return _complete_resumed_update(args, home, target, release, bundle)
+    except BaseException as update_error:
+        # An older caller will switch back and run its own rollback executable.
+        # Restore copy bytes while this version still understands materialized
+        # provenance; the old manager can then recognize its current source.
+        try:
+            _restore_update_instruction_copies(home, operation)
+        except BaseException as restoration_error:
+            raise RuntimeError(
+                f"update failed: {update_error}; instruction copy restoration failed: "
+                f"{restoration_error}"
+            ) from update_error
+        raise
+
+
+def _restore_update_instruction_copies(home: Path, operation: dict) -> None:
+    from harness_registry import load_harness_registry, resolve_harness_plan
+    from sync_harness_instructions import (
+        apply_instruction_sync,
+        materialized_instruction_bytes,
+        prepare_instruction_sync,
+    )
+
+    operation = _journal_instruction_transition(home, operation)
+    before = operation["before"]
+    target = operation["target"]
+    if not before.get("desiredHarnesses"):
+        return
+    if target["instructionsMaterializedSha256"] in {
+        before["instructionsMaterializedSha256"], target["instructionsSource"]["sha256"]
+    }:
+        # Old rollback already recognizes unchanged bytes or Git-blob copies.
+        return
+    source = before["instructionsSource"]
+    migration = source.get("migration")
+    # Pre-bridge registries cannot be loaded by this manager; never guess paths.
+    if not isinstance(migration, dict):
+        # A failed preflight may never have changed any instructions. Do not
+        # introduce a new rollback block for legacy registries in that case.
+        for harness in before["desiredHarnesses"]:
+            plan = _resolve_plan(harness)
+            destination = plan.instructions_target
+            if (plan.instructions_materialization == "copy"
+                    and not destination.is_symlink() and destination.is_file()
+                    and hashlib.sha256(destination.read_bytes()).hexdigest()
+                    == target["instructionsMaterializedSha256"]):
+                raise SystemExit("cannot restore changed instruction copies without the old registry migration contract")
+        return
+    with tempfile.TemporaryDirectory(prefix="omh-instruction-rollback-") as temporary:
+        root = Path(temporary)
+        paths = (INSTRUCTION_REGISTRY_PATH, source["path"], migration["peer"])
+        for relative_path in paths:
+            destination = root / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(materialized_instruction_bytes(
+                REPO_ROOT, before["revision"], relative_path
+            ))
+        if hashlib.sha256((root / source["path"]).read_bytes()).hexdigest() != before["instructionsMaterializedSha256"]:
+            raise SystemExit("rollback instruction source changed after journal validation")
+        registry = load_harness_registry(root / INSTRUCTION_REGISTRY_PATH, repo_root=root)
+        prepared = {}
+        for harness in before.get("desiredHarnesses", ()):
+            old_plan = resolve_harness_plan(registry, harness, repo_root=root)
+            new_plan = _resolve_plan(harness)
+            if old_plan.instructions_target != new_plan.instructions_target:
+                raise SystemExit("instruction target changed across update; refusing automatic copy rollback")
+            if old_plan.instructions_materialization != "copy":
+                continue
+            if new_plan.instructions_materialization != "copy":
+                raise SystemExit("instruction materialization changed across update; refusing automatic copy rollback")
+            destination = old_plan.instructions_target
+            if not os.path.lexists(destination):
+                continue
+            if destination.is_symlink() or not destination.is_file():
+                raise SystemExit("refusing non-file instruction target during copy rollback")
+            # Only these exact source bytes confer ownership. Do not use peer
+            # provenance or a freshly captured user file as a rollback baseline.
+            digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+            if digest not in {before["instructionsMaterializedSha256"], target["instructionsMaterializedSha256"]}:
+                raise SystemExit("refusing changed or unmanaged instruction target during copy rollback")
+            item = prepare_instruction_sync(
+                old_plan, dry_run=False, assume_yes=True,
+                operation_managed_digests=(target["instructionsMaterializedSha256"],),
+                input_fn=lambda _prompt: "no",
+            )
+            if item.snapshot.kind != "file" or item.snapshot.digest != digest:
+                raise SystemExit("instruction target changed during copy rollback preflight")
+            key = os.path.normcase(str(lexical_absolute(destination)))
+            previous = prepared.get(key)
+            if previous is not None:
+                if (
+                    lexical_absolute(previous.plan.instructions_source)
+                    != lexical_absolute(item.plan.instructions_source)
+                    or previous.source_digest != item.source_digest
+                    or previous.snapshot != item.snapshot
+                ):
+                    raise SystemExit("conflicting instruction rollback plans for shared target")
+                continue
+            prepared[key] = item
+        for item in prepared.values():
+            apply_instruction_sync(item, dry_run=False)
+
+
+def _complete_resumed_update(
+    args: argparse.Namespace, home: Path, target: dict, release: str, bundle: str,
+) -> int:
     _manager, desired = _state_context(
         home,
         persist=True,
@@ -1238,6 +1364,9 @@ def command_recover(args: argparse.Namespace) -> int:
         if not isinstance(before, dict) or not isinstance(before.get("revision"), str):
             raise SystemExit("update operation journal has no rollback revision")
         repo = repo_path(home)
+        target = operation.get("target", {})
+        if _revision(repo) == target.get("revision"):
+            _restore_update_instruction_copies(home, operation)
         _git(repo, "checkout", "--detach", before["revision"], capture=False)
         _bootstrap_tooling(home)
         result = _invoke_internal(

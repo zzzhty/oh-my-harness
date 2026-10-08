@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -126,7 +127,9 @@ def operation_instruction_digests(
             raise SystemExit(
                 f"update operation journal has no {side_name} instruction source"
             )
-        digest = source.get("sha256")
+        # Blob digests remain immutable migration identities for older managers;
+        # copies must match the exact checkout bytes, never EOL-normalized bytes.
+        digest = side.get("instructionsMaterializedSha256", source.get("sha256"))
         if not isinstance(digest, str):
             raise SystemExit(
                 f"update operation journal has no {side_name} instruction digest"
@@ -361,6 +364,68 @@ def run(command: list[str], *, env: dict[str, str], dry_run: bool, check: bool =
     except subprocess.CalledProcessError as exc:
         raise SystemExit(f"command failed with exit code {exc.returncode}: {command_text(command)}") from exc
     return result.returncode
+
+
+def add_codex_plugin(
+    codex: str,
+    selector: str,
+    *,
+    env: dict[str, str],
+    dry_run: bool,
+    version: str | None = None,
+    source_root: Path | None = None,
+    stage: str = "plugin-add",
+) -> None:
+    """Retry only Codex's specific Windows copy/access-denied failure.
+
+    Reissue the same plugin command, never the enclosing transaction. Codex owns
+    its temporary copy paths; retain its output rather than guessing those paths
+    or deleting caches. Successful exit still requires normal closure validation.
+    """
+    command = [codex, "plugin", "add", selector]
+    if dry_run or sys.platform != "win32":
+        run(command, env=env, dry_run=dry_run)
+        return
+    delays = (0.5, 1.0)
+    for attempt in range(1, len(delays) + 2):
+        print("+ " + command_text(command), flush=True)
+        print(
+            f"Codex stage={stage} plugin={selector} version={version or 'unknown'} "
+            f"attempt={attempt}/{len(delays) + 1} "
+            f"validated-source={source_root or 'unknown'} "
+            "copy-target=reported-by-Codex-if-available",
+            flush=True,
+        )
+        try:
+            result = subprocess.run(
+                command, env=env, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", check=False,
+            )
+        except FileNotFoundError as exc:
+            raise SystemExit(f"command not found: {codex}") from exc
+        except PermissionError as exc:
+            raise SystemExit(f"command not executable: {codex}: {exc}") from exc
+        if result.stdout:
+            print(result.stdout, end="" if result.stdout.endswith("\n") else "\n", flush=True)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr,
+                  end="" if result.stderr.endswith("\n") else "\n", flush=True)
+        if result.returncode == 0:
+            return
+        output = f"{result.stdout or ''}\n{result.stderr or ''}".casefold()
+        retryable = "failed to copy plugin file" in output and "(os error 5)" in output
+        retry = retryable and attempt <= len(delays)
+        write_stderr(
+            f"Codex stage={stage} plugin={selector} version={version or 'unknown'} "
+            f"exit={result.returncode} attempt={attempt}/{len(delays) + 1}; "
+            + (f"copy access denied; retrying in {delays[attempt - 1]}s."
+               if retry else "plugin add failed; returning to transaction rollback.")
+        )
+        if not retry:
+            raise subprocess.CalledProcessError(
+                result.returncode, command, output=result.stdout, stderr=result.stderr,
+            )
+        time.sleep(delays[attempt - 1])
 
 
 def codex_version(codex: str, *, env: dict[str, str]) -> str:
@@ -951,10 +1016,10 @@ def apply_codex_harness(
                 continue
             if selector.partition("@")[0] not in enabled_before:
                 attempted_new.append(selector)
-            run(
-                [codex, "plugin", "add", selector],
-                env=env,
-                dry_run=dry_run,
+            add_codex_plugin(
+                codex, selector, env=env, dry_run=dry_run,
+                version=source_versions[plugin_name],
+                source_root=plugin_sources[plugin_name],
             )
         verify_codex()
     except (Exception, SystemExit) as exc:
@@ -1162,7 +1227,7 @@ def apply_retired_marketplace_migration(
         rollback_errors: list[str] = []
         for selector in reversed(removed_selectors):
             try:
-                run([codex, "plugin", "add", selector], env=env, dry_run=False)
+                add_codex_plugin(codex, selector, env=env, dry_run=False, stage="migration-rollback")
             except (Exception, SystemExit) as rollback_error:
                 rollback_errors.append(f"{selector}: {rollback_error}")
         if rollback_errors:
@@ -1720,79 +1785,40 @@ def ensure_marketplace_source(
             "explicit Git marketplace request cannot be honored because the canonical "
             f"checkout remote is unavailable for ref {git_ref!r}"
         )
-    skipped_stale_git_source = False
-    if git_source:
-        canonical_remote = git_remote_source(REPO_ROOT)
-        if canonical_remote is None or not same_marketplace_source(git_source, canonical_remote):
-            message = (
-                "Git marketplace source must be the canonical checkout remote; "
-                f"expected {canonical_remote!r}, found {git_source!r}"
-            )
-            if git_request_explicit:
-                raise SystemExit(message)
-            print(f"{message}; using local source.")
-            git_source = None
-            skipped_stale_git_source = True
-        else:
-            current, reason = git_remote_ref_status(REPO_ROOT, git_ref)
-            if not current:
-                if git_request_explicit:
-                    raise SystemExit(
-                        f"explicit Git marketplace ref is not the validated checkout: {reason}"
-                    )
-                print(
-                    f"Local checkout is ahead of or not aligned with Git marketplace ref "
-                    f"`{git_ref}`; using local source."
-                )
-                print(f"Reason: {reason}")
-                git_source = None
-                skipped_stale_git_source = True
-            else:
-                print(f"Git marketplace freshness check passed: {reason}")
-
-    if git_source:
-        pinned_revision = git_head_revision(REPO_ROOT)
-        print(f"Trying Git marketplace source first: {git_source}")
-        print(f"Pinning Git marketplace package source to validated revision: {pinned_revision}")
-        git_exit = ensure_git_marketplace_source(
-            codex,
-            codex_home=codex_home,
-            marketplace_name=marketplace_name,
-            source=git_source,
-            ref=pinned_revision,
-            env=env,
-            dry_run=dry_run,
+    if not git_request_explicit:
+        # The caller already validated the complete checkout distribution. Reuse
+        # that source instead of asking Codex to acquire the same Git tree again.
+        ensure_local_marketplace_source(
+            codex, codex_home=codex_home, marketplace_name=marketplace_name,
+            source=local_source, env=env, dry_run=dry_run,
         )
-        if git_exit == 0:
-            print("Marketplace source mode: git")
-            return MarketplaceSourceBinding(
-                source_type="git",
-                source=git_source,
-                revision=pinned_revision,
-            )
-        failure = (
+        print("Marketplace source mode: local (validated checkout reuse)")
+        return MarketplaceSourceBinding(source_type="local", source=local_source)
+    assert git_source is not None
+    canonical_remote = git_remote_source(REPO_ROOT)
+    if canonical_remote is None or not same_marketplace_source(git_source, canonical_remote):
+        raise SystemExit(
+            "Git marketplace source must be the canonical checkout remote; "
+            f"expected {canonical_remote!r}, found {git_source!r}"
+        )
+    current, reason = git_remote_ref_status(REPO_ROOT, git_ref)
+    if not current:
+        raise SystemExit(
+            f"explicit Git marketplace ref is not the validated checkout: {reason}"
+        )
+    pinned_revision = git_head_revision(REPO_ROOT)
+    print(f"Pinning explicit Git marketplace source to validated revision: {pinned_revision}")
+    git_exit = ensure_git_marketplace_source(
+        codex, codex_home=codex_home, marketplace_name=marketplace_name,
+        source=git_source, ref=pinned_revision, env=env, dry_run=dry_run,
+    )
+    if git_exit != 0:
+        raise SystemExit(
             f"Git marketplace source {git_source!r} at validated revision "
             f"{pinned_revision} failed with exit code {git_exit}"
         )
-        if git_request_explicit:
-            raise SystemExit(failure)
-        print(f"{failure}; falling back to local source.")
-    elif not skipped_stale_git_source:
-        print("Git marketplace source was not found; falling back to local source.")
-
-    ensure_local_marketplace_source(
-        codex,
-        codex_home=codex_home,
-        marketplace_name=marketplace_name,
-        source=local_source,
-        env=env,
-        dry_run=dry_run,
-    )
-    print("Marketplace source mode: local")
-    return MarketplaceSourceBinding(
-        source_type="local",
-        source=str(REPO_ROOT),
-    )
+    print("Marketplace source mode: git")
+    return MarketplaceSourceBinding("git", git_source, pinned_revision)
 
 
 def main() -> None:
@@ -1826,9 +1852,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--git-marketplace-source",
-        help="Codex-only Git marketplace source. Defaults to this checkout's remote.origin.url.",
+        help="Request Git acquisition from the canonical remote (default without this option: local checkout).",
     )
-    parser.add_argument("--git-ref", help="Codex-only Git ref. Defaults to main.")
+    parser.add_argument("--git-ref", help="Request Git acquisition at this ref (default with --git-marketplace-source: main).")
     parser.add_argument("--skip-bootstrap", action="store_true", help="Do not refresh the shared tooling venv.")
     parser.add_argument("--skip-agents", action="store_true", help="Do not sync the Codex subagent support file.")
     parser.add_argument("--skip-hooks", action="store_true", help="Do not refresh Codex Watcher hooks.")
