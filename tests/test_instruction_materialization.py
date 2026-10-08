@@ -297,6 +297,37 @@ class InstructionMaterializationTests(unittest.TestCase):
                         apply.assert_called_once()
                         self.assertEqual(self.plan.instructions_target.read_bytes(), old_bytes)
 
+    def test_real_vscode_copilot_registry_restores_shared_copy_once(self):
+        operation = self.enrich(self.journal())
+        operation['before']['desiredHarnesses'] = ['copilot', 'vscode']
+        registry = load_harness_registry(
+            self.repo / '.agents/harnesses/registry.json', repo_root=self.repo,
+        )
+        def current_plan(harness):
+            return resolve_harness_plan(
+                registry, harness, repo_root=self.repo,
+                user_home=self.root / 'user', os_name=os.name, environ={},
+            )
+        copilot = current_plan('copilot')
+        vscode = current_plan('vscode')
+        self.assertEqual(copilot.instructions_target, vscode.instructions_target)
+        self.assertEqual(copilot.instructions_materialization, 'copy')
+        destination = copilot.instructions_target
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        old_bytes = self.source.read_bytes()
+        self.git('checkout', '-q', self.new)
+        destination.write_bytes(self.source.read_bytes())
+        with (
+            mock.patch.object(omh, 'REPO_ROOT', self.repo),
+            mock.patch.object(omh, '_resolve_plan', side_effect=current_plan),
+            mock.patch.object(omh, 'update_operation', side_effect=lambda _home, **fields: {**operation, **fields}),
+            mock.patch.dict(os.environ, {'HOME': str(self.root / 'user'), 'USERPROFILE': str(self.root / 'user'), 'COPILOT_HOME': ''}),
+            mock.patch.object(instructions, 'apply_instruction_sync', wraps=instructions.apply_instruction_sync) as apply,
+        ):
+            omh._restore_update_instruction_copies(self.root, operation)
+        apply.assert_called_once()
+        self.assertEqual(destination.read_bytes(), old_bytes)
+
     def test_revision_attributes_override_current_checkout(self):
         (self.repo / '.gitattributes').write_text('AGENTS.md text eol=lf\n')
         self.git('add', '.')

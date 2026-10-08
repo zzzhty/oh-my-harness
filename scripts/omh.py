@@ -29,6 +29,7 @@ from harness_registry import (
 from manager_paths import (
     PRODUCT_NAME,
     bin_path,
+    expand_path,
     lexical_absolute,
     manager_home,
     repo_path,
@@ -643,9 +644,9 @@ def _refresh_one(
         _run(_check_args(args, home=home, harness=harness))
 
 
-def _write_harness_state(home: Path, harness: str) -> None:
+def _write_harness_state(home: Path, harness: str, *, codex_home: str | Path | None = None) -> None:
     release, bundle = _distribution(REPO_ROOT)
-    plan = _resolve_plan(harness)
+    plan = _resolve_plan(harness, codex_home=expand_path(codex_home) if codex_home else None)
     write_harness_receipt(
         home,
         harness=harness,
@@ -674,7 +675,7 @@ def command_install(args: argparse.Namespace) -> int:
             if harness not in desired:
                 desired.append(harness)
             write_desired(home, desired)
-            _write_harness_state(home, harness)
+            _write_harness_state(home, harness, codex_home=getattr(args, "codex_home", None))
         if not targets:
             print("no harness distributions selected")
     return 0
@@ -700,7 +701,7 @@ def command_refresh(args: argparse.Namespace) -> int:
                 check_after=not args.no_check,
             )
             if not args.dry_run:
-                _write_harness_state(home, harness)
+                _write_harness_state(home, harness, codex_home=getattr(args, "codex_home", None))
                 write_desired(home, desired_harnesses(desired_state))
     return 0
 
@@ -722,6 +723,8 @@ def _remove_one(args: argparse.Namespace, *, home: Path, harness: str) -> None:
         command.extend(["--codex", args.codex])
     if getattr(args, "dry_run", False):
         command.append("--dry-run")
+        for removed in getattr(args, "preview_removed", ()):
+            command.extend(["--preview-removed", removed])
     if getattr(args, "yes", False):
         command.append("--yes")
     _run(command)
@@ -743,9 +746,11 @@ def command_remove(args: argparse.Namespace) -> int:
             )
         for harness in targets:
             validate_harness_receipts(home, harness)
+        args.preview_removed = []
         for harness in targets:
             _remove_one(args, home=home, harness=harness)
             if args.dry_run:
+                args.preview_removed.append(harness)
                 continue
             desired.remove(harness)
             write_desired(home, desired)
@@ -1429,7 +1434,7 @@ def command_manager_repair(args: argparse.Namespace) -> int:
             )
             _refresh_one(refresh_args, home=home, harness=harness, check_after=True)
             if not dry_run:
-                _write_harness_state(home, harness)
+                _write_harness_state(home, harness, codex_home=refresh_args.codex_home)
                 if harness not in installed:
                     installed.append(harness)
                 write_desired(home, installed)

@@ -48,6 +48,7 @@ class HarnessRegistryTests(unittest.TestCase):
                 "zcode",
                 "claude-code",
                 "copilot",
+                "vscode",
                 "gemini",
                 "opencode",
                 "pi-agent",
