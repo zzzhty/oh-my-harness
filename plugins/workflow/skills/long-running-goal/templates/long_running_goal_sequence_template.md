@@ -109,7 +109,7 @@ Execution mode: `Loop-shaped execution`
 5. Skills and context: `<workflow:long-running-goal, sequence-child-goals.md, child-required skills, runbooks, and specs.>`
 6. Connector read/write boundaries: `<Exact child-by-child pre-approved external reads/writes and specified later actions in each owner's Deferred approval gates; undefined boundaries keep the sequence Draft.>`
 7. Independent verification: `<check_goal_sequence.py plus project-specific tests or reviewer gates.>`
-8. Runtime hard stops: `<Only repeated technical impossibility, unavailable facts/credentials, destructive/irreversible/privacy-sensitive/external action beyond recorded authorization, semantic drift, or required verifier failure with no in-scope next step.>`
+8. Runtime hard stops: `<Uncovered authorization/semantic-decision boundary: stop the affected action immediately. Technical failure: adapt after the first and second runtime-reported native Goal failures; honor the third native Codex Goal hard stop. Use the skill's adaptive recovery procedure; do not override runtime counting or retry denied access.>`
 9. Durable learning: `<Parent/child evidence, current docs, validation logs, closeouts, and any reusable strategy update.>`
 
 ## Pre-Approval / YOLO
@@ -118,7 +118,7 @@ Authorization evidence: `<Source references mapping actual actions, targets, sco
 
 1. Pre-approved YOLO local operations: `<Only planned non-destructive local code/docs edits, tests, lint, formatting, rebuilds, refreshes, reinstalls, link checks, plugin/cache refreshes, and project-owned generated-artifact cleanup inside each child boundary; task temporary cache housekeeping remains separately governed.>`
 2. Pre-approved external reads/writes: `<Exact union of already-approved child-specific surfaces, or Not applicable; the parent grants no additional permission.>`
-3. Runtime hard stops: `<Repeated technical impossibility after local diagnosis, required inputs/tools that cannot be obtained or restored through authorized means, destructive/irreversible/privacy-sensitive/externally visible/external writes beyond recorded authorization, frozen-semantic conflict, or required verifier failure without an in-plan next step.>`
+3. Runtime hard stops: `<Uncovered authorization/semantic-decision boundary: stop the affected action immediately. Technical failure: adapt after the first and second runtime-reported native Goal failures; honor the third native Codex Goal hard stop. Use the skill's adaptive recovery procedure; do not override runtime counting or retry denied access.>`
 4. Non-stops: `<M0, child handoff after passed gates, review/checkpoint boundaries, timing rebaseline after a range overrun, evidence recording, rebuild/refresh/reinstall, docs sync, and locally repairable validation failures.>`
 
 ## Deferred approval gates

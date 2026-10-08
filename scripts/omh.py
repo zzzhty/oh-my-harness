@@ -1192,7 +1192,7 @@ def _restore_update_instruction_copies(home: Path, operation: dict) -> None:
         if hashlib.sha256((root / source["path"]).read_bytes()).hexdigest() != before["instructionsMaterializedSha256"]:
             raise SystemExit("rollback instruction source changed after journal validation")
         registry = load_harness_registry(root / INSTRUCTION_REGISTRY_PATH, repo_root=root)
-        prepared = []
+        prepared = {}
         for harness in before.get("desiredHarnesses", ()):
             old_plan = resolve_harness_plan(registry, harness, repo_root=root)
             new_plan = _resolve_plan(harness)
@@ -1219,8 +1219,19 @@ def _restore_update_instruction_copies(home: Path, operation: dict) -> None:
             )
             if item.snapshot.kind != "file" or item.snapshot.digest != digest:
                 raise SystemExit("instruction target changed during copy rollback preflight")
-            prepared.append(item)
-        for item in prepared:
+            key = os.path.normcase(str(lexical_absolute(destination)))
+            previous = prepared.get(key)
+            if previous is not None:
+                if (
+                    lexical_absolute(previous.plan.instructions_source)
+                    != lexical_absolute(item.plan.instructions_source)
+                    or previous.source_digest != item.source_digest
+                    or previous.snapshot != item.snapshot
+                ):
+                    raise SystemExit("conflicting instruction rollback plans for shared target")
+                continue
+            prepared[key] = item
+        for item in prepared.values():
             apply_instruction_sync(item, dry_run=False)
 
 

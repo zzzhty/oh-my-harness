@@ -58,7 +58,10 @@ On a graceful resumed-update failure, the new executable restores old copy bytes
 before an older caller re-enters its rollback executable. Both registries must
 resolve the same target and copy strategy. Every existing copy must match an
 exact old or new materialized digest; preflight all copies before restoring any.
-Existing atomic replacement and race revalidation still apply. Changed targets
+Existing atomic replacement and race revalidation still apply. Multiple logical
+harnesses sharing one physical copy are preflighted separately and written once
+only when source path, source digest and target snapshot agree. Conflicts fail
+before any writes; logical harness receipts remain distinct. Changed targets
 are preserved, and the update/rollback journal remains the failure authority.
 Explicit recovery running the new code performs this bridge before switching
 back to the old revision as well.

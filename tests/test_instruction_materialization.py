@@ -264,6 +264,39 @@ class InstructionMaterializationTests(unittest.TestCase):
         self.assertEqual(self.plan.instructions_target.read_bytes(), new_bytes)
         self.assertEqual(edited_target.read_bytes(), b'user edited\r\n')
 
+    def test_bridge_restores_shared_copy_once_and_rejects_conflicting_sources(self):
+        operation = self.enrich(self.journal())
+        old_bytes = self.source.read_bytes()
+        self.git('checkout', '-q', self.new)
+        self.sync(operation)
+        new_bytes = self.plan.instructions_target.read_bytes()
+        operation['before']['desiredHarnesses'].append('claude-code')
+        for conflict in (False, True):
+            with self.subTest(conflict=conflict):
+                self.plan.instructions_target.write_bytes(new_bytes)
+                def shared_plan(registry, harness, **kwargs):
+                    plan = resolve_harness_plan(registry, harness, **kwargs)
+                    plan = replace(plan, instructions_target=self.plan.instructions_target,
+                                   instructions_materialization='copy')
+                    if conflict and harness == 'claude-code':
+                        different_source = plan.repo_root / 'different-instructions.md'
+                        different_source.write_bytes(b'conflicting old instructions\r\n')
+                        plan = replace(plan, instructions_source=different_source)
+                    return plan
+                with (
+                    mock.patch('harness_registry.resolve_harness_plan', side_effect=shared_plan),
+                    mock.patch.object(instructions, 'apply_instruction_sync', wraps=instructions.apply_instruction_sync) as apply,
+                ):
+                    if conflict:
+                        with self.assertRaisesRegex(SystemExit, 'conflicting instruction rollback plans'):
+                            self.bridge(operation)
+                        apply.assert_not_called()
+                        self.assertEqual(self.plan.instructions_target.read_bytes(), new_bytes)
+                    else:
+                        self.bridge(operation)
+                        apply.assert_called_once()
+                        self.assertEqual(self.plan.instructions_target.read_bytes(), old_bytes)
+
     def test_revision_attributes_override_current_checkout(self):
         (self.repo / '.gitattributes').write_text('AGENTS.md text eol=lf\n')
         self.git('add', '.')

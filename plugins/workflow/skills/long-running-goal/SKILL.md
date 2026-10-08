@@ -43,21 +43,19 @@ On execution/resume, read those sources and later changes before asking. Still-c
 
 Planned non-destructive local operations are non-stops: reviews, checkpoints, rebuilds, refreshes, dependency restores, edits, tests, formatting and link checks. Continue when gates pass. Apply `components/milestone-scope-gate.md` at its defined boundaries; it constrains unplanned expansion, never work frozen by the user, goal, repository, review gate or checkpoint.
 
-Diagnose and fix ordinary failures while a useful in-scope next step remains. Ask only at a runtime hard stop:
+Diagnose ordinary technical failures with [adaptive recovery](references/execute-and-close.md#adaptive-recovery). The first and second runtime-reported native Goal failures are opportunities to change strategy within existing authority, not reasons to declare the goal blocked or repeat an unchanged failed approach. The third runtime-reported native Goal failure reaches the native Codex Goal hard stop; do not extend or reset that limit in this skill.
 
-- Repeated technical impossibility, normally after at least three attempts or distinct approaches unless immediately decisive.
-- Required credentials, files, tools or source-of-truth inputs cannot be obtained/restored through authorized means and prevent the next required action; local absence alone is a non-stop.
-- A destructive, irreversible, privacy-sensitive, externally visible or external-write action needs authorization beyond the frozen contract.
-- Evidence contradicts frozen semantics and continuation would change scope or product behavior.
-- A required subagent, connector, worktree or verifier failed and no meaningful in-plan local fallback remains.
+Ask only at a runtime hard stop: an uncovered authorization boundary (including a sourced final-review gate, denied access, or a scope/product-semantic change requiring a decision), or the native Goal technical-failure stop. Stop the affected action immediately at an authorization boundary; never spend retry opportunities probing or routing around it.
 
-Stop the affected action, not at status checkpoints. Finish independent authorized work within the current milestone without bypassing gates or advancing past an incomplete milestone. Record assumptions, actions, validation, risk and checkpoint evidence in the goal.
+Missing credentials, files, tools, source inputs, subagents, connectors, worktrees or verifiers first require diagnosis and authorized recovery. Local absence or one failed method alone is not technical impossibility. Preserve required methods, gates, scope and acceptance criteria when changing strategy. If no authorized useful alternative exists, report the exact external dependency and wait for it; do not manufacture attempts, claim success, or silently relax a required gate.
+
+Stop the affected action, not at status checkpoints. Finish independent authorized work within the current milestone without bypassing gates or advancing past an incomplete milestone, unless the native runtime has already stopped execution. Record recovery evidence in the existing milestone so a context transition does not restart failed approaches.
 
 Temporary-cache housekeeping uses only preflight's recorded policy and owner paths. Never infer cleanup consent from YOLO scope, skipped grilling or generic cleanup language.
 
 ## Harness Goal Tool Boundary
 
-Use native goal tools only on an explicit active-conversation request to create, execute, resume or close a long-running goal; a planning document alone is not an active native goal. Set the project outcome, add a token budget only if requested, and avoid nested active goals. Complete only when no required work remains; block only at the recorded hard-stop threshold with no meaningful progress left.
+Use native goal tools only on an explicit active-conversation request to create, execute, resume or close a long-running goal; a planning document alone is not an active native goal. Set the project outcome, add a token budget only if requested, and avoid nested active goals. Complete only when no required work remains; block only at an authorization boundary or the native technical-failure threshold with no meaningful progress left. Native stop signals take precedence; the skill neither implements a second counter nor overrides runtime counting/reset semantics. Do not recreate, rename or resume a stopped native goal merely to obtain more attempts.
 
 The goal document, milestone states, validation, commits or equivalent revisions and final report remain the durable authority; native status does not replace them.
 
