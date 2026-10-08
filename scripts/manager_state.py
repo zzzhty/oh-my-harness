@@ -201,6 +201,56 @@ def load_or_initialize(
     return manager, desired
 
 
+def load_state_snapshot(home: Path, *, registry: HarnessRegistry | None = None) -> dict[str, Any]:
+    """Read recorded state only: never initialize, hash sources or inspect Git."""
+    manager = _load_object(manager_file(home), label="manager state", required=False)
+    desired = _load_object(desired_file(home), label="desired harness state", required=False)
+    if (manager is None) != (desired is None):
+        raise SystemExit("manager lifecycle state is incomplete; both manager.json and desired.json "
+                         "must exist or both must be absent")
+    initial = None
+    if manager is not None:
+        _validate_manager_payload(manager, path=manager_file(home))
+        assert desired is not None
+        _validate_desired_payload(desired, path=desired_file(home))
+        names = desired["harnesses"]
+        harnesses = list(canonical_harnesses(names, registry=registry)) if registry else list(names)
+    else:
+        initial_path = state_root(home) / "install.json"
+        if initial_path.exists():
+            initial = install_receipt(home)
+        harnesses = []
+    operation = load_current_operation(home)
+    if operation is not None:
+        if operation.get("schemaVersion") != STATE_SCHEMA_VERSION:
+            raise SystemExit("current manager operation schema is unsupported")
+        for field in ("operationId", "command", "phase"):
+            if not isinstance(operation.get(field), str) or not operation[field]:
+                raise SystemExit(f"current manager operation field {field!r} is invalid")
+        if not isinstance(operation.get("before"), dict) or not isinstance(operation.get("target"), dict):
+            raise SystemExit("current manager operation transition state is invalid")
+    receipts = {}
+    if registry is not None:
+        for harness in harnesses:
+            if harness not in registry.harnesses:
+                continue  # Unknown recorded IDs remain visible; never resolve them as paths.
+            entries = []
+            for path in _harness_receipts(home, harness, registry=registry):
+                receipt = _load_object(path, label="harness receipt")
+                assert receipt is not None
+                if receipt.get("status") != "ready":
+                    raise SystemExit(f"harness receipt status is invalid: {path}")
+                for field in ("managerRevision", "releaseVersion", "bundleIdentity", "root", "updatedAt"):
+                    if not isinstance(receipt.get(field), str) or not receipt[field]:
+                        raise SystemExit(f"harness receipt field {field!r} is invalid: {path}")
+                entries.append(receipt)
+            receipts[harness] = entries
+    return {"manager": manager, "desiredHarnesses": harnesses,
+            "operation": operation, "harnessReceipts": receipts,
+            "stateKind": "recorded" if manager else "legacy-receipt-only" if initial else "unknown",
+            "initialReceipt": initial}
+
+
 def canonical_harnesses(harnesses: Iterable[str], *, registry: HarnessRegistry | None = None) -> tuple[str, ...]:
     """Normalize persisted aliases in memory; unknown IDs remain visible to status."""
     aliases = (registry or load_harness_registry()).aliases

@@ -644,10 +644,11 @@ def _harness(harness_id: str, value: object) -> HarnessSpec:
     )
 
 
-def load_harness_registry(
+def _load_harness_registry(
     path: Path = REGISTRY_FILE,
     *,
     repo_root: Path = REPO_ROOT,
+    validate_sources: bool,
 ) -> HarnessRegistry:
     try:
         payload = json.loads(
@@ -714,12 +715,13 @@ def load_harness_registry(
     if "codex" not in harnesses or harnesses["codex"].skills.driver != "codex-marketplace":
         raise HarnessRegistryError("registry must define the codex marketplace harness")
     resolved_repo_root = repo_root.resolve(strict=False)
-    resolved_instructions_source = _repo_owned_path(
+    path_resolver = _repo_owned_path if validate_sources else _join_within
+    resolved_instructions_source = path_resolver(
         resolved_repo_root,
         instructions_source,
         label="registry instructions source",
     )
-    resolved_peer_source = _repo_owned_path(
+    resolved_peer_source = path_resolver(
         resolved_repo_root,
         instructions_migration.peer_source,
         label="registry instructions migration peer",
@@ -728,9 +730,9 @@ def load_harness_registry(
         ("registry instructions source", resolved_instructions_source),
         ("registry instructions migration peer", resolved_peer_source),
     ):
-        if source.is_symlink() or not source.is_file():
+        if validate_sources and (source.is_symlink() or not source.is_file()):
             raise HarnessRegistryError(f"{label} must be a regular file: {source}")
-    if instructions_migration.stage in {"bridge-ready", "source-switched"}:
+    if validate_sources and instructions_migration.stage in {"bridge-ready", "source-switched"}:
         try:
             sources_match = (
                 resolved_instructions_source.read_bytes()
@@ -762,6 +764,16 @@ def load_harness_registry(
         excluded_skill_roots=excluded_skill_roots,
         harnesses=harnesses,
     )
+
+
+def load_harness_registry(path: Path = REGISTRY_FILE, *, repo_root: Path = REPO_ROOT) -> HarnessRegistry:
+    """Load strict runtime authority, including source-file integrity."""
+    return _load_harness_registry(path, repo_root=repo_root, validate_sources=True)
+
+
+def load_harness_metadata(path: Path = REGISTRY_FILE, *, repo_root: Path = REPO_ROOT) -> HarnessRegistry:
+    """Parse registry structure for help/state display without inspecting resources."""
+    return _load_harness_registry(path, repo_root=repo_root, validate_sources=False)
 
 
 def _resolve_root(

@@ -25,6 +25,7 @@ from harness_registry import (
     INSTRUCTIONS_MIGRATION_STAGES,
     HarnessRegistry,
     HarnessRegistryError,
+    load_harness_metadata,
 )
 from manager_paths import (
     PRODUCT_NAME,
@@ -44,6 +45,7 @@ from manager_state import (
     finish_operation,
     load_current_operation,
     load_or_initialize,
+    load_state_snapshot,
     remove_harness_receipt,
     translate_harness_receipts,
     validate_harness_receipts,
@@ -780,59 +782,67 @@ def command_check(args: argparse.Namespace, *, strict: bool = False) -> int:
     return 0
 
 
+def _recorded_snapshot(home: Path) -> dict:
+    try:
+        registry = load_harness_metadata(repo_root=REPO_ROOT)
+    except HarnessRegistryError:
+        registry = None
+    return load_state_snapshot(home, registry=registry)
+
+
 def command_status(args: argparse.Namespace) -> int:
     home = lexical_absolute(manager_home(args.home))
-    manager, desired = _state_context(
-        home,
-        persist=False,
-        allow_manager_drift=True,
-        allow_degraded=True,
-        allow_active_operation=True,
-    )
-    current_op = load_current_operation(home)
     payload = {
-        "product": PRODUCT_NAME,
-        "home": str(home),
-        "manager": manager,
-        "desiredHarnesses": list(desired_harnesses(desired)),
-        "worktreeClean": _worktree_clean(REPO_ROOT),
-        "operation": current_op,
+        "product": PRODUCT_NAME, "home": str(home),
+        **_recorded_snapshot(home),
+        "worktreeClean": None,
+        "observation": "recorded-state-only",
     }
+    if getattr(args, "registry_error", None):
+        payload["registryWarning"] = args.registry_error
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
-    print(f"{PRODUCT_NAME} {manager['releaseVersion']}")
+    manager = payload["manager"]
+    print(f"{PRODUCT_NAME}: recorded state (not a live health check)")
     print(f"home: {home}")
-    print(f"revision: {manager['revision']}")
-    print(f"bundle: {manager['bundleIdentity']}")
-    print(f"channel: {manager['channel']}")
-    print("desired harnesses: " + (", ".join(payload["desiredHarnesses"]) or "<none>"))
-    print(f"worktree: {'clean' if payload['worktreeClean'] else 'dirty'}")
+    if manager:
+        print(f"recorded version: {manager['releaseVersion']}")
+        print(f"recorded revision: {manager['revision']}")
+        print(f"recorded bundle: {manager['bundleIdentity']}")
+        print(f"channel: {manager['channel']}")
+        print(f"recorded status: {manager['status']}")
+    else:
+        print(f"state: {payload['stateKind']}; current version unknown; run omh repair")
+    print("desired harnesses: " + (", ".join(payload["desiredHarnesses"]) or "<none recorded>"))
+    print("worktree: unchecked; use omh check or omh doctor for live validation")
+    current_op = payload["operation"]
     if current_op:
-        print(
-            "operation: "
-            f"{current_op.get('command')} / {current_op.get('phase')} "
-            f"({current_op.get('operationId')})"
-        )
+        print(f"operation: {current_op['command']} / {current_op['phase']} ({current_op['operationId']})")
     else:
         print("operation: none")
+    if "registryWarning" in payload:
+        print("registry warning: " + payload["registryWarning"])
     return 0
 
 
 def command_version(args: argparse.Namespace) -> int:
-    release, bundle = _distribution(REPO_ROOT)
+    home = lexical_absolute(manager_home(args.home))
+    snapshot = _recorded_snapshot(home)
+    manager = snapshot["manager"]
     payload = {
         "product": PRODUCT_NAME,
-        "releaseVersion": release,
-        "revision": _revision(REPO_ROOT),
-        "bundleIdentity": bundle,
+        "releaseVersion": manager["releaseVersion"] if manager else None,
+        "revision": manager["revision"] if manager else None,
+        "bundleIdentity": manager["bundleIdentity"] if manager else None,
+        "observation": "recorded-state-only", "stateKind": snapshot["stateKind"],
     }
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     else:
-        print(f"{PRODUCT_NAME} {release}")
-        print(f"revision: {payload['revision']}")
-        print(f"bundle: {bundle}")
+        print(f"{PRODUCT_NAME} recorded version: {payload['releaseVersion'] or 'unknown'}")
+        print(f"recorded revision: {payload['revision'] or 'unknown'}")
+        print(f"recorded bundle: {payload['bundleIdentity'] or 'unknown'}")
     return 0
 
 
@@ -1606,17 +1616,19 @@ def _selected_command(argv: Sequence[str]) -> str | None:
 def _add_harness_common(
     parser: argparse.ArgumentParser,
     *,
-    registry: HarnessRegistry,
+    registry: HarnessRegistry | None,
     mode: str,
 ) -> None:
     def harness_name(value: str) -> str:
+        if registry is None:
+            return value
         try:
             return registry.resolve_id(value)
         except HarnessRegistryError as exc:
             raise argparse.ArgumentTypeError(str(exc)) from exc
 
     default = (
-        f"Default: {registry.default_harness}." if mode == "install"
+        f"Default: {registry.default_harness if registry else 'registry unavailable'}." if mode == "install"
         else "Required unless --all is used." if mode == "remove"
         else "Default: all installed harnesses."
     )
@@ -1668,7 +1680,7 @@ def _add_install_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_repair_options(parser: argparse.ArgumentParser, registry: HarnessRegistry) -> None:
+def _add_repair_options(parser: argparse.ArgumentParser, registry: HarnessRegistry | None) -> None:
     _add_harness_common(parser, registry=registry, mode="repair")
     parser.add_argument("--rebuild", action="store_true", help="Rebuild the tooling venv through the stable launcher.")
     parser.add_argument("--reclone", action="store_true", help="Restore the recorded checkout from its remote, keeping a backup.")
@@ -1679,8 +1691,15 @@ def _add_repair_options(parser: argparse.ArgumentParser, registry: HarnessRegist
 
 
 def build_parser() -> argparse.ArgumentParser:
-    registry = _load_registry()
-    available = textwrap.fill(registry.selection_help(), width=78)
+    registry_error = None
+    try:
+        registry = load_harness_metadata(repo_root=REPO_ROOT)
+    except HarnessRegistryError as exc:
+        registry = None
+        registry_error = str(exc)
+    available = textwrap.fill(registry.selection_help(), width=78) if registry else (
+        "Harness choices unavailable: " + str(registry_error)
+    )
     parser = argparse.ArgumentParser(
         prog="omh",
         description=(
@@ -1705,6 +1724,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Run omh COMMAND --help for defaults, options and examples."
         ),
     )
+    parser.set_defaults(registry_error=registry_error)
     parser.add_argument("--home", metavar="PATH", help="Manager home; place before COMMAND (default: OH_MY_HARNESS_HOME or ~/.oh-my-harness).")
     sub = parser.add_subparsers(dest="command", required=True, title="commands", metavar="COMMAND")
 
@@ -1720,7 +1740,7 @@ def build_parser() -> argparse.ArgumentParser:
     install = command(
         "install", "Add skills and instructions to coding clients.",
         f"Install one or more harness distributions and record them for future updates. "
-        f"Default: {registry.default_harness}. Existing targets are reapplied; this does not install the client app.",
+        f"Default: {registry.default_harness if registry else 'registry unavailable'}. Existing targets are reapplied; this does not install the client app.",
         "  omh install copilot\n  omh install claude gemini --dry-run\n  omh install --all",
         harnesses=True,
     )
@@ -1861,11 +1881,28 @@ def build_internal_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    normalized = _normalize_argv(list(sys.argv[1:] if argv is None else argv))
+def parse_arguments(argv: list[str]) -> argparse.Namespace:
+    """One side-effect-free parser shared by the stable shim and direct CLI."""
+    normalized = _normalize_argv(argv)
     command = _selected_command(normalized)
     parser = build_internal_parser() if command in INTERNAL_COMMANDS else build_parser()
     args = parser.parse_args(normalized)
+    if getattr(args, "registry_error", None) and args.command not in {"status", "version"}:
+        repair = args.command == "repair" or (args.command == "manager" and args.manager_command == "repair")
+        if not repair or any(getattr(args, key, None) for key in (
+                "targets", "harness", "all", "codex", "codex_home", "migrate_marketplace", "migrate_from_repo")):
+            parser.error(args.registry_error + "; restore with plain omh repair before selecting harnesses")
+    if getattr(args, "all", False) and (getattr(args, "targets", []) or getattr(args, "harness", None)):
+        parser.error("do not combine explicit harness targets with --all")
+    if args.command == "remove" and not (args.all or args.targets or args.harness):
+        parser.error("remove requires HARNESS or --all")
+    if args.command == "update" and getattr(args, "target", None) and (args.channel or args.to):
+        parser.error("use one update target: positional TARGET, --channel, or --to")
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_arguments(list(sys.argv[1:] if argv is None else argv))
     return int(args.func(args) or 0)
 
 

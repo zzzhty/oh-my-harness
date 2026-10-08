@@ -2,9 +2,11 @@
 """Dependency-free launcher and recovery entry point, outside the managed checkout."""
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
+import runpy
 import shutil
 import stat
 import subprocess
@@ -251,6 +253,35 @@ def _read_only_runtime(home: Path, cli: Path, arguments: list[str], env: dict[st
     return subprocess.run([str(python), "-B", str(cli), "--home", str(home), *arguments], env=env).returncode
 
 
+def _parse_cli(cli: Path, home: Path, arguments: list[str]):
+    """Use the checkout's sole parser under the base interpreter before writes."""
+    before = list(sys.path)
+    sys.path.insert(0, str(cli.parent))
+    try:
+        namespace = runpy.run_path(str(cli))
+        argv = ["--home", str(home), *arguments]
+        if "parse_arguments" in namespace:
+            return namespace["parse_arguments"](argv)
+        # The stable shim can outlive its checkout during rollback/downgrade.
+        # Older managers already expose these same normalization/parser owners.
+        normalized = namespace["_normalize_argv"](argv)
+        command = namespace["_selected_command"](normalized)
+        factory = "build_internal_parser" if command in namespace["INTERNAL_COMMANDS"] else "build_parser"
+        return namespace[factory]().parse_args(normalized)
+    finally:
+        sys.path[:] = before
+
+
+def _parse_missing_checkout_repair(arguments: list[str]):
+    # The full CLI cannot be imported until its checkout is restored. This small
+    # recovery adapter accepts only restoration flags, never guesses harness IDs.
+    parser = argparse.ArgumentParser(prog="omh repair")
+    for flag in ("--rebuild", "--reclone", "--dry-run", "--yes", "--no-path"):
+        parser.add_argument(flag, action="store_true")
+    rest = arguments[2:] if arguments[:2] == ["manager", "repair"] else arguments[1:]
+    return parser.parse_args(rest)
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if len(arguments) < 2 or arguments[0] != "--home":
@@ -280,41 +311,72 @@ def main(argv: list[str] | None = None) -> int:
     cli = repo / "scripts" / "omh.py"
     bootstrap = repo / "scripts" / "bootstrap_tooling_env.py"
     tooling_python = _venv_python(home)
-    help_request = _is_help_request(command_arguments)
-    if help_request:
-        if cli.is_file() and tooling_python.is_file():
-            completed = subprocess.run([
-                str(tooling_python), "-B", str(cli), "--home", str(home),
-                *("--help" if arg == "-Help" else arg for arg in command_arguments),
-            ], env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", GIT_OPTIONAL_LOCKS="0"))
-            return completed.returncode
+    # Help and parsing are standard-library work, even with a broken tooling venv.
+    sys.dont_write_bytecode = True
+    for index, argument in enumerate(command_arguments):
+        if argument == "--":
+            break
+        if argument == "-Help":
+            command_arguments[index] = "--help"
+    if _is_help_request(command_arguments) and (not cli.is_file() or sys.version_info[:2] < MINIMUM_PYTHON_VERSION):
         _fallback_help()
         return 0
     _require_supported_python()
-    repair = _is_manager_repair(command_arguments)
-    # argparse accepts unambiguous long-option prefixes. Conservatively treat
-    # every dry-run prefix as read-only, leaving validity checks to the CLI.
-    dry_run = _has_long_option(command_arguments, "--dry-run")
+    if cli.is_file():
+        try:
+            parsed = _parse_cli(cli, home, command_arguments)
+        except SystemExit as exc:
+            if isinstance(exc.code, int):
+                return exc.code
+            raise
+        except (ImportError, SyntaxError, ValueError) as exc:
+            if not _is_manager_repair(command_arguments):
+                raise SystemExit(f"managed CLI is unavailable: {exc}; run omh repair") from exc
+            parsed = _parse_missing_checkout_repair(command_arguments)
+            parsed.command = "repair"
+        repair = parsed.command == "repair" or (
+            parsed.command == "manager" and parsed.manager_command == "repair")
+        dry_run = getattr(parsed, "dry_run", False)
+        if parsed.command in {"status", "version"}:
+            # A retained older CLI can still inspect Git here; keep its reads
+            # non-mutating just as the previous read-only subprocess path did.
+            previous = os.environ.get("GIT_OPTIONAL_LOCKS")
+            os.environ["GIT_OPTIONAL_LOCKS"] = "0"
+            try:
+                return int(parsed.func(parsed) or 0)
+            finally:
+                if previous is None:
+                    os.environ.pop("GIT_OPTIONAL_LOCKS", None)
+                else:
+                    os.environ["GIT_OPTIONAL_LOCKS"] = previous
+    else:
+        repair = _is_manager_repair(command_arguments)
+        if not repair:
+            if command_arguments and command_arguments[0] in {"status", "version", "check", "doctor"}:
+                return _read_only_runtime(home, cli, command_arguments,
+                                          dict(os.environ, PYTHONDONTWRITEBYTECODE="1", GIT_OPTIONAL_LOCKS="0"))
+            raise SystemExit("managed checkout is unavailable; run `omh repair` or rerun the external installer")
+        parsed = _parse_missing_checkout_repair(command_arguments)
+        dry_run = parsed.dry_run
     if repair and dry_run:
-        _repair_checkout(home, force="--reclone" in command_arguments, dry_run=True)
+        _repair_checkout(home, force=parsed.reclone, dry_run=True)
         print("would check/rebuild tooling, restore launchers and user PATH, recover an interrupted update, then repair and check selected harnesses")
         return 0
-    read_only = bool(command_arguments) and command_arguments[0] in {"status", "version", "check", "doctor"}
+    read_only = getattr(parsed, "command", None) in {"check", "doctor"}
     if read_only or dry_run:
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", GIT_OPTIONAL_LOCKS="0")
     if read_only:
         return _read_only_runtime(home, cli, command_arguments, env)
     if dry_run:
-        # A preview must not run pip, create a venv, or acquire a creating lock.
         executable = tooling_python if tooling_python.is_file() else Path(sys.executable)
         return subprocess.run([str(executable), "-B", str(cli), "--home", str(home), *command_arguments], env=env).returncode
     with _mutation_lock(home):
         if repair:
-            _repair_checkout(home, force="--reclone" in command_arguments)
+            _repair_checkout(home, force=parsed.reclone)
         elif not cli.is_file() or not bootstrap.is_file():
             raise SystemExit("managed checkout is unavailable; run `omh repair` or rerun the external installer")
         command = [sys.executable, str(bootstrap), "--venv", str(home / "venv")]
-        if repair and "--rebuild" in command_arguments:
+        if repair and parsed.rebuild:
             command.append("--rebuild")
         subprocess.run(command, check=True, stdout=sys.stderr)
     if not tooling_python.is_file():

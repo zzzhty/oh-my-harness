@@ -876,6 +876,7 @@ def _enabled_codex_harness_plugins(
     env: dict[str, str],
     ignored_unclassified: set[str] | None = None,
     ignored_alternate_marketplaces: set[str] | None = None,
+    rows: dict[tuple[str, str], PluginListRow] | None = None,
 ) -> set[str]:
     selectors = _enabled_catalog_plugin_selectors(
         catalog,
@@ -883,6 +884,7 @@ def _enabled_codex_harness_plugins(
         marketplace_name=marketplace_name,
         env=env,
         ignored_unclassified=ignored_unclassified,
+        rows=rows,
     )
     alternate = sorted(
         f"{plugin_name}@{marketplace}"
@@ -909,14 +911,16 @@ def _enabled_catalog_plugin_selectors(
     marketplace_name: str,
     env: dict[str, str],
     ignored_unclassified: set[str] | None = None,
+    rows: dict[tuple[str, str], PluginListRow] | None = None,
 ) -> set[tuple[str, str]]:
     expected = set(catalog.plugin_names)
-    rows = read_codex_plugin_rows(
-        codex,
-        marketplace_name=marketplace_name,
-        plugin_names=expected,
-        env=env,
-    )
+    if rows is None:
+        rows = read_codex_plugin_rows(
+            codex,
+            marketplace_name=marketplace_name,
+            plugin_names=expected,
+            env=env,
+        )
     enabled = {
         (marketplace, plugin_name)
         for (marketplace, plugin_name), row in rows.items()
@@ -1060,6 +1064,10 @@ def apply_codex_harness(
 
     require_excluded_skill_roots_clear(catalog, excluded_skill_roots)
     expected_names = set(catalog.plugin_names)
+    rows_before = read_codex_plugin_rows(
+        codex, marketplace_name=marketplace_name,
+        plugin_names=expected_names, env=env,
+    )
     enabled_before = _enabled_codex_harness_plugins(
         catalog,
         codex=codex,
@@ -1067,6 +1075,7 @@ def apply_codex_harness(
         env=env,
         ignored_unclassified=set(ignored_stale_enabled_plugins or ()),
         ignored_alternate_marketplaces=set(ignored_alternate_marketplaces or ()),
+        rows=rows_before,
     )
     transition_selectors = all_selectors
 
@@ -1105,7 +1114,6 @@ def apply_codex_harness(
             )
         source_versions[plugin_name] = source_version
 
-    rows_before = current_rows()
     if not repair:
         cache_identity_issues: list[str] = []
         for plugin_name, source_root in plugin_sources.items():
@@ -2264,15 +2272,19 @@ def main() -> None:
         assert codex is not None
         assert marketplace_name is not None
         git_ref = args.git_ref or "main"
+        git_request_explicit = (
+            args.git_marketplace_source is not None or args.git_ref is not None
+        )
+        git_source = args.git_marketplace_source
+        if git_request_explicit and not git_source:
+            git_source = git_remote_source(REPO_ROOT)
         marketplace_source_binding = ensure_marketplace_source(
             codex,
             codex_home=plan.root,
             marketplace_name=marketplace_name,
-            git_source=args.git_marketplace_source or git_remote_source(REPO_ROOT),
+            git_source=git_source,
             git_ref=git_ref,
-            git_request_explicit=(
-                args.git_marketplace_source is not None or args.git_ref is not None
-            ),
+            git_request_explicit=git_request_explicit,
             local_source=args.marketplace_source or str(REPO_ROOT),
             env=env,
             dry_run=args.dry_run,
