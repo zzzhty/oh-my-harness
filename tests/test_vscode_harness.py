@@ -292,6 +292,95 @@ class VSCodeHarnessTests(unittest.TestCase):
         self.assertTrue(self.plan('zcode').instructions_target.exists())
         self.assertFalse(any(self.plan('zcode').skills_root.iterdir()))
 
+    def test_install_refresh_repair_receipts_use_explicit_codex_home(self):
+        import omh
+        import install_oh_my_harness as installer
+        self.install('zcode')
+        custom_root = self.plan('zcode').root
+        manager = dict(repository='origin', revision='a'*40, releaseVersion='1.0.0',
+                       bundleIdentity='fixture', channel='main')
+        for command in ('install', 'refresh', 'repair'):
+            with self.subTest(command=command):
+                # Give refresh/repair an old, incorrectly recorded receipt to
+                # prove an authorized reapplication writes its effective root.
+                if command != 'install':
+                    manager_state.write_harness_receipt(self.home, harness='codex',
+                        manager_revision='a'*40, release_version='1.0.0', bundle_identity='fixture',
+                        root=str(self.user / '.codex'))
+                desired = json.loads(manager_state.desired_file(self.home).read_text())
+                args = omh.build_parser().parse_args(['--home', str(self.home), command,
+                    'codex', '--codex-home', str(custom_root), '--yes'])
+                with mock.patch.object(omh, '_state_context', return_value=(manager, desired)), \
+                     mock.patch.object(omh, '_refresh_one') as refresh, \
+                     mock.patch.object(omh, '_bootstrap_tooling'), \
+                     mock.patch.object(installer, 'write_launchers'), \
+                     mock.patch.object(omh, 'ensure_user_path'), \
+                     mock.patch.object(omh, 'write_manager'):
+                    args.func(args)
+                self.assertEqual(refresh.call_args.args[0].codex_home, str(custom_root))
+                receipt = json.loads(manager_state.harness_file(self.home, 'codex').read_text())
+                self.assertEqual(Path(receipt['root']), custom_root)
+                # A later command omitting the override cannot silently delete
+                # the file that the explicit Codex installation actually used.
+                with self.assertRaisesRegex(SystemExit, 'recorded root for codex'):
+                    self.remove('zcode')
+                self.assertTrue(self.plan('zcode').instructions_target.exists())
+
+    def test_receipt_override_matches_materialization_path_expansion(self):
+        import omh
+        import refresh_harness
+        self.install()
+        expected = self.user / '.zcode'
+        with mock.patch.dict(os.environ, {'OMH_FIXTURE_CODEX': str(expected), 'OMH_FIXTURE_SUBDIR': '.zcode'}):
+            for value in ('$OMH_FIXTURE_CODEX', str(self.user / '$OMH_FIXTURE_SUBDIR'), '~/.zcode'):
+                with self.subTest(value=value):
+                    self.assertEqual(refresh_harness.expand_path(value), expected)
+                    omh._write_harness_state(self.home, 'codex', codex_home=value)
+                    receipt = json.loads(manager_state.harness_file(self.home, 'codex').read_text())
+                    self.assertEqual(Path(receipt['root']), expected)
+
+    def custom_registry(self):
+        import copy
+        payload = json.loads(self.registry.path.read_text())
+        custom = copy.deepcopy(payload['harnesses']['vscode'])
+        custom['displayName'] = 'Fixture Editor'
+        custom['aliases'] = ['editor-old']
+        payload['harnesses']['editor-x'] = custom
+        path = self.user / 'custom-registry.json'
+        path.write_text(json.dumps(payload))
+        return load_harness_registry(path, repo_root=ROOT)
+
+    def test_custom_registry_unknown_default_id_can_remove_without_state(self):
+        self.registry = self.custom_registry()
+        plan = self.plan('editor-x')
+        plan.skills_root.mkdir(parents=True)
+        plan.instructions_target.write_bytes(plan.instructions_source.read_bytes())
+        self.remove('editor-old')
+        self.assertFalse(plan.instructions_target.exists())
+
+    def test_custom_registry_alias_consumers_and_receipts_protect_shared_files(self):
+        self.install('vscode')
+        self.registry = self.custom_registry()
+        desired = json.loads(manager_state.desired_file(self.home).read_text())
+        desired['harnesses'] = ['editor-old', 'vscode']
+        manager_state.atomic_write_json(manager_state.desired_file(self.home), desired)
+        manager_state.atomic_write_json(manager_state.harness_file(self.home, 'editor-old'), {
+            'schemaVersion': manager_state.STATE_SCHEMA_VERSION, 'harness': 'editor-old',
+            'status': 'ready', 'root': str(self.plan('editor-x').root),
+        })
+        self.assertEqual(manager_state.removal_consumers(self.home, registry=self.registry), ('editor-x', 'vscode'))
+        self.assertIn('retain shared', self.remove('vscode'))
+        self.assertTrue(self.plan('vscode').instructions_target.exists())
+
+    def test_custom_registry_still_validates_receipt_identity(self):
+        self.registry = self.custom_registry()
+        manager_state.atomic_write_json(manager_state.harness_file(self.home, 'editor-x'), {
+            'schemaVersion': manager_state.STATE_SCHEMA_VERSION, 'harness': 'wrong-editor',
+            'status': 'ready', 'root': str(self.plan('editor-x').root),
+        })
+        with self.assertRaisesRegex(SystemExit, 'receipt identity is invalid'):
+            self.remove('editor-x')
+
     def test_public_install_records_two_identities_and_refreshes_them(self):
         import omh
         self.install()

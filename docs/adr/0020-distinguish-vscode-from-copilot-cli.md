@@ -55,6 +55,14 @@ naturally clean up on the last consumer. A dry-run-only preview of previously
 selected consumers yields the same last-consumer cleanup plan without state
 writes. The helper rejects that preview input during actual deletion.
 
+New install, refresh and repair receipts use the same explicit `--codex-home`
+override passed to materialization. Thus a later command omitting that override
+still sees the recorded overlap instead of silently deleting a shared file.
+Legacy selected-Codex removal compatibility remains as described above; an
+authorized refresh/repair with its effective root can repair the old receipt.
+The lower-level removal helper passes its selected `--registry` through desired
+alias normalization and receipt validation, including custom harness identities.
+
 A managed downgrade to a revision lacking `vscode` must fail before switching;
 `copilot` is not an equivalent replacement. The existing cross-version identity
 resolver enforces this. Remove VS Code explicitly before such a downgrade.

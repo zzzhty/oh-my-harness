@@ -110,7 +110,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(omh, name, return_value=value))
             stack.enter_context(mock.patch.object(
                 omh, "_resolve_plan",
-                side_effect=lambda harness: SimpleNamespace(root=self.root / "targets" / harness),
+                side_effect=lambda harness, *, codex_home=None: SimpleNamespace(root=codex_home or self.root / "targets" / harness),
             ))
             effects = {
                 name: stack.enter_context(mock.patch.object(omh, name))

@@ -219,7 +219,7 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
     Receipts are evidence of resolved roots, never arbitrary deletion targets.
     Resolve current plans and reject root drift before trusting shared ownership.
     """
-    installed = removal_consumers(home)
+    installed = removal_consumers(home, registry=registry)
     keep_skills = keep_instructions = False
     selected_paths = [plan.instructions_target]
     if plan.skills_root is not None:
@@ -234,7 +234,7 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
     for name in dict.fromkeys((*installed, plan.harness_id)):
         if name != plan.harness_id and name in preview_removed:
             continue
-        roots = recorded_harness_roots(home, name)
+        roots = recorded_harness_roots(home, name, registry=registry)
         current_root = resolve_harness_root(registry, name, environ=environment)
         spec = registry.harnesses[registry.resolve_id(name)].instructions
         if (name != plan.harness_id and spec.driver == "settings-derived-file"

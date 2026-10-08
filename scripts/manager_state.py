@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from harness_registry import load_harness_registry
+from harness_registry import HarnessRegistry, load_harness_registry
 from manager_paths import PRODUCT_NAME, state_path
 
 STATE_SCHEMA_VERSION = "2026-08-24"
@@ -201,14 +201,14 @@ def load_or_initialize(
     return manager, desired
 
 
-def canonical_harnesses(harnesses: Iterable[str]) -> tuple[str, ...]:
+def canonical_harnesses(harnesses: Iterable[str], *, registry: HarnessRegistry | None = None) -> tuple[str, ...]:
     """Normalize persisted aliases in memory; unknown IDs remain visible to status."""
-    aliases = load_harness_registry().aliases
+    aliases = (registry or load_harness_registry()).aliases
     return tuple(sorted({aliases.get(name, name) for name in harnesses}))
 
 
-def desired_harnesses(desired: dict[str, Any]) -> tuple[str, ...]:
-    return canonical_harnesses(desired["harnesses"])
+def desired_harnesses(desired: dict[str, Any], *, registry: HarnessRegistry | None = None) -> tuple[str, ...]:
+    return canonical_harnesses(desired["harnesses"], registry=registry)
 
 
 def write_desired(
@@ -292,9 +292,9 @@ def write_harness_receipt(
             path.unlink()
 
 
-def _harness_receipts(home: Path, harness: str) -> tuple[Path, ...]:
+def _harness_receipts(home: Path, harness: str, *, registry: HarnessRegistry | None = None) -> tuple[Path, ...]:
     """Validate every current/legacy receipt before replacing or deleting any."""
-    registry = load_harness_registry()
+    registry = registry or load_harness_registry()
     canonical = registry.resolve_id(harness)
     parent = state_root(home) / HARNESS_STATE_DIR
     if parent.exists() or parent.is_symlink():
@@ -324,24 +324,24 @@ def validate_harness_receipts(home: Path, harness: str) -> None:
     _harness_receipts(home, harness)
 
 
-def removal_consumers(home: Path) -> tuple[str, ...]:
+def removal_consumers(home: Path, *, registry: HarnessRegistry | None = None) -> tuple[str, ...]:
     """Read the installed set without initializing or migrating manager state."""
     path = desired_file(home)
     payload = _load_object(path, label="desired harness state", required=False)
     if payload is not None:
         _validate_desired_payload(payload, path=path)
-        return desired_harnesses(payload)
+        return desired_harnesses(payload, registry=registry)
     initial = state_path(home) / "install.json"
     if initial.exists() or initial.is_symlink():
         receipt = install_receipt(home)
         if receipt.get("status") == "ready":
-            return canonical_harnesses([receipt["harness"]])
+            return canonical_harnesses([receipt["harness"]], registry=registry)
     return ()
 
 
-def recorded_harness_roots(home: Path, harness: str) -> tuple[str, ...]:
+def recorded_harness_roots(home: Path, harness: str, *, registry: HarnessRegistry | None = None) -> tuple[str, ...]:
     roots = []
-    for path in _harness_receipts(home, harness):
+    for path in _harness_receipts(home, harness, registry=registry):
         payload = _load_object(path, label="harness receipt")
         root = payload.get("root")
         if payload.get("status") != "ready" or not isinstance(root, str) or not Path(root).is_absolute():
