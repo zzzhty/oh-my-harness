@@ -409,7 +409,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
 
         ensure_local.assert_not_called()
 
-    def test_automatic_git_install_failure_falls_back_to_canonical_local_source(self) -> None:
+    def test_automatic_source_reuses_checkout_without_git_acquisition(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with (
                 mock.patch.object(refresh, "git_remote_source", return_value="git@example/repo.git"),
@@ -419,7 +419,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
                     return_value=(True, "checkout matches ref"),
                 ),
                 mock.patch.object(refresh, "git_head_revision", return_value="abc123"),
-                mock.patch.object(refresh, "ensure_git_marketplace_source", return_value=17),
+                mock.patch.object(refresh, "ensure_git_marketplace_source", return_value=17) as ensure_git,
                 mock.patch.object(refresh, "ensure_local_marketplace_source") as ensure_local,
             ):
                 binding = refresh.ensure_marketplace_source(
@@ -436,6 +436,7 @@ class RefreshHarnessCliTests(unittest.TestCase):
 
         self.assertEqual(binding, refresh.MarketplaceSourceBinding("local", str(REPO_ROOT)))
         ensure_local.assert_called_once()
+        ensure_git.assert_not_called()
 
     def test_cli_tracks_a_git_ref_as_an_explicit_codex_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -616,7 +616,33 @@ the unified Python CLI; `omh --help` remains available without a tooling rebuild
 and harness defaults, choices, and paths remain registry authority. Global
 instructions are preflighted before skills or marketplace mutation.
 
-For `codex`, refresh validates the complete manifest, marketplace policy, nested source-package containment, current cache shape, and marketplace source binding before mutation. Git installation is pinned to the validated checkout commit; explicit Git failures stop, while only automatic Git selection may fall back to the exact local checkout. Codex CLI resolution uses explicit `--codex`/`-CodexPath`, `CODEX_BIN`, `PATH`, standalone installs, then platform-managed fallbacks.
+For `codex`, refresh validates the complete manifest, marketplace policy, nested source-package containment, current cache shape, and marketplace source binding before mutation. By default, installation reuses the validated canonical checkout as its local marketplace source, avoiding a second Git acquisition. An explicit Git source/ref still requires the canonical remote and is pinned to the validated checkout commit; explicit Git failures stop without local fallback. Codex CLI resolution uses explicit `--codex`/`-CodexPath`, `CODEX_BIN`, `PATH`, standalone installs, then platform-managed fallbacks.
+
+
+On Windows, `plugin add` retries only a failed command whose output contains both
+`failed to copy plugin file` and `(os error 5)`: at most three attempts, with
+0.5-second then 1-second delays. Each attempt keeps the same selector and source;
+it does not restart the update or delete caches. Other failures return
+immediately. Exhaustion still fails the transaction and invokes the existing
+rollback. A successful command must pass the normal package/cache and harness
+closure checks before an update is recorded as successful. Diagnostics retain
+Codex output and report the plugin, expected version, stage, exit code, attempt,
+and validated source path. Actual temporary destination paths are available only
+if Codex reports them.
+
+This handles one observed intermittent failure, not its unconfirmed underlying
+cause. Fresh caches and local sources can also fail; neither local source reuse
+nor a few successful attempts proves the problem has disappeared. OMH does not
+recommend clearing all caches, elevation, disabling security software, or adding
+security exclusions as the default remedy.
+
+`omh update --channel main` remains the complete upgrade path for the manager and
+all recorded harnesses (`omh update --check --channel main` previews it). The
+updated implementation must be present on that channel first. Codex plugin-level
+CLI upgrades still use its copy operation; installer `--repair` / `--reinstall`
+and `omh repair` restore the recorded revision and are not upgrade substitutes.
+See [ADR 0021](docs/adr/0021-retry-windows-plugin-copy-and-track-materialized-instructions.md)
+for source/retry and instruction journal boundaries.
 
 Codex stale-plugin reconciliation is on by default because the registry declares `managed-stale`. Only configured entries and cache directories inside the selected marketplace namespace are eligible. A nonempty exact plan is printed before mutation and requires confirmation; `--yes` or `-Yes` may confirm it. An enabled plugin visible only through the CLI and not proven by managed config/cache remains a hard failure. Other harnesses use only their registry-selected directory projection and never prune Codex plugins.
 

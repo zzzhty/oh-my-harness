@@ -164,6 +164,15 @@ class RefreshHarnessIntegrationTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.fixture = HarnessFixture(Path(self._tmp.name))
         self.addCleanup(self._tmp.cleanup)
+        # This fixture models Codex operations, not subprocess transport/retries.
+        # Keep it platform independent; the Windows retry tests exercise transport.
+        add_patch = mock.patch.object(
+            refresh, "add_codex_plugin",
+            side_effect=lambda codex, selector, *, env, dry_run, **kwargs:
+                refresh.run([codex, "plugin", "add", selector], env=env, dry_run=dry_run),
+        )
+        add_patch.start()
+        self.addCleanup(add_patch.stop)
 
     def patches(self):
         return (
