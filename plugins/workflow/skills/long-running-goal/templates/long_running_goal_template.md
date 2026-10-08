@@ -104,7 +104,7 @@ Authorization evidence：`<可定位 Markdown 链接或带日期的 user request
 2. Pre-approved external reads/writes / 预授权外部读写：
    - `<已允许读取或写入的 connector、API、issue、PR、CI、automation、hook、message surface；无外部写入时写 Not applicable。>`
 3. Runtime hard stops / 运行时硬停止：
-   - `<仅列真正会停止执行的条件：通常本地诊断/修复至少三次或三种方式后仍无法继续（已有决定性证据时可提前停止）、必需凭据/文件/工具/事实源无法通过已授权方式取得或恢复、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。>`
+   - `<仅列真正会停止执行的条件：原生反馈明确第三次 Codex Goal 失败或任何原生 hard stop（停止当前 Goal，不自动第四次尝试或重建 Goal 重置失败）；无可行已授权路径或当前无法推进的外部依赖（记录恢复条件）、必需凭据/文件/工具/事实源无法通过已授权方式取得或恢复、下一步破坏性/不可逆/隐私敏感/外部可见且未预授权、事实源冲突会改变冻结语义、必需 sub-agent/connector/worktree/verifier 失败且无计划内本地下一步。>`
 4. Non-stops / 不应中断的事项：
    - `<普通阶段边界、checkpoint、耗时区间超出后的 rebaseline、可记录风险、rebuild、refresh、reinstall、失败但有明确本地下一步的验证、策略合同更新、docs sync 等。>`
 
@@ -122,7 +122,8 @@ Authorization evidence：`<可定位 Markdown 链接或带日期的 user request
 2. 状态只维护整体状态和阶段状态表。阶段按顺序开始；完成记录必须包含行为、命令结果、文档、回滚和剩余风险。运行必需验证，通过 review gate 后应用 `components/checkpoint.md`，再确认 `components/milestone-scope-gate.md` 并推进。
 3. 只在已授权范围内更新当前 goal；修改 reusable skill/template 需要相应源码授权。不得静默放宽验收或掩盖失败。
    - 阶段入口和上下文恢复后比对动作、目标、范围、条件及最新授权变更；已覆盖权限继续使用，只询问未覆盖增量或已记录最终审批。
-4. Close 使用本文件冻结的 housekeeping policy、当前文档同步与归档规则；缺少清理授权时保留缓存。
+4. 每次失败后先按 `references/execute-and-close.md` 的 Failure Recovery 记录证据并调整下一步；原生反馈明确第一次、第二次 Goal 失败时立即改进策略，不重复已被证伪的路径。修复后可重跑同一必需测试；原样重试仅限有证据的瞬时故障或前置条件变化。普通测试/诊断失败不代表原生 Goal 失败次数；计数不可见时记录 unknown，仍每次失败改进，不自建运行时计数器。原生第三次失败或 hard stop 立即停止 Goal，不自动第四次尝试、恢复或重建 Goal 重置失败；公开文档尚未验证原生计数事件及 reset 语义。任何阶段授权缺口立即停止受影响动作，独立已授权工作可继续；原生 hard stop 后仅可继续 Goal 外另有授权的独立工作。等价方法须保留已授权范围、指定方法、全部 gate、冻结语义和验收，不借换路绕过权限；无可行路径或等待外部依赖时记录阻塞与恢复条件。
+5. Close 使用本文件冻结的 housekeeping policy、当前文档同步与归档规则；缺少清理授权时保留缓存。
 
 Checkpoint evidence format：
 

@@ -19,16 +19,28 @@ For each milestone:
 1. Check any `Deferred approval gates` for this milestone before its work begins. Reconcile the row with sourced actual authorization first; when still covered, record Approved evidence and continue without another question. Otherwise ask only for the reserved final approval or uncovered increment, stop at the gate and record section-local runtime hard-stop evidence. Mark the milestone `In Progress` only after its approval gates pass. Do not remove a user-retained final gate on the strength of generic pre-approval.
 2. Apply `../components/milestone-scope-gate.md`, then implement only its recorded scope and necessary consequences.
 3. For an observed weakness in the contract, apply [Contract Evolution](#contract-evolution) before continuing affected mutation.
-4. Satisfy the milestone validation commands and complete its review gate. Reuse still-valid passing results under the global verification policy; a checkpoint or skill transition alone does not require rerunning them. Explicit lifecycle fresh-run requirements, including the readiness check above, remain binding.
+4. Satisfy the milestone validation commands and complete its review gate. After any failure, apply [Failure Recovery](#failure-recovery) before another attempt. Reuse still-valid passing results under the global verification policy; a checkpoint or skill transition alone does not require rerunning them. Explicit lifecycle fresh-run requirements, including the readiness check above, remain binding.
 5. Record scope and necessary-consequence completion, changed files, behavior impact, command results, doc sync, rollback path, and remaining risk.
 6. If the milestone exercises a Loop Blueprint, also record trigger/input path, orchestration or worktree isolation evidence, connector read/write evidence, independent verification, YOLO actions, and runtime-hard-stop decisions.
 7. Apply `../components/checkpoint.md`.
 8. Confirm the milestone-scope exit gate.
 9. Mark milestone `Done`, review `Passed`, and checkpoint `Done` only after evidence is recorded.
 
-When both the review gate and milestone-scope exit gate pass, advance to the next milestone and check its approval gates. When a review or scope gate fails, keep fixing and diagnosing in scope while the next useful step is clear; stop only at the runtime-hard-stop boundary.
+When both the review gate and milestone-scope exit gate pass, advance to the next milestone and check its approval gates. When a review or scope gate fails, apply [Failure Recovery](#failure-recovery), then continue in scope while an authorized useful step remains and no native hard stop applies.
 
 Completion criterion: the current milestone has passing scope and review gates plus recorded behavior, docs, rollback, risk, Loop evidence when applicable, validation, review status, and checkpoint evidence before it is marked `Done` or execution advances.
+
+## Failure Recovery
+
+Apply this protocol after every failure, before repeating a command, selecting another approach, or resuming after a context transition:
+
+1. Check authorization and native feedback first. Missing or withdrawn authorization stops the affected action immediately at any stage. Native feedback identifying the third Codex Goal failure, or a native hard stop with no visible count, stops active Goal execution even if a useful approach remains. Do not initiate a fourth native attempt, resume automatically, or recreate/replace the Goal to reset failures. Follow the skill's Goal Tool Boundary; local commands and these document validators do not implement native counting.
+2. Record the failed action, observed result, breakpoint, and supported cause or uncertainty in the existing milestone evidence. Keep native feedback separate from test and diagnostic results: a nonzero command exit does not establish a native Goal failure. Use only a count explicitly supplied by native feedback; otherwise record it as unknown. Do not infer, increment, or maintain a custom runtime counter.
+3. Select an evidence-backed change to the next step: repair the implementation or inputs, restore an authorized prerequisite, test a different causal hypothesis, or change the implementation path within the frozen outcome. When native feedback identifies the first or second Goal failure, adjust strategy immediately before another native attempt. With an unknown native count, still improve the next step after every failure. A deterministic failure disproves the unchanged path; do not repeat it without new evidence.
+4. After a repair, rerun the same required validation to check the fix; the command may stay the same because the implementation changed. An unchanged retry is justified only by evidence of a transient fault or a changed prerequisite; record that evidence and stop repeating if it no longer supports a useful next step. Equivalent methods are allowed only within existing authorization, required methods and gates, privacy/safety boundaries, frozen semantics, and unchanged acceptance criteria. Do not switch routes to evade an authorization or required-method failure, lower the goal or acceptance criteria, hide partial results, or declare success without the required checks.
+5. Continue only when that next step is feasible and authorized and no native hard stop applies. If no feasible path remains or an external dependency must change, record the blocker and concrete recovery condition, then stop affected work rather than loop indefinitely. Independent authorized work may continue within the current milestone; a native hard stop permits only separately authorized work outside the stopped Goal. A Sequence cannot skip the blocked child or promote another child to evade the stop.
+
+Record what changed, why the evidence supports it, and the actual validation result. A repaired test, failed diagnostic, or strategy change is not a manufactured native failure event, remaining-attempt estimate, or reset claim.
 
 ## Contract Evolution
 

@@ -43,21 +43,24 @@ On execution/resume, read those sources and later changes before asking. Still-c
 
 Planned non-destructive local operations are non-stops: reviews, checkpoints, rebuilds, refreshes, dependency restores, edits, tests, formatting and link checks. Continue when gates pass. Apply `components/milestone-scope-gate.md` at its defined boundaries; it constrains unplanned expansion, never work frozen by the user, goal, repository, review gate or checkpoint.
 
-Diagnose and fix ordinary failures while a useful in-scope next step remains. Ask only at a runtime hard stop:
+After each failure, apply [Failure Recovery](references/execute-and-close.md#failure-recovery) before another attempt: use the evidence to repair the cause or change the strategy within frozen scope and acceptance criteria. When native feedback identifies the first or second Goal failure, make that adjustment immediately; do not spend the remaining native attempts repeating a disproven path. Ordinary test or diagnostic command failures do not establish a native Goal failure count. Ask only at a runtime hard stop:
 
-- Repeated technical impossibility, normally after at least three attempts or distinct approaches unless immediately decisive.
+- The third native Codex Goal failure, when identified by native feedback, or any native hard-stop feedback. Stop active Goal execution even if another useful approach exists; do not initiate a fourth native attempt or recreate the Goal to reset failures.
+- Evidence shows no feasible authorized next step, or a required external dependency cannot progress now. Record the blocker and concrete recovery condition; do not wait for an arbitrary number of local failures or loop indefinitely.
 - Required credentials, files, tools or source-of-truth inputs cannot be obtained/restored through authorized means and prevent the next required action; local absence alone is a non-stop.
 - A destructive, irreversible, privacy-sensitive, externally visible or external-write action needs authorization beyond the frozen contract.
 - Evidence contradicts frozen semantics and continuation would change scope or product behavior.
 - A required subagent, connector, worktree or verifier failed and no meaningful in-plan local fallback remains.
 
-Stop the affected action, not at status checkpoints. Finish independent authorized work within the current milestone without bypassing gates or advancing past an incomplete milestone. Record assumptions, actions, validation, risk and checkpoint evidence in the goal.
+Authorization problems stop the affected action immediately at any stage; never wait for a failure threshold or route around missing permission. Finish independent authorized work within the current milestone without bypassing gates or advancing past an incomplete milestone. A native hard stop ends active Goal execution; independent work outside that stopped Goal needs its own existing authority. Record failure evidence, strategy changes, recovery conditions, assumptions, validation, risk and checkpoint evidence in the existing goal.
 
 Temporary-cache housekeeping uses only preflight's recorded policy and owner paths. Never infer cleanup consent from YOLO scope, skipped grilling or generic cleanup language.
 
 ## Harness Goal Tool Boundary
 
-Use native goal tools only on an explicit active-conversation request to create, execute, resume or close a long-running goal; a planning document alone is not an active native goal. Set the project outcome, add a token budget only if requested, and avoid nested active goals. Complete only when no required work remains; block only at the recorded hard-stop threshold with no meaningful progress left.
+Use native goal tools only on an explicit active-conversation request to create, execute, resume or close a long-running goal; a planning document alone is not an active native goal. Set the project outcome, add a token budget only if requested, and avoid nested active goals. Complete only when no required work remains; honor native hard stops immediately and use blocked status for actual runtime hard stops, never as a report for every failed command.
+
+The third-failure boundary above is the requested execution constraint. Public documentation has not verified which events the native platform counts or how reset works; this skill and its document validators do not implement platform counting. Use only available native feedback. If the count is unavailable, record it as unknown, improve the next step after every failure, and obey any native stop. Do not infer a count from commands, keep a custom runtime counter, or recreate/replace a Goal to evade a stop or reset its failures. A new user request cannot establish undocumented platform reset semantics.
 
 The goal document, milestone states, validation, commits or equivalent revisions and final report remain the durable authority; native status does not replace them.
 

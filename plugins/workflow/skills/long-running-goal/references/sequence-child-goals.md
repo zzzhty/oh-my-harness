@@ -89,6 +89,8 @@ Record each promotion in the template's canonical timestamped `Transition Eviden
 
 When an executing child reaches a runtime hard stop, keep that child's overall state `In Progress`, mark its current atomic milestone and mapped parent stage `Blocked`, and record section-local `Runtime hard-stop evidence:` in both contracts. Each evidence field must include a date, owning child ID, and breakpoint or attempted diagnostics. For promotion drift, also name semantic drift or failed handoff plus the required decision revalidation/external decision, then use the `Draft / n/a` exception above. Never skip, reorder, or partially start another child to route around a stop.
 
+After any parent or child failure, apply [Failure Recovery](execute-and-close.md#failure-recovery) before another attempt. The third native Codex Goal failure identified by native feedback, or any native hard stop, stops the active parent Goal even when another approach exists. Do not promote a child, create a child native Goal, or recreate the parent to reset failures. Ordinary child test/diagnostic failures do not establish native parent failure counts; unknown counts stay unknown. Authorization stops remain immediate and action-scoped.
+
 If parent-only M0, Integration Acceptance, or Close is `Blocked`, its owning section must instead record a date, the `sequence`, `integration`, or `close` stage owner respectively, and the breakpoint or attempted diagnostics.
 
 ## Resume, Validation, And Close
