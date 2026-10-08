@@ -598,7 +598,9 @@ def main() -> None:
             plugin_names=set(catalog.plugin_names),
             env=env,
         )
-        if plugin_sources is not None:
+        # Complete installation closure includes source validation. If CLI
+        # discovery fails, still report source defects independently.
+        if plugin_sources is not None and rows is None:
             runner.check_plugin_packages(catalog, plugin_sources=plugin_sources)
         if plugin_sources is not None and rows is not None:
             runner.check_codex_harness(

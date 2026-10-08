@@ -86,6 +86,45 @@ class PublicLauncherContracts(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.snapshot(), before)
 
+    def test_invalid_arguments_never_prepare_runtime(self):
+        before = self.snapshot()
+        for args in (("update", "--nonsense"), ("manager",), ("remove",), ("not-a-harness",),
+                     ("repair", "--dry-run", "--nonsense"), ("install", "copilot", "--all")):
+            with self.subTest(args=args):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertNotIn("UNEXPECTED MUTATING BOOTSTRAP", result.stderr)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_help_and_snapshot_survive_source_damage_and_broken_venv(self):
+        python = self.home / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        python.unlink()
+        (self.repo / "agents/global-instructions.md").unlink()
+        (self.repo / "plugins/workflow/.codex-plugin/plugin.json").write_text("broken")
+        before = self.snapshot()
+        for args in (("--help",), ("manager", "repair", "-Help"), ("status", "--json")):
+            result = self.run_cli(*args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.snapshot(), before)
+
+    def test_explicit_repair_preview_survives_damaged_metadata_or_imports(self):
+        registry = self.repo / ".agents/harnesses/registry.json"
+        original = registry.read_bytes()
+        registry.write_text("{broken")
+        for damage in ("registry", "import"):
+            if damage == "import":
+                registry.write_bytes(original)
+                (self.repo / "scripts/manager_environment.py").unlink()
+            before = self.snapshot()
+            for command in (("repair",), ("manager", "repair")):
+                result = self.run_cli(*command, "--dry-run")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("would restore checkout", result.stdout)
+                self.assertEqual(self.snapshot(), before)
+                bad = self.run_cli(*command, "--dry-run", "--nonsense")
+                self.assertEqual(bad.returncode, 2, bad.stderr)
+                self.assertEqual(self.snapshot(), before)
+
     def test_healthy_json_is_pure_and_read_only(self):
         before = self.snapshot()
         for command in ("status", "version"):
@@ -125,21 +164,23 @@ class PublicLauncherContracts(unittest.TestCase):
             with self.subTest(command=command):
                 args = [command, "--json"] if command in {"status", "version"} else [command]
                 result = self.run_cli(*args)
-                self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertIn("omh repair", result.stderr)
                 if "--json" in args:
-                    self.assertEqual(json.loads(result.stdout)["error"], "runtime_unavailable")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout)["observation"], "recorded-state-only")
+                else:
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("omh repair", result.stderr)
                 self.assertEqual(self.snapshot(), before)
 
-    def test_missing_dependencies_fail_without_installing_them(self):
+    def test_snapshot_needs_no_tooling_dependencies(self):
         self.env.pop("PYTHONPATH", None)
         config = self.home / "venv/pyvenv.cfg"
         config.write_text(config.read_text().replace("include-system-site-packages = true",
                                                    "include-system-site-packages = false"))
         before = self.snapshot()
         result = self.run_cli("version", "--j")
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["error"], "runtime_unavailable")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["observation"], "recorded-state-only")
         self.assertEqual(self.snapshot(), before)
 
     def test_harness_validation_failure_is_read_only(self):
@@ -159,8 +200,12 @@ class PublicLauncherContracts(unittest.TestCase):
                 self.repo.rename(self.root / "missing repo")
             before = self.snapshot()
             result = self.run_cli("status", "--json")
-            self.assertEqual(result.returncode, 1)
-            self.assertEqual(json.loads(result.stdout)["error"], "runtime_unavailable")
+            if missing_checkout:
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(json.loads(result.stdout)["error"], "runtime_unavailable")
+            else:
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["stateKind"], "legacy-receipt-only")
             self.assertEqual(self.snapshot(), before)
 
     def test_every_dry_run_preserves_files_and_avoids_lock(self):

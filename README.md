@@ -134,7 +134,7 @@ same manager lifecycle used by `omh`:
 | Repair Codex caches | `omh refresh codex --repair` | Explicitly rebuilds caches at the current version. |
 | Preview an update | `omh update --check` | Fetches and validates the remote target without applying it. |
 | Apply an update | `omh update` | Updates the manager and all installed harnesses using the saved channel. |
-| Inspect state | `omh status` | Shows recorded harnesses, channel, checkout status, and active operation. |
+| Inspect state | `omh status` | Reads recorded harnesses, channel, successful receipts, and active operation; no live health check. |
 | Validate files | `omh check` | Read-only; all installed harnesses unless targets are given. |
 | Diagnose warnings | `omh doctor` | The same checks, with warnings treated as failures; does not repair. |
 | Remove a harness | `omh remove copilot` | Explicit targets or `--all` required; removes only proven managed resources. |
@@ -147,6 +147,36 @@ the command. `install`, `refresh`, `repair`, and `remove` accept `--dry-run` to 
 changes. `--yes` confirms creation and bounded managed cleanup; replacing different
 existing instructions still requires a live confirmation. Public command help
 bypasses tooling initialization and manager repair, including `omh manager repair --help`.
+
+Help and argument validation use the base Python and the registry's structural
+metadata before runtime preparation or a mutation lock. They do not require Git,
+Codex, plugin hashing, or tooling dependencies. Invalid arguments (including a
+repair dry run) return a usage error without repairing anything. Help remains
+available with damaged instruction sources; a corrupt registry still permits
+generic command help but blocks execution that requires harness metadata.
+
+`omh status` and `omh version` are **recorded-state snapshots**. They do not start
+Git or Codex, hash plugin files, probe/rebuild a venv, or contact the network.
+`status --json` retains `worktreeClean` with the explicit value `null` (unchecked);
+consumers must not interpret null as clean or dirty. `observation` is
+`recorded-state-only`, and per-harness receipts describe the last successful
+record, not current health. Use existing `omh check` or `omh doctor` for live
+validation; check tolerates warnings, while doctor fails on warnings too.
+When both rolling files are absent, status reports `legacy-receipt-only` or
+`unknown`, and version fields are null: the immutable initial receipt is never
+presented as the current revision. One missing rolling file or malformed state
+still fails clearly. Snapshot reads do not initialize or migrate state and are
+not an atomic view of a concurrent update; inspect the displayed operation.
+
+The checkout must still supply the CLI for full help and snapshots. If it is
+missing, the stable shim shows recovery help. A missing or partially damaged
+checkout (including unreadable registry metadata/imports) accepts only `repair`'s
+restoration flags (`--reclone`, `--rebuild`, `--dry-run`, `--yes`, `--no-path`);
+restore the checkout before selecting named harnesses or migration options.
+A newer shim paired with an older checkout during rollback uses that checkout's
+existing parser. Older CLI snapshot/parser dependencies remain in effect until
+the new checkout is active; this does not retrofit lightweight behavior into
+an old manager.
 
 `HARNESS` selects an oh-my-harness distribution, not the harness application
 itself. Install and configure the Pi, Claude Code, Gemini CLI, or other client

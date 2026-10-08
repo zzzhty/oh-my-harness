@@ -110,7 +110,7 @@ class OmhCliTests(unittest.TestCase):
 
     def test_harness_command_help_lists_registry_owned_target_choices(self) -> None:
         registry = self.registry()
-        with mock.patch.object(omh, "_load_registry", return_value=registry):
+        with mock.patch.object(omh, "load_harness_metadata", return_value=registry):
             parser = omh.build_parser()
 
         subparsers = next(
@@ -1223,12 +1223,7 @@ class BootstrapHelpTests(unittest.TestCase):
                     run.return_value = subprocess.CompletedProcess([], 0)
                     self.assertEqual(omh_bootstrap.main(["--home", str(home), *arguments]), 0)
                     repair.assert_not_called()
-                    run.assert_called_once_with([
-                        str(tooling), "-B", str(cli), "--home", str(home),
-                        *("--help" if arg == "-Help" else arg for arg in arguments),
-                    ], env=mock.ANY)
-                    self.assertEqual(run.call_args.kwargs["env"]["PYTHONDONTWRITEBYTECODE"], "1")
-                    self.assertEqual(run.call_args.kwargs["env"]["GIT_OPTIONAL_LOCKS"], "0")
+                    run.assert_not_called()
             self.assertFalse(omh_bootstrap._is_help_request(["install", "--", "--help"]))
 
     def test_unsupported_python_rejects_repair_before_checkout_mutation(self) -> None:

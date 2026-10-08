@@ -325,7 +325,11 @@ def repository_identity_issues(
     repo_root: Path,
     *,
     plugin_sources: Mapping[str, Path] | None = None,
+    _validated_identities: dict[str, PluginDistributionIdentity] | None = None,
 ) -> list[str]:
+    # Output only: computed identities may be reused within this read phase.
+    if _validated_identities is not None:
+        _validated_identities.clear()
     issues: list[str] = []
     try:
         release = release_version(repo_root)
@@ -357,6 +361,8 @@ def repository_identity_issues(
                 )
     except PluginIdentityError as exc:
         issues.append(str(exc))
+    if not issues and _validated_identities is not None:
+        _validated_identities.update((identity.name, identity) for identity in identities)
     return issues
 
 
@@ -364,7 +370,13 @@ def plugin_cache_identity_issues(
     *,
     source_root: Path,
     cache_root: Path,
+    _source_identity: PluginDistributionIdentity | None = None,
 ) -> list[str]:
+    """Compare cache bytes; standalone callers always hash the source too.
+
+    The private identity is only for the enclosing closure read phase, never
+    for reuse across a mutation, command, or checkout transition.
+    """
     try:
         source_name, source_version, _ = _manifest_name_and_version(source_root)
         match = CODEX_VERSION_PATTERN.fullmatch(source_version)
@@ -373,10 +385,16 @@ def plugin_cache_identity_issues(
                 f"source plugin version is not a content-derived Codex identity: {source_version!r}"
             ]
         base_version = match.group("base")
-        source_digest = canonical_plugin_package_digest(
-            source_root,
-            base_version=base_version,
-        )
+        if _source_identity is None:
+            source_digest = canonical_plugin_package_digest(
+                source_root, base_version=base_version,
+            )
+        else:
+            if (source_name, source_version, base_version) != (
+                _source_identity.name, _source_identity.version, _source_identity.base_version,
+            ):
+                return ["source manifest changed during closure validation"]
+            source_digest = _source_identity.content_sha256
         cache_name, cache_version, _ = _manifest_name_and_version(cache_root)
         cache_digest = canonical_plugin_package_digest(
             cache_root,

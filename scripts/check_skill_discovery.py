@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from plugin_package_identity import (
+    PluginDistributionIdentity,
     plugin_cache_identity_issues,
     repository_identity_issues,
 )
@@ -304,9 +305,13 @@ def plugin_package_issues(
     catalog: SkillCatalog,
     *,
     plugin_sources: dict[str, Path],
+    _validated_identities: dict[str, PluginDistributionIdentity] | None = None,
 ) -> list[str]:
     """Validate that plugin packages are the packaging projection of catalog owners."""
 
+    if _validated_identities is not None:
+        _validated_identities.clear()
+    identities: dict[str, PluginDistributionIdentity] = {}
     issues: list[str] = []
     expected_plugins = set(catalog.plugin_names)
     missing = sorted(expected_plugins - set(plugin_sources))
@@ -454,8 +459,11 @@ def plugin_package_issues(
         repository_identity_issues(
             catalog.repo_root,
             plugin_sources=plugin_sources,
+            _validated_identities=identities,
         )
     )
+    if not issues and _validated_identities is not None:
+        _validated_identities.update(identities)
     return issues
 
 
@@ -579,8 +587,12 @@ def plugin_installation_issues(
 ) -> list[str]:
     """Validate the complete active plugin projection against canonical source."""
 
+    source_identities: dict[str, PluginDistributionIdentity] = {}
     issues = [
-        *plugin_package_issues(catalog, plugin_sources=plugin_sources),
+        *plugin_package_issues(
+            catalog, plugin_sources=plugin_sources,
+            _validated_identities=source_identities,
+        ),
         *plugin_cache_harness_issues(
             catalog,
             codex_home=codex_home,
@@ -687,6 +699,7 @@ def plugin_installation_issues(
             for issue in plugin_cache_identity_issues(
                 source_root=source_root,
                 cache_root=version_root,
+                _source_identity=source_identities.get(plugin_name),
             )
         )
 
