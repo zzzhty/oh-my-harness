@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,45 @@ def _digest(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+def materialized_instruction_bytes(repo: Path, revision: str, relative_path: str) -> bytes:
+    """Read Git's exact checkout bytes, using the revision's own attributes.
+
+    A private index and empty worktree avoid both the live checkout's attributes
+    and its file contents. Git applies core.autocrlf, eol attributes, and filters
+    exactly as it does when the manager switches revisions.
+    """
+    with tempfile.TemporaryDirectory(prefix="omh-instructions-") as temporary:
+        root = Path(temporary)
+        worktree = root / "worktree"
+        worktree.mkdir()
+        environment = {
+            **os.environ,
+            "GIT_INDEX_FILE": str(root / "index"),
+            "GIT_WORK_TREE": str(worktree),
+        }
+        for arguments in (
+            ["read-tree", revision],
+            ["checkout-index", "--prefix=" + worktree.as_posix() + "/", "--", relative_path],
+        ):
+            try:
+                result = subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    env=environment, capture_output=True, check=False,
+                )
+            except OSError as exc:
+                raise SystemExit(f"cannot materialize journaled instructions: {exc}") from exc
+            if result.returncode:
+                detail = result.stderr.decode("utf-8", errors="replace").strip()
+                raise SystemExit(f"cannot materialize journaled instructions: {detail}")
+        source = worktree / relative_path
+        _validate_regular_source(source, label="journaled instructions source")
+        return source.read_bytes()
+
+
+def materialized_instruction_digest(repo: Path, revision: str, relative_path: str) -> str:
+    return hashlib.sha256(materialized_instruction_bytes(repo, revision, relative_path)).hexdigest()
 
 
 def _is_reparse_point(path: Path) -> bool:
