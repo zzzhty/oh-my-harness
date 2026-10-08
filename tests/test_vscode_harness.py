@@ -268,7 +268,7 @@ class VSCodeHarnessTests(unittest.TestCase):
         create_projection_link(gemini.root / 'linked', self.plan('zcode').root)
         settings = gemini.root / 'settings.json'
         settings.write_text(json.dumps({'context': {'fileName': 'linked/AGENTS.md'}}))
-        self.assertEqual(self.plan('gemini').instructions_target.resolve(), self.plan('zcode').instructions_target)
+        self.assertEqual(self.plan('gemini').instructions_target.resolve(), self.plan('zcode').instructions_target.resolve())
         settings.write_text(json.dumps({'context': {'fileName': ['linked/AGENTS.md', 'OTHER.md']}}))
         self.assertIn('retain instructions', self.remove('zcode'))
         self.assertTrue(self.plan('zcode').instructions_target.exists())
