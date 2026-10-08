@@ -366,6 +366,119 @@ def run(command: list[str], *, env: dict[str, str], dry_run: bool, check: bool =
     return result.returncode
 
 
+def _ordinary_kind(path: Path) -> str | None:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return None
+    if getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
+        return None
+    if stat.S_ISDIR(metadata.st_mode):
+        return "directory"
+    if stat.S_ISREG(metadata.st_mode):
+        return "file"
+    return None
+
+
+def _staging_entries(cache_root: Path) -> dict[str, os.stat_result]:
+    # Inspect ancestors lexically: resolving a junction would conceal an escape.
+    for path in (cache_root.parents[2], cache_root.parents[1], cache_root.parent, cache_root):
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        if _ordinary_kind(path) != "directory":
+            raise SystemExit(f"refusing Codex residue handling through non-ordinary directory: {path}")
+    if not cache_root.exists():
+        return {}
+    return {path.name: path.lstat() for path in cache_root.iterdir()}
+
+
+def _expected_staging_tree(
+    path: Path, *, plugin: str, version: str, source_root: Path,
+) -> dict[str, tuple[int, ...]] | None:
+    """Snapshot a source-compatible partial tree, not a proof of creator PID."""
+    if not path.name.startswith("plugin-install-") or _ordinary_kind(path) != "directory":
+        return None
+    plugin_root = path / plugin
+    version_root = plugin_root / version
+    try:
+        if {child.name for child in path.iterdir()} != {plugin}:
+            return None
+        if _ordinary_kind(plugin_root) != "directory":
+            return None
+        if {child.name for child in plugin_root.iterdir()} != {version}:
+            return None
+        if _ordinary_kind(version_root) != "directory" or _ordinary_kind(source_root) != "directory":
+            return None
+        snapshot = {}
+
+        def record(item: Path) -> None:
+            metadata = item.lstat()
+            snapshot[str(item.relative_to(path))] = (
+                metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_size,
+                metadata.st_mtime_ns, metadata.st_ctime_ns,
+            )
+
+        for item in (path, plugin_root, version_root):
+            record(item)
+        pending = [(version_root, source_root)]
+        while pending:
+            staged, source = pending.pop()
+            for child in staged.iterdir():
+                kind = _ordinary_kind(child)
+                if kind is None or kind != _ordinary_kind(source / child.name):
+                    return None
+                record(child)
+                if kind == "directory":
+                    pending.append((child, source / child.name))
+        return snapshot
+    except OSError:
+        return None
+
+
+def _quarantine_install_residue(
+    cache_root: Path,
+    residue: dict[Path, tuple[dict[str, tuple[int, ...]], int]],
+    *,
+    plugin: str,
+    version: str,
+    source_root: Path,
+    stage: str,
+) -> None:
+    """Move only newly observed failed-copy staging; never delete cache data."""
+    for path, (observed, attempt) in residue.items():
+        try:
+            if path.name not in _staging_entries(cache_root):
+                continue  # Codex may have completed its own cleanup.
+            current = _expected_staging_tree(path, plugin=plugin, version=version, source_root=source_root)
+            if current != observed:
+                raise SystemExit(f"Codex install residue changed before quarantine: {path}")
+            quarantine = cache_root.parents[1] / "omh-install-residue" / cache_root.name
+            for directory in (quarantine.parent, quarantine):
+                directory.mkdir(exist_ok=True)
+                if _ordinary_kind(directory) != "directory":
+                    raise OSError(f"non-ordinary quarantine directory: {directory}")
+            # Reserve an empty owner directory; rename never overwrites an entry.
+            destination = quarantine / path.name
+            destination.mkdir()
+            kept = destination / "cache-entry"
+            path.resolve().relative_to(cache_root.resolve())
+            kept.resolve().relative_to(cache_root.parents[2].resolve())
+            path.rename(kept)
+            context = {
+                "source": str(path), "retainedAt": str(kept),
+                "plugin": f"{plugin}@{cache_root.name}", "version": version,
+                "stage": stage, "failedAttempt": attempt,
+            }
+            with (destination / "context.json").open("x", encoding="utf-8") as handle:
+                json.dump(context, handle, indent=2)
+                handle.write("\n")
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"failed to quarantine Codex install residue {path}: {exc}") from exc
+        print(f"+ quarantine Codex install residue {path} -> {kept}", flush=True)
+
+
 def add_codex_plugin(
     codex: str,
     selector: str,
@@ -379,15 +492,43 @@ def add_codex_plugin(
     """Retry only Codex's specific Windows copy/access-denied failure.
 
     Reissue the same plugin command, never the enclosing transaction. Codex owns
-    its temporary copy paths; retain its output rather than guessing those paths
-    or deleting caches. Successful exit still requires normal closure validation.
+    its temporary copy paths. Observe each failed attempt's new staging entries
+    and retain only uniquely matching residue outside the active cache; never delete
+    caches. Successful exit still requires normal closure validation.
     """
     command = [codex, "plugin", "add", selector]
     if dry_run or sys.platform != "win32":
         run(command, env=env, dry_run=dry_run)
         return
+    cache_root = None
+    residue: dict[Path, tuple[dict[str, tuple[int, ...]], int]] = {}
+    plugin, separator, marketplace = selector.rpartition("@")
+    if version and source_root is not None and env.get("CODEX_HOME") and separator:
+        for component in (plugin, marketplace, version):
+            if component in {"", ".", ".."} or any(char in component for char in "/\\:"):
+                raise SystemExit(f"invalid Codex residue path component: {component!r}")
+        cache_root = expand_path(env["CODEX_HOME"]) / "plugins" / "cache" / marketplace
+
+    def retain_residue() -> None:
+        if cache_root is not None and residue:
+            assert version is not None and source_root is not None
+            _quarantine_install_residue(
+                cache_root, residue, plugin=plugin, version=version,
+                source_root=source_root, stage=stage,
+            )
+
     delays = (0.5, 1.0)
+    last_failure = None
     for attempt in range(1, len(delays) + 2):
+        try:
+            before = _staging_entries(cache_root) if cache_root is not None else {}
+        except (OSError, SystemExit) as exc:
+            if last_failure is None:
+                raise SystemExit(f"cannot observe Codex install residue: {exc}") from exc
+            write_stderr(f"cannot observe Codex install residue before retry: {exc}")
+            raise subprocess.CalledProcessError(
+                last_failure.returncode, command, output=last_failure.stdout, stderr=last_failure.stderr,
+            ) from exc
         print("+ " + command_text(command), flush=True)
         print(
             f"Codex stage={stage} plugin={selector} version={version or 'unknown'} "
@@ -411,10 +552,40 @@ def add_codex_plugin(
             print(result.stderr, file=sys.stderr,
                   end="" if result.stderr.endswith("\n") else "\n", flush=True)
         if result.returncode == 0:
+            retain_residue()
             return
         output = f"{result.stdout or ''}\n{result.stderr or ''}".casefold()
         retryable = "failed to copy plugin file" in output and "(os error 5)" in output
-        retry = retryable and attempt <= len(delays)
+        last_failure = result
+        observation_failed = False
+        if retryable and cache_root is not None:
+            assert version is not None and source_root is not None
+            try:
+                candidates = {}
+                for name in _staging_entries(cache_root):
+                    path = cache_root / name
+                    if name not in before:
+                        snapshot = _expected_staging_tree(
+                            path, plugin=plugin, version=version, source_root=source_root,
+                        )
+                        if snapshot is not None:
+                            candidates[path] = (snapshot, attempt)
+                if len(candidates) > 1:
+                    raise SystemExit(
+                        "ambiguous Codex install residue; preserving entries: "
+                        + ", ".join(str(path) for path in candidates)
+                    )
+                if candidates:
+                    write_stderr(
+                        "Codex residue matches this failed attempt's observation window; "
+                        "preservation requires no concurrent Codex install/update against "
+                        "this CODEX_HOME (the OMH lock does not enforce that boundary)."
+                    )
+                residue.update(candidates)
+            except (OSError, SystemExit) as exc:
+                observation_failed = True
+                write_stderr(f"cannot collect Codex install residue: {exc}")
+        retry = retryable and not observation_failed and attempt <= len(delays)
         write_stderr(
             f"Codex stage={stage} plugin={selector} version={version or 'unknown'} "
             f"exit={result.returncode} attempt={attempt}/{len(delays) + 1}; "
@@ -422,6 +593,12 @@ def add_codex_plugin(
                if retry else "plugin add failed; returning to transaction rollback.")
         )
         if not retry:
+            try:
+                if not observation_failed:
+                    retain_residue()
+            except (OSError, SystemExit) as exc:
+                # Preservation failure must not erase the final Codex failure evidence.
+                write_stderr(str(exc))
             raise subprocess.CalledProcessError(
                 result.returncode, command, output=result.stdout, stderr=result.stderr,
             )

@@ -32,6 +32,39 @@ stage, attempt and exit status. The validated source path is not a claim about
 Codex's internal temporary copy source/destination. Preserve those actual paths
 only when Codex itself reports them; do not fabricate a staging path.
 
+The Windows run on 2026-10-08 reproduced a second failure: Copy denied on the
+first attempt, the same command succeeded on the second, but the abandoned
+`plugin-install-*` directory made closure fail. Pre-install stale reconciliation
+cannot handle residue created after that preflight. Codex's store stages into
+`<marketplace>/plugin-install-*/<plugin>/<version>` before activation
+([upstream store](https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/store.rs)).
+
+Observe cache entries before and after each matching failed attempt. Retain
+only a unique previously absent staging entry whose sole plugin/version matches
+the request and whose partial paths and file types exist in the validated source.
+This recovery supports nonconcurrent use of the selected `CODEX_HOME`: another
+Codex install/update must not mutate that cache during the operation. The OMH
+manager lock serializes OMH commands only, not external Codex processes. A name
+delta and matching layout cannot prove creator-process provenance; even a unique
+candidate could belong to another process if this boundary is violated. Do not
+claim concurrency safety. Multiple matching candidates are demonstrably ambiguous;
+preserve them in place, report the ambiguity, and return the original CLI failure.
+Do not infer ownership from a PID guess or silently exclude all staging entries.
+Reject symlinks and Windows reparse points throughout the inspected tree and
+cache ancestors. Snapshot root and descendant identity/type/size/timestamps and
+revalidate that metadata and the source-compatible shape before an atomic move
+into an exclusively created owner directory under
+`$CODEX_HOME/plugins/omh-install-residue/<marketplace>/<staging-name>/`.
+Keep the original tree as `cache-entry` and record its original path, selector,
+version, stage, and failed attempt in `context.json`; never delete it, modify ACLs,
+or overwrite another retained entry. This uses observed paths, not paths inferred
+from a diagnostic string. Existing, foreign, backup, unrecognized, or changed
+entries remain failures. Successful add cannot hide a quarantine failure or
+bypass package/cache identity validation. Exhaustion retains the final CLI error
+even when observation or quarantine also fails, with a supplementary diagnostic,
+then enters the existing rollback. Metadata checks are bounded change detection,
+not a synchronization primitive against concurrent filesystem mutation.
+
 The supported complete upgrade remains `omh update --channel main` (or the saved
 channel via `omh update`). A plugin-level upgrade still uses Codex Copy. Repair
 and reinstall recover a recorded revision; they cannot install this fix as an

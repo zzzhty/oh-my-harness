@@ -607,6 +607,10 @@ Python, or failed dependency imports, they exit nonzero and direct you to
 and `version --json` return one JSON object on stdout (including a structured
 `runtime_unavailable` error when that read-only runtime preflight fails). Command
 traces and bootstrap progress go to stderr.
+The Windows launcher parses its invocation and exit in one command block before
+starting Python. An update can then replace the launcher without CMD reading
+the new file at the old byte offset; the actual child exit status and quoted
+arguments, including literal exclamation marks, are preserved.
 
 `install`, `refresh`, and `remove --dry-run` do not create or update manager locks
 or receipts; `repair --dry-run` and `manager repair --dry-run` also remain
@@ -656,9 +660,22 @@ For `codex`, refresh validates the complete manifest, marketplace policy, nested
 On Windows, `plugin add` retries only a failed command whose output contains both
 `failed to copy plugin file` and `(os error 5)`: at most three attempts, with
 0.5-second then 1-second delays. Each attempt keeps the same selector and source;
-it does not restart the update or delete caches. Other failures return
-immediately. Exhaustion still fails the transaction and invokes the existing
-rollback. A successful command must pass the normal package/cache and harness
+it does not restart the update or delete caches. A failed copy can leave a
+`plugin-install-*` staging directory that Codex does not clean up. The retry
+wrapper snapshots each attempt and retains only a unique newly observed staging
+candidate with the expected plugin/version layout and paths from the validated
+source. Do not run another Codex install/update against the same `CODEX_HOME`
+during this operation. The OMH manager lock does not serialize external Codex
+processes; a matching snapshot is not proof of which process created the entry.
+Multiple matching candidates stop the operation and remain in place. Before
+returning, it moves this residue to
+`$CODEX_HOME/plugins/omh-install-residue/<marketplace>/<staging-name>/cache-entry`
+and writes `context.json` beside it. Existing entries, other plugins/versions,
+backup directories, unexpected files, and symlinks/junctions are preserved in
+place and still fail normal closure. Changed directory/file metadata or layout,
+or a failed quarantine, stops successful activation; it never overwrites retained
+evidence or edits ACLs. Other command failures return immediately. Exhaustion
+still fails the transaction and invokes the existing rollback. A successful command must pass the normal package/cache and harness
 closure checks before an update is recorded as successful. Diagnostics retain
 Codex output and report the plugin, expected version, stage, exit code, attempt,
 and validated source path. Actual temporary destination paths are available only
@@ -675,6 +692,34 @@ all recorded harnesses (`omh update --check --channel main` previews it). The
 updated implementation must be present on that channel first. Codex plugin-level
 CLI upgrades still use its copy operation; installer `--repair` / `--reinstall`
 and `omh repair` restore the recorded revision and are not upgrade substitutes.
+An old Windows launcher cannot be fixed retroactively while it is executing.
+For the first update from that launcher, use the healthy managed Python to enter
+the same update CLI from PowerShell (after the fix is on the selected channel):
+
+```powershell
+$ManagerHome = if ($env:OH_MY_HARNESS_HOME) { $env:OH_MY_HARNESS_HOME } else { Join-Path $env:USERPROFILE '.oh-my-harness' }
+$Python = Join-Path $ManagerHome 'venv\Scripts\python.exe'
+$Cli = Join-Path $ManagerHome 'repo\scripts\omh.py'
+& $Python $Cli --home $ManagerHome update --check --channel main
+# Proceed only if the preview permits the update and returns 0:
+& $Python $Cli --home $ManagerHome update --channel main
+omh check
+```
+
+This bypasses only the old batch reader; ancestry, source identity, journal,
+refresh, closure, and rollback checks still run. Once updated, normal
+`omh update --check --channel main`, `omh update --channel main`, and `omh check`
+use the corrected launcher.
+
+An installation at an unpublished local commit requires a separate ancestry
+check. Applying its diff, squashing it, or cherry-picking it into the channel
+produces different commits: matching code does not establish a fast-forward.
+The channel must descend from the installed commit for the normal update above.
+Preserve the original commit objects/history when integrating, or separately
+review a supported history transition; a diff alone cannot supply those objects.
+Do not reset the managed checkout or disable the fast-forward gate to make the
+update appear successful. An explicit `--to <commit>` still runs all update
+checks and does not establish ancestry for later channel updates.
 See [ADR 0021](docs/adr/0021-retry-windows-plugin-copy-and-track-materialized-instructions.md)
 for source/retry and instruction journal boundaries.
 

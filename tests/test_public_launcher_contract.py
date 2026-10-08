@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import site
 import subprocess
 import sys
 import tempfile
@@ -28,13 +29,20 @@ class PublicLauncherContracts(unittest.TestCase):
         self.user.mkdir()
         self.home = self.user / "manager with spaces"
         self.repo = self.home / "repo"
-        shutil.copytree(ROOT, self.repo, ignore=shutil.ignore_patterns("__pycache__", ".venv"))
+        # A copied worktree .git file points outside the fixture and is not an
+        # ordinary manager clone. Overlay current edits onto an independent clone.
+        subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(self.repo)], check=True)
+        shutil.copytree(ROOT, self.repo, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns(".git", "__pycache__", ".venv"))
         venv.EnvBuilder(with_pip=False, system_site_packages=True).create(self.home / "venv")
         installer.write_launchers(home=self.home, repo=self.repo, dry_run=False)
         self.launcher = self.home / "bin" / ("omh.cmd" if os.name == "nt" else "omh")
         self.env = dict(os.environ, HOME=str(self.user), USERPROFILE=str(self.user),
                         OH_MY_HARNESS_BOOTSTRAP_PYTHON=sys.executable,
-                        CODEX_HOME=str(self.user / ".codex"))
+                        CODEX_HOME=str(self.user / ".codex"),
+                        # A nested venv inherits the base Python's packages,
+                        # not the runner venv's tested dependencies.
+                        PYTHONPATH=os.pathsep.join(site.getsitepackages()))
         self.env.pop("PYTHONDONTWRITEBYTECODE", None)
         self.env.pop("GIT_OPTIONAL_LOCKS", None)
         state = self.home / "state"
@@ -124,6 +132,7 @@ class PublicLauncherContracts(unittest.TestCase):
                 self.assertEqual(self.snapshot(), before)
 
     def test_missing_dependencies_fail_without_installing_them(self):
+        self.env.pop("PYTHONPATH", None)
         config = self.home / "venv/pyvenv.cfg"
         config.write_text(config.read_text().replace("include-system-site-packages = true",
                                                    "include-system-site-packages = false"))
