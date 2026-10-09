@@ -26,7 +26,7 @@ class HarnessNameTransitionTests(unittest.TestCase):
         self.manager = dict(repository="repo", revision="a" * 40, releaseVersion="1.0.0",
                             bundleIdentity="bundle", channel="main", requestedRef="main")
         self.desired = dict(schemaVersion=state.STATE_SCHEMA_VERSION,
-                            harnesses=["copilot-cli", "gemini-cli"],
+                            harnesses=["copilot", "gemini"],
                             updatePolicy={"channel": "main", "userOption": "preserve"},
                             userMetadata="preserve", updatedAt="initial")
         state.atomic_write_json(state.desired_file(self.home), self.desired)
@@ -35,6 +35,11 @@ class HarnessNameTransitionTests(unittest.TestCase):
                 "schemaVersion": state.STATE_SCHEMA_VERSION, "harness": name,
                 "managerRevision": "a" * 40, "root": str(self.home / name),
             })
+        install = self.home / "state/install.json"
+        install.write_text(json.dumps({"product": "oh-my-harness", "status": "ready",
+                                      "harness": "copilot", "revision": "a" * 40}))
+        self.legacy_files = {path: path.read_bytes() for path in
+                             (install, *sorted((self.home / "state/harnesses").iterdir()))}
         self.operation = state.begin_operation(
             self.home, command="update", before=self.manager,
             target={**self.manager, "revision": "b" * 40})
@@ -54,10 +59,12 @@ class HarnessNameTransitionTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def assert_legacy_state(self):
+        for path, content in self.legacy_files.items():
+            self.assertEqual(path.read_bytes(), content)
         self.assertEqual(json.loads(state.desired_file(self.home).read_text())["harnesses"],
-                         ["copilot-cli", "gemini-cli"])
+                         ["copilot", "gemini"])
         self.assertEqual(sorted(path.name for path in (self.home / "state/harnesses").iterdir()),
-                         ["copilot-cli.json", "gemini-cli.json"])
+                         ["copilot.json", "gemini.json"])
 
     def test_resume_keeps_legacy_state_until_commit_then_converges(self):
         seen = []
@@ -75,13 +82,13 @@ class HarnessNameTransitionTests(unittest.TestCase):
         with mock.patch.object(omh, "_refresh_one", side_effect=refresh), \
              mock.patch.object(omh, "_write_harness_state", side_effect=receipt):
             self.assertEqual(omh.command_resume_update(self.args), 0)
-        self.assertEqual(seen, ["copilot", "gemini"])
+        self.assertEqual(seen, ["copilot-cli", "gemini-cli"])
         current = json.loads(state.desired_file(self.home).read_text())
-        self.assertEqual(current["harnesses"], ["copilot", "gemini"])
+        self.assertEqual(current["harnesses"], ["copilot-cli", "gemini-cli"])
         self.assertEqual(current["updatePolicy"], self.desired["updatePolicy"])
         self.assertEqual(current["userMetadata"], "preserve")
         self.assertEqual(sorted(p.name for p in (self.home / "state/harnesses").iterdir()),
-                         ["copilot.json", "gemini.json"])
+                         ["copilot-cli.json", "gemini-cli.json"])
 
     def test_failure_after_first_harness_leaves_state_consumable_by_old_rollback(self):
         with mock.patch.object(omh, "_refresh_one", side_effect=[None, SystemExit("closure failure")]), \
@@ -128,7 +135,7 @@ class HarnessNameTransitionTests(unittest.TestCase):
                     ("_target_revision", ("old", "a" * 40)),
                     ("_validate_update_target", ("1.0.0", "bundle")),
                     ("_instruction_transition", ({}, {})),
-                    ("_harness_names_at_revision", ("copilot-cli", "gemini-cli")),
+                    ("_harness_names_at_revision", ("copilot", "gemini")),
                 ):
                     stack.enter_context(mock.patch.object(omh, name, return_value=value))
                 validate = stack.enter_context(mock.patch.object(
@@ -146,17 +153,23 @@ class HarnessNameTransitionTests(unittest.TestCase):
                 self.assertEqual(state.desired_file(self.home).read_bytes(), before)
 
     def test_target_names_use_legacy_canonical_keys_even_without_input_aliases(self):
+        registry = {"harnesses": {"copilot": {}, "gemini": {}, "zcode": {}}}
+        with mock.patch.object(omh, "_git_blob", return_value=json.dumps(registry).encode()):
+            self.assertEqual(omh._harness_names_at_revision(Path("repo"), "old", ["gemini-cli", "copilot-cli"]),
+                             ("copilot", "gemini"))
+
+    def test_target_names_use_pre_alias_full_canonical_keys(self):
         registry = {"harnesses": {"copilot-cli": {}, "gemini-cli": {}, "zcode": {}}}
         with mock.patch.object(omh, "_git_blob", return_value=json.dumps(registry).encode()):
-            self.assertEqual(omh._harness_names_at_revision(Path("repo"), "old", ["gemini", "copilot"]),
+            self.assertEqual(omh._harness_names_at_revision(Path("repo"), "pre-alias", ["gemini", "copilot"]),
                              ("copilot-cli", "gemini-cli"))
 
     def test_target_name_mapping_refuses_missing_or_ambiguous_distributions(self):
-        for harnesses in ({"zcode": {}}, {"copilot": {}, "copilot-cli": {}}):
+        for harnesses in ({"zcode": {}}, {"copilot-cli": {}, "copilot": {}}):
             with self.subTest(harnesses=harnesses), \
                  mock.patch.object(omh, "_git_blob", return_value=json.dumps({"harnesses": harnesses}).encode()), \
                  self.assertRaisesRegex(SystemExit, "cannot represent installed harness"):
-                omh._harness_names_at_revision(Path("repo"), "old", ["copilot"])
+                omh._harness_names_at_revision(Path("repo"), "old", ["copilot-cli"])
 
 
 if __name__ == "__main__":

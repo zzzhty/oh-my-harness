@@ -279,34 +279,41 @@ class InstallerTests(unittest.TestCase):
                 mock.patch.object(installer, "invoke_refresh") as refresh,
             ):
                 installer.main()
-            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot")
+            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
             receipt = json.loads((home / "state/install.json").read_text())
-            self.assertEqual(receipt["harness"], "copilot")
+            self.assertEqual(receipt["harness"], "copilot-cli")
             self.assertEqual(receipt["status"], "ready")
 
     def test_bootstrap_old_ref_uses_target_canonical_receipt_and_command(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp) / "manager"
-            repo = home / "repo"
-            repo.mkdir(parents=True)
-            self.seed_bootstrap(repo)
-            target_registry = repo / ".agents/harnesses/registry.json"
-            payload = json.loads(target_registry.read_text())
-            for short in ("copilot", "gemini"):
-                payload["harnesses"][short + "-cli"] = payload["harnesses"].pop(short)
-                payload["harnesses"][short + "-cli"].pop("aliases", None)
-            target_registry.write_text(json.dumps(payload))
-            with (
-                mock.patch.object(installer, "SOURCE_ROOT", repo),
-                mock.patch.object(sys, "argv", ["installer", "--home", str(home),
-                    "--repository", "https://example.invalid/repo.git", "--harness", "copilot-cli",
-                    "--adopt-current-checkout"]),
-                mock.patch.object(installer, "installed_revision", return_value="a" * 40),
-                mock.patch.object(installer, "invoke_refresh") as refresh,
-            ):
-                installer.main()
-            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
-            self.assertEqual(json.loads((home / "state/install.json").read_text())["harness"], "copilot-cli")
+        for target_name in ("copilot-cli", "copilot"):
+            with self.subTest(target=target_name), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp) / "manager"
+                repo = home / "repo"
+                repo.mkdir(parents=True)
+                self.seed_bootstrap(repo)
+                target_registry = repo / ".agents/harnesses/registry.json"
+                payload = json.loads(target_registry.read_text())
+                for short in ("copilot", "gemini"):
+                    if target_name == "copilot":
+                        # Model ADR 0018's short-canonical revision, not today's registry.
+                        entry = payload["harnesses"].pop(short + "-cli")
+                        entry["aliases"] = [short + "-cli"]
+                        payload["harnesses"][short] = entry
+                    else:
+                        # The older pre-alias revision accepted only the full key.
+                        payload["harnesses"][short + "-cli"].pop("aliases", None)
+                target_registry.write_text(json.dumps(payload))
+                with (
+                    mock.patch.object(installer, "SOURCE_ROOT", repo),
+                    mock.patch.object(sys, "argv", ["installer", "--home", str(home),
+                        "--repository", "https://example.invalid/repo.git", "--harness", "copilot-cli",
+                        "--adopt-current-checkout"]),
+                    mock.patch.object(installer, "installed_revision", return_value="a" * 40),
+                    mock.patch.object(installer, "invoke_refresh") as refresh,
+                ):
+                    installer.main()
+                self.assertEqual(refresh.call_args.kwargs["harness"], target_name)
+                self.assertEqual(json.loads((home / "state/install.json").read_text())["harness"], target_name)
 
     def test_unknown_bootstrap_harness_fails_before_creating_manager_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -322,7 +329,7 @@ class InstallerTests(unittest.TestCase):
             ):
                 installer.main()
             self.assertEqual(raised.exception.code, 2)
-            self.assertIn("copilot-cli = copilot", error.getvalue())
+            self.assertIn("copilot = copilot-cli", error.getvalue())
             self.assertFalse(home.exists())
             clone.assert_not_called()
 
@@ -532,8 +539,8 @@ class InstallerTests(unittest.TestCase):
             self.assertNotEqual(old_revision, new_revision)
             self.assertEqual(state["revision"], new_revision)
             self.assertEqual(state["status"], "ready")
-            self.assertEqual(state["harness"], "copilot")
-            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot")
+            self.assertEqual(state["harness"], "copilot-cli")
+            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
 
     def test_fast_forward_resume_rejects_a_dirty_checkout(self) -> None:
         dirty = subprocess.CompletedProcess(

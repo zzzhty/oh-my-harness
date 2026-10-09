@@ -32,7 +32,7 @@ class LightweightCommands(unittest.TestCase):
                             revision='a' * 40, releaseVersion='1.2.3', bundleIdentity='b' * 64,
                             channel='main')
         self.desired = dict(schemaVersion=manager_state.STATE_SCHEMA_VERSION,
-                            harnesses=['copilot-cli', 'unknown-client'], updatePolicy={'channel': 'main'})
+                            harnesses=['copilot', 'unknown-client'], updatePolicy={'channel': 'main'})
         self.write_state()
 
     def write_state(self):
@@ -55,7 +55,7 @@ class LightweightCommands(unittest.TestCase):
             self.assertEqual(result['observation'], 'recorded-state-only')
             if command == 'status':
                 self.assertIsNone(result['worktreeClean'])
-                self.assertEqual(result['desiredHarnesses'], ['copilot', 'unknown-client'])
+                self.assertEqual(result['desiredHarnesses'], ['copilot-cli', 'unknown-client'])
                 self.assertEqual(result['manager']['revision'], 'a' * 40)
             self.assertEqual(before, self.snapshot())
 
@@ -92,7 +92,7 @@ class LightweightCommands(unittest.TestCase):
         registry = self.home / 'registry.json'
         shutil.copyfile(ROOT / '.agents/harnesses/registry.json', registry)
         metadata = harness_registry.load_harness_metadata(registry, repo_root=self.home)
-        self.assertEqual(metadata.resolve_id('copilot-cli'), 'copilot')
+        self.assertEqual(metadata.resolve_id('copilot'), 'copilot-cli')
         with self.assertRaises(harness_registry.HarnessRegistryError):
             harness_registry.load_harness_registry(registry, repo_root=self.home)
 
@@ -125,7 +125,7 @@ class LightweightCommands(unittest.TestCase):
 
     def test_shorthand_and_delimiter_are_preserved(self):
         self.assertEqual(omh.parse_arguments([]).command, 'refresh')
-        self.assertEqual(omh.parse_arguments(['copilot-cli']).targets, ['copilot'])
+        self.assertEqual(omh.parse_arguments(['copilot']).targets, ['copilot-cli'])
         self.assertEqual(omh.parse_arguments(['refresh', '--', 'vscode']).targets, ['vscode'])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             omh.parse_arguments(['refresh', '--', '--help'])

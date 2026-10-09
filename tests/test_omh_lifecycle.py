@@ -137,12 +137,12 @@ class OmhCliTests(unittest.TestCase):
         for command in ("install", "refresh", "remove", "check", "doctor", "repair"):
             with self.subTest(command=command):
                 args = parser.parse_args([command, "copilot", "copilot-cli", "--harness", "claude"])
-                targets = omh._target_set(args, desired=("copilot-cli",), mode=command)
-                self.assertEqual(targets, ("copilot", "claude-code"))
+                targets = omh._target_set(args, desired=("copilot",), mode=command)
+                self.assertEqual(targets, ("copilot-cli", "claude-code"))
                 all_args = parser.parse_args([command, "--all"])
                 self.assertEqual(
-                    omh._target_set(all_args, desired=("copilot-cli",), mode=command),
-                    omh._load_registry().choices if command == "install" else ("copilot",),
+                    omh._target_set(all_args, desired=("copilot",), mode=command),
+                    omh._load_registry().choices if command == "install" else ("copilot-cli",),
                 )
 
     def test_unknown_alias_is_rejected_before_any_lifecycle_state_access(self) -> None:
@@ -152,7 +152,7 @@ class OmhCliTests(unittest.TestCase):
                 omh.main(["install", "copliot"])
         self.assertEqual(raised.exception.code, 2)
         self.assertIn("unknown harness 'copliot'", error.getvalue())
-        self.assertIn("copilot-cli = copilot", error.getvalue())
+        self.assertIn("copilot = copilot-cli", error.getvalue())
         state.assert_not_called()
 
     def test_install_and_remove_alias_share_one_canonical_receipt(self) -> None:
@@ -174,18 +174,18 @@ class OmhCliTests(unittest.TestCase):
             ):
                 omh.main(["--home", str(home), "install", "copilot", "copilot-cli"])
             refresh.assert_called_once()
-            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot")
+            self.assertEqual(refresh.call_args.kwargs["harness"], "copilot-cli")
             desired = json.loads((home / "state/desired.json").read_text())
-            self.assertEqual(desired["harnesses"], ["copilot"])
-            receipt = manager_state.harness_file(home, "copilot")
-            self.assertEqual(json.loads(receipt.read_text())["harness"], "copilot")
-            self.assertFalse(manager_state.harness_file(home, "copilot-cli").exists())
+            self.assertEqual(desired["harnesses"], ["copilot-cli"])
+            receipt = manager_state.harness_file(home, "copilot-cli")
+            self.assertEqual(json.loads(receipt.read_text())["harness"], "copilot-cli")
+            self.assertFalse(manager_state.harness_file(home, "copilot").exists())
             with (
                 mock.patch.object(omh, "_state_context", return_value=(manager, desired)),
                 mock.patch.object(omh, "_remove_one") as remove,
             ):
                 omh.main(["--home", str(home), "remove", "copilot"])
-            self.assertEqual(remove.call_args.kwargs["harness"], "copilot")
+            self.assertEqual(remove.call_args.kwargs["harness"], "copilot-cli")
             self.assertEqual(json.loads((home / "state/desired.json").read_text())["harnesses"], [])
             self.assertFalse(receipt.exists())
 

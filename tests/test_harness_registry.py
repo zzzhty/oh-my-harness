@@ -47,9 +47,9 @@ class HarnessRegistryTests(unittest.TestCase):
                 "codex",
                 "zcode",
                 "claude-code",
-                "copilot",
+                "copilot-cli",
                 "vscode",
-                "gemini",
+                "gemini-cli",
                 "opencode",
                 "pi-agent",
             },
@@ -104,7 +104,7 @@ class HarnessRegistryTests(unittest.TestCase):
         )
 
     def test_aliases_resolve_the_same_plan_without_adding_distributions(self) -> None:
-        expected = {"claude": "claude-code", "copilot-cli": "copilot", "gemini-cli": "gemini", "pi": "pi-agent"}
+        expected = {"claude": "claude-code", "copilot": "copilot-cli", "gemini": "gemini-cli", "pi": "pi-agent"}
         self.assertEqual(self.registry.aliases, expected)
         self.assertTrue(set(expected).isdisjoint(self.registry.choices))
         with tempfile.TemporaryDirectory() as tmp:
@@ -131,7 +131,7 @@ class HarnessRegistryTests(unittest.TestCase):
             ("untrimmed", [" copilot "], True),
             ("duplicate", ["copilot", "copilot"], True),
             ("canonical-collision", ["codex"], False),
-            ("self-collision", ["copilot"], False),
+            ("self-collision", ["copilot-cli"], False),
             ("alias-collision", ["claude"], False),
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,7 +139,7 @@ class HarnessRegistryTests(unittest.TestCase):
             for label, aliases, structural in cases:
                 with self.subTest(label=label):
                     payload = json.loads(json.dumps(original))
-                    payload["harnesses"]["copilot"]["aliases"] = aliases
+                    payload["harnesses"]["copilot-cli"]["aliases"] = aliases
                     if structural:
                         self.assertFalse(validator.is_valid(payload))
                     write_registry(path, payload)
@@ -169,13 +169,13 @@ class HarnessRegistryTests(unittest.TestCase):
             )
             copilot = resolve_harness_plan(
                 self.registry,
-                "copilot",
+                "copilot-cli",
                 environ={"COPILOT_HOME": str(copilot_root)},
                 user_home=home,
             )
             gemini = resolve_harness_plan(
                 self.registry,
-                "gemini",
+                "gemini-cli",
                 environ={"GEMINI_CLI_HOME": str(gemini_home)},
                 user_home=home,
             )
@@ -373,7 +373,7 @@ class HarnessRegistryTests(unittest.TestCase):
             )
             plan = resolve_harness_plan(
                 self.registry,
-                "gemini",
+                "gemini-cli",
                 environ={},
                 user_home=home,
             )
@@ -386,7 +386,7 @@ class HarnessRegistryTests(unittest.TestCase):
             with self.assertRaisesRegex(HarnessRegistryError, "multiple filenames"):
                 resolve_harness_plan(
                     self.registry,
-                    "gemini",
+                    "gemini-cli",
                     environ={},
                     user_home=home,
                 )

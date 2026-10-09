@@ -134,26 +134,39 @@ class VSCodeHarnessTests(unittest.TestCase):
 
     def test_missing_consumer_receipt_fails_safe(self):
         self.install('vscode', 'copilot')
-        manager_state.harness_file(self.home, 'copilot').unlink()
+        manager_state.harness_file(self.home, 'copilot-cli').unlink()
         with self.assertRaisesRegex(SystemExit, 'no receipt'):
             self.remove('vscode')
 
-    def test_legacy_alias_receipt_retains_shared_resources(self):
-        self.install('vscode', 'copilot')
-        path = manager_state.harness_file(self.home, 'copilot')
-        payload = json.loads(path.read_text())
-        payload['harness'] = 'copilot-cli'
-        path.rename(manager_state.harness_file(self.home, 'copilot-cli'))
-        manager_state.harness_file(self.home, 'copilot-cli').write_text(json.dumps(payload))
-        manager_state.write_desired(self.home, ['vscode', 'copilot-cli'], canonicalize=False)
-        self.assertIn('retain shared', self.remove('vscode'))
+    def test_legacy_alias_receipt_retains_shared_resources_in_both_removal_orders(self):
+        for first, second in [('vscode', 'copilot'), ('copilot', 'vscode')]:
+            with self.subTest(first=first):
+                self.install('vscode', 'copilot-cli')
+                path = manager_state.harness_file(self.home, 'copilot-cli')
+                payload = json.loads(path.read_text())
+                payload['harness'] = 'copilot'
+                path.rename(manager_state.harness_file(self.home, 'copilot'))
+                manager_state.harness_file(self.home, 'copilot').write_text(json.dumps(payload))
+                manager_state.write_desired(self.home, ['vscode', 'copilot'], canonicalize=False)
+                plan = self.plan(first)
+                self.assertIn('retain shared', self.remove(first))
+                self.assertTrue(plan.instructions_target.exists())
+                self.assertTrue(any(plan.skills_root.iterdir()))
+                manager_state.remove_harness_receipt(self.home, first)
+                manager_state.write_desired(self.home, [second], canonicalize=False)
+                self.remove(second)
+                manager_state.remove_harness_receipt(self.home, second)
+                self.assertFalse(plan.instructions_target.exists())
+                self.assertFalse(any(plan.skills_root.iterdir()))
+                self.assertFalse(manager_state.harness_file(self.home, 'copilot').exists())
+                self.assertFalse(manager_state.harness_file(self.home, 'copilot-cli').exists())
 
     def test_resource_matching_is_per_path_not_whole_root(self):
         self.install('vscode', 'copilot')
         from dataclasses import replace
         plan = self.plan('vscode')
         other = replace(self.plan('copilot'), instructions_target=self.user / 'other.md')
-        with mock.patch.object(remove_harness, 'resolve_harness_plan', side_effect=lambda reg, name, **kw: other if name == 'copilot' else plan):
+        with mock.patch.object(remove_harness, 'resolve_harness_plan', side_effect=lambda reg, name, **kw: other if name == 'copilot-cli' else plan):
             self.assertEqual(remove_harness.shared_resources(plan, registry=self.registry,
                 home=self.home, environment=dict(os.environ)), (True, False))
 
@@ -447,16 +460,16 @@ class VSCodeHarnessTests(unittest.TestCase):
         with mock.patch.object(omh, '_state_context', return_value=({}, desired)), \
              mock.patch.object(omh, '_refresh_one') as refresh:
             omh.command_install(args)
-        self.assertEqual([call.kwargs['harness'] for call in refresh.call_args_list], ['vscode', 'copilot'])
+        self.assertEqual([call.kwargs['harness'] for call in refresh.call_args_list], ['vscode', 'copilot-cli'])
         desired = json.loads(manager_state.desired_file(self.home).read_text())
-        self.assertEqual(desired['harnesses'], ['copilot', 'vscode'])
+        self.assertEqual(desired['harnesses'], ['copilot-cli', 'vscode'])
         for name in desired['harnesses']:
             self.assertEqual(json.loads(manager_state.harness_file(self.home, name).read_text())['harness'], name)
         args = omh.build_parser().parse_args(['--home', str(self.home), 'refresh', '--all', '--yes'])
         with mock.patch.object(omh, '_state_context', return_value=({}, desired)), \
              mock.patch.object(omh, '_refresh_one') as refresh:
             omh.command_refresh(args)
-        self.assertEqual([call.kwargs['harness'] for call in refresh.call_args_list], ['copilot', 'vscode'])
+        self.assertEqual([call.kwargs['harness'] for call in refresh.call_args_list], ['copilot-cli', 'vscode'])
 
     def test_public_remove_all_and_dry_run_use_shared_lifecycle(self):
         import omh

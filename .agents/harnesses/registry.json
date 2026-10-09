@@ -160,9 +160,9 @@
       },
       "extras": []
     },
-    "copilot": {
+    "copilot-cli": {
       "displayName": "GitHub Copilot CLI",
-      "aliases": ["copilot-cli"],
+      "aliases": ["copilot"],
       "root": {
         "candidates": [
           {
@@ -240,9 +240,9 @@
       },
       "extras": []
     },
-    "gemini": {
+    "gemini-cli": {
       "displayName": "Gemini CLI",
-      "aliases": ["gemini-cli"],
+      "aliases": ["gemini"],
       "root": {
         "candidates": [
           {

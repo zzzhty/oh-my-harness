@@ -1,4 +1,4 @@
-"""Persisted-state regressions for the Copilot and Gemini short-name migration."""
+"""Persisted-state regressions for the Copilot and Gemini full-name migration."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
     revision = "a" * 40
     release = "1.0.0"
     bundle = "sha256:migration-fixture"
-    pairs = (("copilot", "copilot-cli"), ("gemini", "gemini-cli"))
+    pairs = (("copilot-cli", "copilot"), ("gemini-cli", "gemini"))
 
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -51,7 +51,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
 
     def seed_home(self, name: str, harnesses: list[str]) -> Path:
         home = self.root / name
-        self.write_install(home, "copilot-cli")
+        self.write_install(home, "copilot")
         self.load_state(home)
         # Deliberately bypass the canonical writer to model pre-migration files.
         manager_state.atomic_write_json(manager_state.desired_file(home), {
@@ -153,33 +153,33 @@ class HarnessNameMigrationTests(unittest.TestCase):
                         self.assertEqual(self.snapshot(home), before)
 
     def test_mixed_desired_state_reads_canonical_set_but_raw_loader_preserves_rollback_input(self) -> None:
-        names = ["copilot-cli", "gemini", "gemini-cli", "copilot"]
+        names = ["copilot", "gemini-cli", "gemini", "copilot-cli"]
         home = self.seed_home("mixed-read", names)
         before = self.snapshot(home)
         for persist in (False, True):
             with self.subTest(persist=persist):
                 _manager, desired = self.load_state(home, persist=persist)
                 self.assertEqual(desired["harnesses"], sorted(names))
-                self.assertEqual(manager_state.desired_harnesses(desired), ("copilot", "gemini"))
+                self.assertEqual(manager_state.desired_harnesses(desired), ("copilot-cli", "gemini-cli"))
                 self.assertEqual(self.snapshot(home), before)
 
     def test_write_desired_canonicalizes_and_deduplicates_preserving_policy(self) -> None:
-        home = self.seed_home("desired-write", ["copilot-cli", "gemini-cli"])
+        home = self.seed_home("desired-write", ["copilot", "gemini"])
         policy = json.loads(manager_state.desired_file(home).read_text())["updatePolicy"]
-        payload = manager_state.write_desired(home, ["gemini-cli", "copilot", "copilot-cli", "gemini", "gemini"])
-        self.assertEqual(payload["harnesses"], ["copilot", "gemini"])
+        payload = manager_state.write_desired(home, ["gemini", "copilot-cli", "copilot", "gemini-cli", "gemini-cli"])
+        self.assertEqual(payload["harnesses"], ["copilot-cli", "gemini-cli"])
         self.assertEqual(payload["updatePolicy"], policy)
         self.assertEqual(json.loads(manager_state.desired_file(home).read_text()), payload)
 
     def test_implicit_and_all_targets_normalize_legacy_desired_for_every_command(self) -> None:
-        desired = ("copilot-cli", "copilot", "gemini-cli", "gemini")
+        desired = ("copilot", "copilot-cli", "gemini", "gemini-cli")
         for mode in ("install", "refresh", "remove", "check", "doctor", "repair"):
             with self.subTest(mode=mode):
                 args = argparse.Namespace(targets=[], harness=None, all=True)
-                expected = omh._load_registry().choices if mode == "install" else ("copilot", "gemini")
+                expected = omh._load_registry().choices if mode == "install" else ("copilot-cli", "gemini-cli")
                 self.assertEqual(omh._target_set(args, desired=desired, mode=mode), expected)
                 args.all = False
-                expected = ("codex",) if mode == "install" else () if mode == "remove" else ("copilot", "gemini")
+                expected = ("codex",) if mode == "install" else () if mode == "remove" else ("copilot-cli", "gemini-cli")
                 self.assertEqual(omh._target_set(args, desired=desired, mode=mode), expected)
 
     def test_receipt_write_converges_both_spellings_and_preserves_unrelated_files(self) -> None:
@@ -194,19 +194,23 @@ class HarnessNameMigrationTests(unittest.TestCase):
                     self.write_receipt(home, selected)
                     self.assert_canonical_receipt(home, canonical, legacy)
                     self.assertEqual(unrelated.read_bytes(), b"unowned content\n")
+                    # Repeating an alias mutation keeps exactly one current identity.
+                    self.write_receipt(home, selected)
+                    self.assert_canonical_receipt(home, canonical, legacy)
+                    self.assertEqual(unrelated.read_bytes(), b"unowned content\n")
 
     def test_failed_canonical_receipt_write_preserves_legacy_and_current_receipts(self) -> None:
-        home = self.seed_home("write-failure", ["copilot-cli"])
-        self.seed_receipt(home, "copilot-cli")
+        home = self.seed_home("write-failure", ["copilot"])
         self.seed_receipt(home, "copilot")
+        self.seed_receipt(home, "copilot-cli")
         before = self.snapshot(home)
         with mock.patch.object(manager_state, "atomic_write_json", side_effect=OSError("injected write failure")):
             with self.assertRaisesRegex(OSError, "injected write failure"):
-                self.write_receipt(home, "copilot")
+                self.write_receipt(home, "copilot-cli")
         self.assertEqual(self.snapshot(home), before)
 
     def test_downgrade_receipts_keep_source_until_atomic_legacy_target_is_written(self) -> None:
-        home = self.seed_home("translate-current", ["copilot", "gemini"])
+        home = self.seed_home("translate-current", ["copilot-cli", "gemini-cli"])
         originals = {}
         for canonical, legacy in self.pairs:
             path = self.seed_receipt(home, canonical)
@@ -217,7 +221,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
         written = []
 
         def checked_write(target: Path, payload: dict) -> None:
-            source = manager_state.harness_file(home, target.stem.removesuffix("-cli"))
+            source = manager_state.harness_file(home, target.stem + "-cli")
             self.assertTrue(source.is_file(), "source removed before the atomic target write")
             self.assertEqual(json.loads(source.read_text()), originals[target.stem])
             atomic_write(target, payload)
@@ -227,7 +231,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
 
         with mock.patch.object(manager_state, "atomic_write_json", side_effect=checked_write):
             manager_state.translate_harness_receipts(home, [legacy for _canonical, legacy in self.pairs])
-        self.assertEqual(written, ["copilot-cli", "gemini-cli"])
+        self.assertEqual(written, ["copilot", "gemini"])
         for canonical, legacy in self.pairs:
             self.assertFalse(manager_state.harness_file(home, canonical).exists())
             self.assertEqual(json.loads(manager_state.harness_file(home, legacy).read_text()), {
@@ -237,7 +241,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
         self.assertEqual((home / "state/install.json").read_bytes(), install)
 
     def test_downgrade_receipts_converge_mixed_names_without_losing_current_metadata(self) -> None:
-        home = self.seed_home("translate-mixed", ["copilot", "copilot-cli", "gemini", "gemini-cli"])
+        home = self.seed_home("translate-mixed", ["copilot-cli", "copilot", "gemini-cli", "gemini"])
         current = {}
         for canonical, legacy in self.pairs:
             self.seed_receipt(home, legacy)
@@ -247,8 +251,8 @@ class HarnessNameMigrationTests(unittest.TestCase):
             current[legacy] = payload
         unrelated = self.seed_receipt(home, "codex")
         original_unrelated = (unrelated.read_bytes(), unrelated.stat().st_mtime_ns)
-        manager_state.translate_harness_receipts(home, ["copilot-cli", "gemini-cli", "copilot-cli"])
-        self.assertEqual(sorted(path.name for path in unrelated.parent.iterdir()), ["codex.json", "copilot-cli.json", "gemini-cli.json"])
+        manager_state.translate_harness_receipts(home, ["copilot", "gemini", "copilot"])
+        self.assertEqual(sorted(path.name for path in unrelated.parent.iterdir()), ["codex.json", "copilot.json", "gemini.json"])
         for _canonical, legacy in self.pairs:
             self.assertEqual(json.loads(manager_state.harness_file(home, legacy).read_text()), {
                 **current[legacy], "harness": legacy,
@@ -258,29 +262,29 @@ class HarnessNameMigrationTests(unittest.TestCase):
     def test_failed_downgrade_target_write_preserves_current_and_legacy_receipts(self) -> None:
         for mixed in (False, True):
             with self.subTest(mixed=mixed):
-                home = self.seed_home(f"translate-failure-{mixed}", ["gemini"])
-                self.seed_receipt(home, "gemini")
+                home = self.seed_home(f"translate-failure-{mixed}", ["gemini-cli"])
+                self.seed_receipt(home, "gemini-cli")
                 if mixed:
-                    self.seed_receipt(home, "gemini-cli")
+                    self.seed_receipt(home, "gemini")
                 before = self.snapshot(home)
                 with mock.patch.object(manager_state, "atomic_write_json", side_effect=OSError("injected downgrade write failure")):
                     with self.assertRaisesRegex(OSError, "injected downgrade write failure"):
-                        manager_state.translate_harness_receipts(home, ["gemini-cli"])
+                        manager_state.translate_harness_receipts(home, ["gemini"])
                 self.assertEqual(self.snapshot(home), before)
 
-    def test_downgrade_translation_is_noop_for_short_names_and_missing_receipts(self) -> None:
-        home = self.seed_home("translate-noop", ["copilot"])
-        self.seed_receipt(home, "copilot")
+    def test_downgrade_translation_is_noop_for_existing_target_names_and_missing_receipts(self) -> None:
+        home = self.seed_home("translate-noop", ["copilot-cli"])
+        self.seed_receipt(home, "copilot-cli")
         before = self.snapshot(home)
-        manager_state.translate_harness_receipts(home, ["copilot", "gemini-cli"])
+        manager_state.translate_harness_receipts(home, ["copilot-cli", "gemini"])
         self.assertEqual(self.snapshot(home), before)
 
     @unittest.skipIf(os.name == "nt", "symlinks require platform-specific privileges")
     def test_downgrade_translation_refuses_linked_parent_source_and_target(self) -> None:
         for kind in ("parent", "source", "target", "dangling-target"):
             with self.subTest(kind=kind):
-                home = self.seed_home(f"translate-linked-{kind}", ["copilot"])
-                source = self.seed_receipt(home, "copilot")
+                home = self.seed_home(f"translate-linked-{kind}", ["copilot-cli"])
+                source = self.seed_receipt(home, "copilot-cli")
                 external = self.root / f"outside-{kind}"
                 if kind == "parent":
                     source.parent.rename(external)
@@ -294,34 +298,34 @@ class HarnessNameMigrationTests(unittest.TestCase):
                         source.unlink()
                         source.symlink_to(target)
                     else:
-                        manager_state.harness_file(home, "copilot-cli").symlink_to(target)
+                        manager_state.harness_file(home, "copilot").symlink_to(target)
                 before = self.snapshot(home)
                 outside_before = self.snapshot(external)
                 with self.assertRaises(SystemExit):
-                    manager_state.translate_harness_receipts(home, ["copilot-cli"])
+                    manager_state.translate_harness_receipts(home, ["copilot"])
                 self.assertEqual(self.snapshot(home), before)
                 self.assertEqual(self.snapshot(external), outside_before)
 
     def test_unowned_or_corrupt_alias_receipts_are_preserved_by_write_and_remove(self) -> None:
         invalid = {
             "bad-json": b"{not-json", "not-object": b"[]",
-            "wrong-schema": json.dumps({"schemaVersion": "unknown", "harness": "copilot-cli"}).encode(),
-            "wrong-owner": json.dumps({"schemaVersion": manager_state.STATE_SCHEMA_VERSION, "harness": "gemini-cli"}).encode(),
+            "wrong-schema": json.dumps({"schemaVersion": "unknown", "harness": "copilot"}).encode(),
+            "wrong-owner": json.dumps({"schemaVersion": manager_state.STATE_SCHEMA_VERSION, "harness": "gemini"}).encode(),
             "unknown-owner": json.dumps({"schemaVersion": manager_state.STATE_SCHEMA_VERSION, "harness": "unrecognized"}).encode(),
         }
         for kind, content in invalid.items():
             for action in ("write", "remove"):
                 with self.subTest(kind=kind, action=action):
-                    home = self.seed_home(f"{kind}-{action}", ["copilot-cli"])
-                    self.seed_receipt(home, "copilot")
-                    legacy = self.seed_receipt(home, "copilot-cli")
+                    home = self.seed_home(f"{kind}-{action}", ["copilot"])
+                    self.seed_receipt(home, "copilot-cli")
+                    legacy = self.seed_receipt(home, "copilot")
                     legacy.write_bytes(content)
                     before = self.snapshot(home)
                     with self.assertRaises(SystemExit):
                         if action == "write":
-                            self.write_receipt(home, "copilot")
+                            self.write_receipt(home, "copilot-cli")
                         else:
-                            manager_state.remove_harness_receipt(home, "copilot")
+                            manager_state.remove_harness_receipt(home, "copilot-cli")
                     self.assertEqual(self.snapshot(home), before)
 
     @unittest.skipIf(os.name == "nt", "symlinks require platform-specific privileges")
@@ -329,18 +333,18 @@ class HarnessNameMigrationTests(unittest.TestCase):
         for dangling in (False, True):
             for action in ("write", "remove"):
                 with self.subTest(dangling=dangling, action=action):
-                    home = self.seed_home(f"symlink-{dangling}-{action}", ["gemini-cli"])
-                    current = self.seed_receipt(home, "gemini")
+                    home = self.seed_home(f"symlink-{dangling}-{action}", ["gemini"])
+                    current = self.seed_receipt(home, "gemini-cli")
                     target = home / "external-receipt.json"
                     if not dangling:
                         target.write_bytes(current.read_bytes())
-                    manager_state.harness_file(home, "gemini-cli").symlink_to(target)
+                    manager_state.harness_file(home, "gemini").symlink_to(target)
                     before = self.snapshot(home)
                     with self.assertRaises(SystemExit):
                         if action == "write":
-                            self.write_receipt(home, "gemini")
+                            self.write_receipt(home, "gemini-cli")
                         else:
-                            manager_state.remove_harness_receipt(home, "gemini-cli")
+                            manager_state.remove_harness_receipt(home, "gemini")
                     self.assertEqual(self.snapshot(home), before)
 
     def test_install_over_legacy_state_refreshes_once_and_does_not_duplicate_desired(self) -> None:
@@ -375,11 +379,11 @@ class HarnessNameMigrationTests(unittest.TestCase):
                     self.assertEqual((home / "state/install.json").read_bytes(), install)
 
     def test_remove_rejects_invalid_receipt_before_external_cleanup_or_desired_mutation(self) -> None:
-        for selected in ("copilot", "copilot-cli", "--all"):
+        for selected in ("copilot-cli", "copilot", "--all"):
             with self.subTest(selected=selected):
-                home = self.seed_home(f"remove-invalid-{selected}", ["copilot-cli"])
-                self.seed_receipt(home, "copilot")
-                self.seed_receipt(home, "copilot-cli").write_bytes(b"{unowned-content")
+                home = self.seed_home(f"remove-invalid-{selected}", ["copilot"])
+                self.seed_receipt(home, "copilot-cli")
+                self.seed_receipt(home, "copilot").write_bytes(b"{unowned-content")
                 before = self.snapshot(home, omit_lock=True)
                 with self.lifecycle_environment() as effects:
                     with self.assertRaises(SystemExit):
@@ -391,7 +395,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
         for command in ("refresh", "repair"):
             for arguments in ((), ("--all",)):
                 with self.subTest(command=command, arguments=arguments):
-                    home = self.seed_home(f"{command}-{len(arguments)}", ["copilot-cli", "copilot", "gemini-cli", "gemini"])
+                    home = self.seed_home(f"{command}-{len(arguments)}", ["copilot", "copilot-cli", "gemini", "gemini-cli"])
                     for canonical, legacy in self.pairs:
                         self.seed_receipt(home, legacy)
                         self.seed_receipt(home, canonical)
@@ -399,21 +403,21 @@ class HarnessNameMigrationTests(unittest.TestCase):
                     original = (install.read_bytes(), install.stat().st_mtime_ns)
                     with self.lifecycle_environment() as effects:
                         self.run_command(home, command, *arguments)
-                    self.assertEqual([call.kwargs["harness"] for call in effects["_refresh_one"].call_args_list], ["copilot", "gemini"])
-                    self.assertEqual(json.loads(manager_state.desired_file(home).read_text())["harnesses"], ["copilot", "gemini"])
+                    self.assertEqual([call.kwargs["harness"] for call in effects["_refresh_one"].call_args_list], ["copilot-cli", "gemini-cli"])
+                    self.assertEqual(json.loads(manager_state.desired_file(home).read_text())["harnesses"], ["copilot-cli", "gemini-cli"])
                     for canonical, legacy in self.pairs:
                         self.assert_canonical_receipt(home, canonical, legacy)
                     self.assertEqual((install.read_bytes(), install.stat().st_mtime_ns), original)
 
     def test_failed_materialization_does_not_normalize_desired_or_receipts(self) -> None:
         for command, arguments, effect in (
-            ("install", ("copilot",), "_refresh_one"),
+            ("install", ("copilot-cli",), "_refresh_one"),
             ("refresh", (), "_refresh_one"),
             ("repair", (), "_refresh_one"),
-            ("remove", ("copilot",), "_remove_one"),
+            ("remove", ("copilot-cli",), "_remove_one"),
         ):
             with self.subTest(command=command):
-                home = self.seed_home(f"failed-{command}", ["copilot-cli", "gemini-cli"])
+                home = self.seed_home(f"failed-{command}", ["copilot", "gemini"])
                 for _canonical, legacy in self.pairs:
                     self.seed_receipt(home, legacy)
                 before = self.snapshot(home, omit_lock=True)
@@ -426,7 +430,7 @@ class HarnessNameMigrationTests(unittest.TestCase):
     def test_status_check_and_doctor_read_legacy_state_without_writing_any_files(self) -> None:
         for command in ("status", "check", "doctor"):
             with self.subTest(command=command):
-                home = self.seed_home(f"readonly-{command}", ["copilot-cli", "copilot", "gemini-cli"])
+                home = self.seed_home(f"readonly-{command}", ["copilot", "copilot-cli", "gemini"])
                 for _canonical, legacy in self.pairs:
                     self.seed_receipt(home, legacy)
                 before = self.snapshot(home)
@@ -434,16 +438,16 @@ class HarnessNameMigrationTests(unittest.TestCase):
                     output = self.run_command(home, command, *(["--json"] if command == "status" else []))
                 self.assertEqual(self.snapshot(home), before)
                 if command == "status":
-                    self.assertEqual(json.loads(output)["desiredHarnesses"], ["copilot", "gemini"])
+                    self.assertEqual(json.loads(output)["desiredHarnesses"], ["copilot-cli", "gemini-cli"])
                 else:
                     commands = [call.args[0] for call in effects["_run"].call_args_list]
-                    self.assertEqual([args[args.index("--harness") + 1] for args in commands], ["copilot", "gemini"])
+                    self.assertEqual([args[args.index("--harness") + 1] for args in commands], ["copilot-cli", "gemini-cli"])
                     self.assertTrue(all(("--strict-warnings" in args) == (command == "doctor") for args in commands))
 
     def test_dry_run_keeps_legacy_files_and_names_byte_for_byte(self) -> None:
         for command in ("install", "refresh", "remove", "repair"):
             with self.subTest(command=command):
-                home = self.seed_home(f"dryrun-{command}", ["copilot-cli", "gemini-cli"])
+                home = self.seed_home(f"dryrun-{command}", ["copilot", "gemini"])
                 for _canonical, legacy in self.pairs:
                     self.seed_receipt(home, legacy)
                 before = self.snapshot(home)
@@ -454,10 +458,10 @@ class HarnessNameMigrationTests(unittest.TestCase):
                 effects["write_launchers"].assert_not_called()
                 selected = effects["_remove_one"] if command == "remove" else effects["_refresh_one"]
                 names = [call.kwargs["harness"] for call in selected.call_args_list]
-                self.assertIn("copilot", names)
-                self.assertIn("gemini", names)
-                self.assertNotIn("copilot-cli", names)
-                self.assertNotIn("gemini-cli", names)
+                self.assertIn("copilot-cli", names)
+                self.assertIn("gemini-cli", names)
+                self.assertNotIn("copilot", names)
+                self.assertNotIn("gemini", names)
 
 
 if __name__ == "__main__":

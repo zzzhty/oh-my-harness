@@ -54,7 +54,7 @@ class InstallerRecoveryTests(unittest.TestCase):
         subprocess.run(["git", "clone", "-q", str(self.origin), str(self.home / "repo")], check=True)
         installer.write_install_state(
             home=self.home, repository=str(self.origin), ref="main", repo=self.home / "repo",
-            harness="copilot-cli", launchers=installer.launcher_paths(self.home),
+            harness="copilot", launchers=installer.launcher_paths(self.home),
             status="ready", revision=self.initial,
         )
         manager_state.derive_initial_state(
@@ -63,7 +63,7 @@ class InstallerRecoveryTests(unittest.TestCase):
         )
         desired_path = self.home / "state/desired.json"
         desired = json.loads(desired_path.read_text())
-        desired["harnesses"] = ["copilot-cli", "zcode"]
+        desired["harnesses"] = ["copilot", "zcode"]
         desired["updatePolicy"]["channel"] = "stable"
         desired["updatePolicy"]["userSetting"] = "preserve"
         desired_path.write_text(json.dumps(desired), encoding="utf-8")
@@ -128,20 +128,20 @@ class InstallerRecoveryTests(unittest.TestCase):
         for mode in ("--repair", "--reinstall"):
             path = self.home / "state/desired.json"
             original = json.loads(path.read_text())
-            original["harnesses"] = ["copilot-cli", "gemini-cli", "zcode"]
+            original["harnesses"] = ["copilot", "gemini", "zcode"]
             original["note"] = "user metadata"
             path.write_text(json.dumps(original))
             receipt = (self.home / "state/install.json").read_bytes()
 
             def child(command):
                 payload = json.loads(path.read_text())
-                payload["harnesses"] = ["copilot", "gemini", "zcode"]
+                payload["harnesses"] = ["copilot-cli", "gemini-cli", "zcode"]
                 payload["updatedAt"] = "changed"
                 path.write_text(json.dumps(payload))
 
             with self.subTest(mode=mode), mock.patch.object(installer, "run", side_effect=child):
                 self.invoke(mode, "--harness", "copilot-cli", "--no-path")
-            expected = {**original, "harnesses": ["copilot", "gemini", "zcode"]}
+            expected = {**original, "harnesses": ["copilot-cli", "gemini-cli", "zcode"]}
             self.assertEqual(json.loads(path.read_text()), expected)
             self.assertEqual((self.home / "state/install.json").read_bytes(), receipt)
 
@@ -337,7 +337,7 @@ class InstallerRecoveryTests(unittest.TestCase):
         self.assertEqual((self.home / "state/install.json").read_bytes(), receipt)
         current = json.loads((self.home / "state/desired.json").read_bytes())
         previous = json.loads(desired_bytes)
-        self.assertEqual(current["harnesses"], ["copilot", "zcode"])
+        self.assertEqual(current["harnesses"], ["copilot-cli", "zcode"])
         self.assertEqual(current["updatePolicy"], previous["updatePolicy"])
 
 
