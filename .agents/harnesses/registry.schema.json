@@ -107,7 +107,7 @@
       "additionalProperties": false,
       "required": ["source", "append"],
       "properties": {
-        "source": {"enum": ["environment", "user-home"]},
+        "source": {"enum": ["environment", "user-home", "openclaw-state"]},
         "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
         "append": {"$ref": "#/$defs/relativeAppend"}
       },
@@ -116,6 +116,10 @@
           "if": {"properties": {"source": {"const": "environment"}}},
           "then": {"required": ["name"]},
           "else": {"not": {"required": ["name"]}}
+        },
+        {
+          "if": {"properties": {"source": {"const": "openclaw-state"}}},
+          "then": {"properties": {"append": {"const": ".openclaw"}}}
         }
       ]
     },
@@ -231,6 +235,12 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["driver"],
+          "properties": {"driver": {"const": "none"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": ["driver", "relativePath", "materialization", "confirmation", "shadowPaths"],
           "properties": {
             "driver": {"const": "managed-file"},
@@ -273,6 +283,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["displayName", "root", "skills", "instructions", "extras"],
+      "allOf": [
+        {
+          "if": {"properties": {"instructions": {"properties": {"driver": {"const": "none"}}}}},
+          "then": {
+            "properties": {
+              "skills": {"properties": {"driver": {"const": "directory-projection"}}},
+              "extras": {"maxItems": 0}
+            }
+          }
+        }
+      ],
       "properties": {
         "displayName": {"type": "string", "minLength": 1},
         "aliases": {

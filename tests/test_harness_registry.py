@@ -51,6 +51,7 @@ class HarnessRegistryTests(unittest.TestCase):
                 "vscode",
                 "gemini-cli",
                 "opencode",
+                "openclaw",
                 "pi-agent",
             },
         )
@@ -116,6 +117,91 @@ class HarnessRegistryTests(unittest.TestCase):
                             resolve_harness_plan(self.registry, alias, **options),
                             resolve_harness_plan(self.registry, canonical, **options),
                         )
+
+    def test_openclaw_state_profile_home_and_platform_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            relocated = home / "relocated"
+            explicit = home / "custom-state"
+            cases = (
+                ({}, home / ".openclaw"),
+                ({"OPENCLAW_PROFILE": "work"}, home / ".openclaw-work"),
+                ({"OPENCLAW_PROFILE": " Dev_2 "}, home / ".openclaw-Dev_2"),
+                ({"OPENCLAW_PROFILE": "DEFAULT"}, home / ".openclaw"),
+                ({"OPENCLAW_HOME": str(relocated)}, relocated / ".openclaw"),
+                ({"OPENCLAW_HOME": "~/relocated", "OPENCLAW_PROFILE": "work"}, relocated / ".openclaw-work"),
+                ({"OPENCLAW_HOME": "null"}, home / ".openclaw"),
+                ({"OPENCLAW_HOME": " undefined "}, home / ".openclaw"),
+                ({"OPENCLAW_STATE_DIR": str(explicit), "OPENCLAW_PROFILE": "work"}, explicit),
+                ({"OPENCLAW_STATE_DIR": "~/state", "OPENCLAW_HOME": str(relocated)}, relocated / "state"),
+                ({"OPENCLAW_STATE_DIR": " ", "OPENCLAW_PROFILE": " "}, home / ".openclaw"),
+            )
+            for environment, expected in cases:
+                for platform, materialization in (("posix", "directory-symlink"), ("nt", "directory-junction")):
+                    with self.subTest(environment=environment, platform=platform):
+                        plan = resolve_harness_plan(self.registry, "openclaw", environ=environment,
+                                                    user_home=home, os_name=platform)
+                        self.assertEqual(plan.root, expected)
+                        self.assertEqual(plan.skills_root, expected / "skills")
+                        self.assertEqual(plan.skills_materialization, materialization)
+                        self.assertIsNone(plan.instructions_target)
+                        self.assertIsNone(plan.instructions_materialization)
+                        self.assertEqual(plan.instruction_shadow_paths, ())
+                        self.assertEqual(plan.harness.extras, ())
+                        self.assertIsNone(plan.marketplace_path)
+                        self.assertEqual(plan.excluded_skill_roots, (home / ".agents/skills",))
+
+    def test_openclaw_invalid_paths_and_profiles_fail_closed(self) -> None:
+        cases = (
+            {"OPENCLAW_STATE_DIR": "relative/state"},
+            {"OPENCLAW_HOME": "relative/home"},
+            {"OPENCLAW_PROFILE": "../work"},
+            {"OPENCLAW_PROFILE": "work/other"},
+            {"OPENCLAW_PROFILE": "work\\other"},
+            {"OPENCLAW_PROFILE": "-work"},
+            {"OPENCLAW_PROFILE": "a" * 65},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            for environment in cases:
+                with self.subTest(environment=environment), self.assertRaises(HarnessRegistryError):
+                    resolve_harness_plan(self.registry, "openclaw", environ=environment, user_home=Path(tmp))
+
+    def test_skills_only_requires_explicit_exact_none_driver(self) -> None:
+        from jsonschema import Draft202012Validator
+
+        original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(json.loads(REGISTRY_FILE.with_name("registry.schema.json").read_text()))
+        validator.validate(original)
+        mutations = (
+            lambda data: data["harnesses"]["openclaw"].pop("instructions"),
+            lambda data: data["harnesses"]["openclaw"].update(instructions=None),
+            lambda data: data["harnesses"]["openclaw"]["instructions"].update(relativePath="AGENTS.md"),
+            lambda data: data["harnesses"]["openclaw"].update(extras=["watcher-hooks"]),
+            lambda data: data["harnesses"]["codex"].update(instructions={"driver": "none"}),
+            lambda data: data["harnesses"]["openclaw"]["root"]["candidates"][0].update(append=".other"),
+            lambda data: data["harnesses"]["openclaw"]["root"]["candidates"][0].update(name="OPENCLAW_STATE_DIR"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            for index, mutate in enumerate(mutations):
+                with self.subTest(case=index):
+                    payload = json.loads(json.dumps(original))
+                    mutate(payload)
+                    self.assertFalse(validator.is_valid(payload))
+                    path = Path(tmp) / "registry.json"
+                    write_registry(path, payload)
+                    with self.assertRaises(HarnessRegistryError):
+                        load_harness_registry(path)
+
+    def test_all_existing_harnesses_retain_their_instruction_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in self.registry.choices:
+                if name == "openclaw":
+                    continue
+                with self.subTest(name=name):
+                    plan = resolve_harness_plan(self.registry, name, environ={}, user_home=Path(tmp))
+                    self.assertIsNotNone(plan.instructions_target)
+                    self.assertIn(plan.instructions_materialization, {"copy", "symlink"})
+                    self.assertNotEqual(plan.harness.instructions.driver, "none")
 
     def test_alias_schema_and_reader_reject_invalid_names_and_collisions(self) -> None:
         from jsonschema import Draft202012Validator

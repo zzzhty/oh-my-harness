@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an explicit OpenClaw skills-only distribution using the existing owned directory projection lifecycle, with state, profile and home overrides and isolated-home regression coverage.
 - Keep public status, version, check, and doctor read-only and usable while a mutation lock is held; report degraded runtime failures without implicit repair.
 - Preserve pure JSON stdout for status/version and move command/bootstrap diagnostics to stderr.
 - Avoid creating or modifying manager locks during install, refresh, and remove dry-run previews.

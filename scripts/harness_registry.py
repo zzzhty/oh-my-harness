@@ -34,7 +34,7 @@ INSTRUCTIONS_MIGRATION_ORIENTATION = {
 }
 
 SKILLS_DRIVERS = frozenset({"codex-marketplace", "directory-projection"})
-INSTRUCTIONS_DRIVERS = frozenset({"managed-file", "settings-derived-file"})
+INSTRUCTIONS_DRIVERS = frozenset({"managed-file", "settings-derived-file", "none"})
 EXTRAS = frozenset(
     {"codex-agent-support", "watcher-hooks", "watcher-doctor"}
 )
@@ -186,8 +186,8 @@ class HarnessPlan:
     skills_materialization: str | None
     instructions_source: Path
     instructions_migration: InstructionsMigrationSpec
-    instructions_target: Path
-    instructions_materialization: str
+    instructions_target: Path | None
+    instructions_materialization: str | None
     instruction_shadow_paths: tuple[Path, ...]
     excluded_skill_roots: tuple[Path, ...]
     marketplace_path: Path | None
@@ -333,9 +333,11 @@ def _root_candidate(value: object, *, label: str) -> RootCandidate:
         if not ENVIRONMENT_NAME_PATTERN.fullmatch(environment):
             raise HarnessRegistryError(f"{label}.name is not a valid environment variable")
         return RootCandidate(source=source, append=append, environment=environment)
-    if source == "user-home":
+    if source in {"user-home", "openclaw-state"}:
         if "name" in payload:
             raise HarnessRegistryError(f"{label}.name is valid only for environment roots")
+        if source == "openclaw-state" and append != Path(".openclaw"):
+            raise HarnessRegistryError(f"{label}.append must be '.openclaw' for openclaw-state")
         return RootCandidate(source=source, append=append)
     raise HarnessRegistryError(f"{label}.source is unsupported: {source!r}")
 
@@ -521,6 +523,9 @@ def _instructions(value: object, *, label: str) -> InstructionsSpec:
     driver = _string(payload.get("driver"), label=f"{label}.driver")
     if driver not in INSTRUCTIONS_DRIVERS:
         raise HarnessRegistryError(f"{label}.driver is unsupported: {driver!r}")
+    if driver == "none":
+        _keys(payload, label=label, required={"driver"})
+        return InstructionsSpec(driver=driver)
     common_required = {"driver", "materialization", "confirmation", "shadowPaths"}
     if driver == "managed-file":
         _keys(payload, label=label, required=common_required | {"relativePath"})
@@ -625,6 +630,10 @@ def _harness(harness_id: str, value: object) -> HarnessSpec:
 
     skills = _skills(payload["skills"], label=f"{label}.skills")
     instructions = _instructions(payload["instructions"], label=f"{label}.instructions")
+    if instructions.driver == "none" and (skills.driver != "directory-projection" or extras):
+        raise HarnessRegistryError(
+            f"{label} skills-only distributions require directory projection and no extras"
+        )
     if extras and harness_id != "codex":
         raise HarnessRegistryError(
             f"{label} cannot declare Codex-specific extras outside the codex harness"
@@ -786,6 +795,8 @@ def _resolve_root(
     if not user_home.is_absolute():
         raise HarnessRegistryError(f"user home must be absolute: {user_home}")
     for candidate in candidates:
+        if candidate.source == "openclaw-state":
+            return _resolve_openclaw_state(candidate.append, environ=environ, user_home=user_home)
         if candidate.source == "environment":
             assert candidate.environment is not None
             raw_root = environ.get(candidate.environment, "").strip()
@@ -800,6 +811,38 @@ def _resolve_root(
             base = user_home
         return lexical_absolute(base / candidate.append)
     raise HarnessRegistryError(f"{label} has no usable root candidate")
+
+
+def _openclaw_absolute_path(raw: str, *, name: str, home: Path) -> Path:
+    # Expand against the explicitly resolved home, never the process's real HOME.
+    if raw == "~":
+        path = home
+    elif raw.startswith(("~/", "~\\")):
+        path = home / raw[2:]
+    else:
+        path = Path(raw)
+    if not path.is_absolute():
+        raise HarnessRegistryError(f"{name} must be an absolute path: {raw!r}")
+    return lexical_absolute(path)
+
+
+def _resolve_openclaw_state(default: Path, *, environ: Mapping[str, str], user_home: Path) -> Path:
+    raw_home = environ.get("OPENCLAW_HOME", "").strip()
+    home = (
+        _openclaw_absolute_path(raw_home, name="OPENCLAW_HOME", home=user_home)
+        if raw_home and raw_home not in {"undefined", "null"} else user_home
+    )
+    profile = environ.get("OPENCLAW_PROFILE", "").strip()
+    if profile and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", profile):
+        raise HarnessRegistryError(
+            "OPENCLAW_PROFILE must be 1-64 letters, digits, underscores or hyphens, "
+            "starting with a letter or digit"
+        )
+    raw_state = environ.get("OPENCLAW_STATE_DIR", "").strip()
+    if raw_state:
+        return _openclaw_absolute_path(raw_state, name="OPENCLAW_STATE_DIR", home=home)
+    suffix = f"-{profile}" if profile and profile.lower() != "default" else ""
+    return lexical_absolute(home / f"{default}{suffix}")
 
 
 def _settings_value(settings: object, path: tuple[str, ...]) -> object | None:
@@ -930,7 +973,9 @@ def resolve_harness_plan(
         skills_materialization = None
 
     instructions = harness.instructions
-    if instructions.driver == "settings-derived-file":
+    if instructions.driver == "none":
+        instructions_target = None
+    elif instructions.driver == "settings-derived-file":
         instructions_target = _settings_instruction_path(instructions, root=root)
     else:
         assert instructions.relative_path is not None
@@ -944,7 +989,8 @@ def resolve_harness_plan(
         if platform_materialization == "windows"
         else instructions.posix_materialization
     )
-    assert instructions_materialization is not None
+    if instructions.driver != "none":
+        assert instructions_materialization is not None
     shadow_paths = tuple(
         _join_within(root, path, label="resolved instruction shadow path")
         for path in instructions.shadow_paths

@@ -15,7 +15,7 @@ The bare name declared by a skill's `SKILL.md` frontmatter and used as the repos
 _Avoid_: harness-independent invocation identity, plugin-qualified identity, physical directory name
 
 **Harness**:
-A named distribution target that owns one complete plan for skills, global instructions, root resolution, materialization, reconciliation, and optional runtime extras.
+A named distribution target that owns one declared plan for skills, its instructions capability, root resolution, materialization, reconciliation, and optional runtime extras. A skills-only harness explicitly owns no global instructions target.
 _Avoid_: skills target plus instructions target, mode, product name without a registry entry
 
 **Harness Registry**:
@@ -27,7 +27,7 @@ The validated, platform-resolved distribution plan produced from one Harness Reg
 _Avoid_: independently selected skills and instructions plans, implicit fallback plan
 
 **Excluded Skill Root**:
-A skill-discovery root that is intentionally outside every Harness Plan because it cannot carry the complete skills-and-instructions bundle or would duplicate catalog identities; registry-selected refresh and closure require canonical repository identities to be absent there.
+A skill-discovery root intentionally outside every Harness Plan because it would duplicate catalog identities or conflict with product-specific discovery; registry-selected refresh and closure require canonical repository identities to be absent there.
 _Avoid_: shared harness, partial harness, implicit cleanup target
 
 **Harness Skill Projection**:
@@ -39,7 +39,7 @@ The `codex` harness skills driver that installs the exact skills-bearing package
 _Avoid_: `$CODEX_HOME/skills` projection, optional partial plugin mode, directory projection
 
 **Harness Instructions Projection**:
-The registry-selected global instructions file derived from `agents/global-instructions.md`; every Harness Plan owns exactly one such projection. Root `AGENTS.md` is repository-local routing, not a global instructions source.
+The registry-selected global instructions file derived from `agents/global-instructions.md`; a Harness Plan with managed instructions owns exactly one such projection, while an explicit skills-only plan owns none. Root `AGENTS.md` is repository-local routing, not a global instructions source.
 _Avoid_: `~/.agents/AGENTS.md`, independently selected instructions harness, silent replacement
 
 **Codex Invocation Identity**:

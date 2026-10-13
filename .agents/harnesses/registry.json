@@ -326,6 +326,28 @@
       },
       "extras": []
     },
+    "openclaw": {
+      "displayName": "OpenClaw",
+      "root": {
+        "candidates": [
+          {"source": "openclaw-state", "append": ".openclaw"}
+        ]
+      },
+      "skills": {
+        "driver": "directory-projection",
+        "relativePath": "skills",
+        "materialization": {
+          "posix": "directory-symlink",
+          "windows": "directory-junction"
+        },
+        "reconciliation": {
+          "prunePolicy": "managed-stale",
+          "confirmation": "none"
+        }
+      },
+      "instructions": {"driver": "none"},
+      "extras": []
+    },
     "pi-agent": {
       "displayName": "Pi Agent",
       "aliases": ["pi"],
