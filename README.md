@@ -53,7 +53,8 @@ The old `plugins/doc-watcher` and `plugins/skill-watcher` source trees were remo
 
 `plugins/*/skills/*/SKILL.md` is the canonical skill catalog. The frontmatter `name` is the bare catalog name even when a physical directory has a different name; marketplace state, plugin caches, and user-level directories are projections, not source authority.
 
-Each harness target selects one complete distribution. Public commands accept
+Each harness target selects one registry-declared distribution, including an
+explicit skills-only capability where the client owns its instructions. Public commands accept
 `HARNESS...`; the lower-level helpers accept `--harness`. The strict JSON authority is `.agents/harnesses/registry.json`, validated by `.agents/harnesses/registry.schema.json` and `scripts/harness_registry.py`. The registry owns canonical names, aliases, root resolution, the skills driver, global instructions, platform materialization, reconciliation, excluded skill roots, and optional runtime extras. The default is `codex`.
 
 | Canonical harness | Alias | Skills | Global instructions |
@@ -65,6 +66,7 @@ Each harness target selects one complete distribution. Public commands accept
 | `vscode` | — | `~/.copilot/skills` projection | `~/.copilot/copilot-instructions.md` (Copilot Agent Host; see below) |
 | `gemini-cli` | `gemini` | `${GEMINI_CLI_HOME:-$HOME}/.gemini/skills` projection | configured `context.fileName`, otherwise `GEMINI.md` |
 | `opencode` | — | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
+| `openclaw` | — | `<state-dir>/skills` projection (default `~/.openclaw/skills`) | None; skills only |
 | `pi-agent` | `pi` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
 
 Aliases are exact lowercase input names declared once in the registry. They
@@ -120,6 +122,72 @@ See [ADR 0023](docs/adr/0023-use-full-canonical-harness-names.md) for the migrat
 scope and compatibility contract.
 
 `codex` deliberately uses the existing marketplace/plugin driver, not `$CODEX_HOME/skills`. Its exact-shape install manifest declares `harness: "codex"` and must cover every package that owns canonical skills. The manifest has no independent schema-version field; its repository-owned reader rejects missing or unsupported fields. Each package manifest exposes exactly `./skills/`; source and cache identities are checked against the repository catalog. Plugin activation rolls back newly attempted packages when closure fails.
+
+### OpenClaw skills
+
+Install and configure OpenClaw separately. The `openclaw` target projects the
+canonical skill directories into OpenClaw's shared managed skills directory:
+
+```bash
+omh install openclaw --dry-run
+omh install openclaw
+omh refresh openclaw
+omh check openclaw
+omh remove openclaw --dry-run
+```
+
+The state root is an absolute `OPENCLAW_STATE_DIR` when set, otherwise
+`<home>/.openclaw-<OPENCLAW_PROFILE>` for a named profile, otherwise
+`<home>/.openclaw`. A blank or case-insensitive `default` profile selects the
+default state. Profile names preserve case and accept 1–64 letters, digits,
+underscores or hyphens, starting with a letter or digit. `<home>` is the current
+user's home unless `OPENCLAW_HOME` overrides it. `~` in either path override
+expands against the relevant home; relative paths and invalid profiles fail
+before projection. Legacy state locations require an explicit state override.
+
+Use the same environment for every lifecycle command. To manage a profile
+normally launched with `openclaw --profile work`, set `OPENCLAW_PROFILE=work`
+for `omh`, or supply its exact state directory:
+
+```bash
+OPENCLAW_PROFILE=work omh install openclaw --dry-run
+OPENCLAW_STATE_DIR="$HOME/.openclaw-work" omh install openclaw
+```
+
+PowerShell equivalents use `$env:OPENCLAW_PROFILE = 'work'` or
+`$env:OPENCLAW_STATE_DIR = Join-Path $HOME '.openclaw-work'` before calling `omh`.
+The OpenClaw CLI's `--profile` flag does not propagate to a separate `omh`
+process. One recorded `openclaw` target represents one state root; removal
+rejects a changed root until its recorded environment is restored. Installing
+multiple profiles as separate recorded targets is not supported.
+
+The registry explicitly selects `instructions: {"driver": "none"}`. This target
+does not manage `AGENTS.md`, `SOUL.md`, workspace bootstrap files, `openclaw.json`,
+permissions, or ClawHub metadata. Same-name unmanaged skills cause an error;
+unrelated user/ClawHub skills are preserved. POSIX uses directory symlinks and
+Windows uses directory junctions, with the existing ownership checks for refresh
+and removal. Shared managed OpenClaw skills accept directory links without
+changing `skills.load.allowSymlinkTargets`; the per-skill `SKILL.md` containment
+rule still applies. Workspace and `extraDirs` discovery have different boundaries.
+
+The projection preserves skill files and their explicit-invocation/read-only
+instructions. It grants no tool permissions or publication authority. OpenClaw
+controls readiness, agent allowlists and runtime visibility; `omh check` verifies
+the managed projection. After installation, use the matching OpenClaw environment
+with `openclaw skills list --json` and `openclaw skills check` to inspect discovery
+and readiness. For a named profile, use `openclaw --profile work skills list --json`
+or set the exact `OPENCLAW_STATE_DIR` for OpenClaw as well. In the local
+OpenClaw 2026.10.2 smoke test, the environment-only profile selected the profile
+workspace but reported the default managed skills root; the explicit CLI flag
+resolved the matching profile root. See the official [skills][openclaw-skills],
+[skills configuration][openclaw-skills-config], [CLI profiles][openclaw-cli] and
+[environment variables][openclaw-environment] documentation, and
+[ADR 0024](docs/adr/0024-add-openclaw-skills-only-distribution.md).
+
+[openclaw-skills]: https://docs.openclaw.ai/tools/skills
+[openclaw-skills-config]: https://docs.openclaw.ai/tools/skills-config
+[openclaw-cli]: https://docs.openclaw.ai/cli
+[openclaw-environment]: https://docs.openclaw.ai/help/environment
 
 ## Lifecycle Manager
 
@@ -245,9 +313,9 @@ A source edit without a regenerated identity fails before Codex mutation. An alr
 
 Directory projections use directory symlinks on POSIX and directory junctions on Windows. They manage only entries proven to target canonical skill directories in this checkout, prune only repository-owned stale links, preserve unrelated user skills, and refuse unmanaged same-name entries. A retry may recover an exact canonical empty ordinary directory left by an interrupted link creation; recovery rejects non-empty directories and reparse points and uses only non-recursive `rmdir()`. Matt skills are maintained in the source catalog under the same rules as the other local plugins.
 
-Instructions are part of every harness plan. A missing target requires confirmation, and `--yes` may confirm its creation. Replacing a different existing file always requires live confirmation; `--yes` does not authorize replacement. Directories, unknown reparse points, unmanaged symlinks, configured shadow files, and source or target changes after preflight fail closed. POSIX Codex instructions use a symlink; other current entries use atomic copies.
+Harnesses with a managed instructions driver include instructions in their plan; the explicit `none` driver owns no instructions target. A missing managed target requires confirmation, and `--yes` may confirm its creation. Replacing a different existing file always requires live confirmation; `--yes` does not authorize replacement. Directories, unknown reparse points, unmanaged symlinks, configured shadow files, and source or target changes after preflight fail closed. POSIX Codex instructions use a symlink; other managed entries use atomic copies.
 
-`~/.agents/skills` is an excluded skill root, not a harness: it cannot distribute `AGENTS.md` as part of the same bundle and may conflict with product-specific discovery. Refresh fails before mutation, and closure fails, when it contains a repository catalog identity or stale repository-owned projection. Unrelated user skills remain untouched. Codex marketplace packages expose `${plugin}:${catalog-name}`; other harnesses retain their native identity behavior, so a bare prompt reference is not a promise of one cross-harness runtime identity.
+`~/.agents/skills` remains an excluded skill root because it may conflict with product-specific discovery. The OpenClaw skills-only capability does not authorize a generic shared projection there. Refresh fails before mutation, and closure fails, when it contains a repository catalog identity or stale repository-owned projection. Unrelated user skills remain untouched. Codex marketplace packages expose `${plugin}:${catalog-name}`; other harnesses retain their native identity behavior, so a bare prompt reference is not a promise of one cross-harness runtime identity.
 
 Source-package validation is independent of the selected harness:
 
@@ -616,7 +684,7 @@ Key platform differences:
 - POSIX directory projections: directory symlinks
 - Windows directory projections: directory junctions
 - POSIX Codex instructions: symlink into `$CODEX_HOME/AGENTS.md`
-- Windows and current non-Codex instructions: atomic copy into the registry-selected target
+- Windows and current non-Codex managed instructions: atomic copy into the registry-selected target
 
 Windows skill projection does not require file-symlink privilege. The projection helper validates junction targets and uses a strictly validated non-recursive `rmdir()` only for an empty ordinary directory left by an interrupted link creation.
 
@@ -682,7 +750,7 @@ desired harness set, while `install` without a target selects the registry
 default (currently `codex`). The bootstrap shim only restores tooling and enters
 the unified Python CLI; `omh --help` remains available without a tooling rebuild,
 and harness defaults, choices, and paths remain registry authority. Global
-instructions are preflighted before skills or marketplace mutation.
+instructions, when declared, are preflighted before skills or marketplace mutation.
 
 For `codex`, refresh validates the complete manifest, marketplace policy, nested source-package containment, current cache shape, and marketplace source binding before mutation. By default, installation reuses the validated canonical checkout as its local marketplace source, avoiding a second Git acquisition. An explicit Git source/ref still requires the canonical remote and is pinned to the validated checkout commit; explicit Git failures stop without local fallback. Codex CLI resolution uses explicit `--codex`/`-CodexPath`, `CODEX_BIN`, `PATH`, standalone installs, then platform-managed fallbacks.
 
@@ -818,11 +886,11 @@ $ToolingPython = Join-Path $ManagerHome "venv\Scripts\python.exe"
 # alternative: & $ToolingPython scripts\check_harness.py --harness zcode
 ```
 
-The check script verifies the selected harness skills and instructions plus the excluded-root policy. Codex closure also verifies the exact marketplace/source package set, manifest `./skills/` projection, enabled CLI state, cache identities, tooling Python, Watcher hooks, subagent support, source plugin validation, and Watcher doctor. Native directory harnesses verify their selected projection and instructions. The check is read-only.
+The check script verifies the selected harness skills, declared instructions, and excluded-root policy. Codex closure also verifies the exact marketplace/source package set, manifest `./skills/` projection, enabled CLI state, cache identities, tooling Python, Watcher hooks, subagent support, source plugin validation, and Watcher doctor. Native directory harnesses verify their selected projection and any managed instructions; OpenClaw checks only its skill projection. The check is read-only.
 
 After the helper refreshes hooks, open `/hooks` in Codex and trust the refreshed Watcher skill command hook definitions. Codex skips non-managed command hooks until the exact hook definition is trusted.
 
-The refresh preflights global instructions before distribution mutation and verifies them after an atomic write. The final closure check reads the same registry-resolved plan.
+For a managed instructions driver, refresh preflights global instructions before distribution mutation and verifies them after an atomic write. The final closure check reads the same registry-resolved plan.
 
 Watcher installs user-level Codex command hooks in `$CODEX_HOME/hooks.json`. It does not use plugin manifest hooks and does not modify `.codex-plugin/plugin.json`.
 

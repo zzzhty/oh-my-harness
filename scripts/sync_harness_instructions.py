@@ -303,7 +303,10 @@ def prepare_instruction_sync(
     operation_managed_digests: tuple[str, ...] = (),
     input_fn: Input = input,
     output: Output = print,
-) -> PreparedInstructionSync:
+) -> PreparedInstructionSync | None:
+    if plan.instructions_target is None:
+        output(f"harness {plan.harness_id} manages skills only; no global instructions target")
+        return None
     prepared = _inspect(
         plan,
         explicit_former_sources=explicit_former_sources,
@@ -419,8 +422,8 @@ def _atomic_symlink(source: Path, target: Path) -> None:
             temporary.unlink()
 
 
-def apply_instruction_sync(prepared: PreparedInstructionSync, *, dry_run: bool) -> None:
-    if prepared.action == "current" or dry_run:
+def apply_instruction_sync(prepared: PreparedInstructionSync | None, *, dry_run: bool) -> None:
+    if prepared is None or prepared.action == "current" or dry_run:
         return
     if not prepared.approved:
         raise SystemExit("instructions mutation was not approved during preflight")
@@ -442,6 +445,8 @@ def apply_instruction_sync(prepared: PreparedInstructionSync, *, dry_run: bool) 
 
 
 def check_instruction_sync(plan: HarnessPlan) -> list[str]:
+    if plan.instructions_target is None:
+        return []
     try:
         prepared = _inspect(plan)
     except SystemExit as exc:
@@ -466,6 +471,8 @@ def remove_instruction_sync(plan: HarnessPlan, *, dry_run: bool) -> None:
     """Remove only instructions proven to match current or registry-peer state."""
 
     target = plan.instructions_target
+    if target is None:
+        return
     snapshot = _snapshot(target)
     if snapshot.kind == "missing":
         print(f"instructions already clear for {plan.harness_id}: {target}")
@@ -516,6 +523,9 @@ def main() -> int:
         plan = resolve_harness_plan(registry, args.harness, repo_root=repo_root)
     except HarnessRegistryError as exc:
         raise SystemExit(str(exc)) from exc
+    if plan.instructions_target is None:
+        print(f"harness {plan.harness_id} manages skills only; no global instructions target")
+        return 0
     if args.check:
         issues = check_instruction_sync(plan)
         if issues:

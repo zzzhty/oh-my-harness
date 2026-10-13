@@ -313,6 +313,9 @@ class CheckRunner:
         self.ok("no stale oh-my-harness plugin config or cache entries remain")
 
     def check_harness_instructions(self, plan: HarnessPlan) -> None:
+        if plan.instructions_target is None:
+            self.ok(f"harness {plan.harness_id} manages skills only; no global instructions target")
+            return
         issues = check_instruction_sync(plan)
         if issues:
             for issue in issues:

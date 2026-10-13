@@ -252,7 +252,9 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
     """
     installed = removal_consumers(home, registry=registry)
     keep_skills = keep_instructions = False
-    selected_paths = [plan.instructions_target]
+    selected_paths = []
+    if plan.instructions_target is not None:
+        selected_paths.append(plan.instructions_target)
     if plan.skills_root is not None:
         selected_paths.append(plan.skills_root)
 
@@ -268,7 +270,8 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
         roots = recorded_harness_roots(home, name, registry=registry)
         current_root = resolve_harness_root(registry, name, environ=environment)
         spec = registry.harnesses[registry.resolve_id(name)].instructions
-        if (name != plan.harness_id and spec.driver == "settings-derived-file"
+        if (plan.instructions_target is not None and name != plan.harness_id
+                and spec.driver == "settings-derived-file"
                 and any(not _same_directory(lexical_absolute(root), current_root) for root in roots)):
             # The old dynamic filename was not recorded; a nested alias may have
             # pointed outside that root. Current settings cannot prove it unused.
@@ -289,17 +292,22 @@ def shared_resources(plan, *, registry, home: Path, environment: dict,
                     # Without readable candidates, roots alone cannot exclude an
                     # intermediate directory alias into the selected file. Keep
                     # that file, but let unrelated skills/logical removal proceed.
-                    keep_instructions = True
-                    print(f"warning: retain instructions because {name} configured targets cannot be determined")
+                    if plan.instructions_target is not None:
+                        keep_instructions = True
+                        print(f"warning: retain instructions because {name} configured targets cannot be determined")
                 else:
-                    if any(_same_resource(path, plan.instructions_target) for path in candidates):
+                    if plan.instructions_target is not None and any(
+                        _same_resource(path, plan.instructions_target) for path in candidates
+                    ):
                         keep_instructions = True
                         print(f"warning: retain instructions referenced by {name} multi-target settings")
                 continue
             raise
         shares_skills = (plan.skills_root is not None and other.skills_root is not None
                          and _same_resource(plan.skills_root, other.skills_root))
-        shares_instructions = _same_resource(plan.instructions_target, other.instructions_target)
+        shares_instructions = (plan.instructions_target is not None
+                               and other.instructions_target is not None
+                               and _same_resource(plan.instructions_target, other.instructions_target))
         relevant = name == plan.harness_id or shares_skills or shares_instructions or recorded_overlap
         if not relevant:
             continue
@@ -370,7 +378,8 @@ def remove_harness(
     print(f"Remove oh-my-harness distribution from {plan.harness.display_name}:")
     if plan.skills_root is not None:
         print(f"- managed skill projections under {plan.skills_root}")
-    print(f"- managed instructions at {plan.instructions_target}")
+    if plan.instructions_target is not None:
+        print(f"- managed instructions at {plan.instructions_target}")
     if plan.harness_id == "codex":
         print("- managed Codex marketplace/plugins, Watcher hooks, and agent support")
 
