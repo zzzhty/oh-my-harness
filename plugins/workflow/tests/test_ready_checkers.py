@@ -1610,6 +1610,41 @@ Checkpoint evidence：close revision recorded.
     def test_sop_checker_validates_placeholders_inside_fences(self) -> None:
         self.assert_checker_contract(SOP_CHECKER, FIXTURES / "ready_sop.md")
 
+    def test_sop_recovery_contracts_keep_existing_readiness_and_required_fields(self) -> None:
+        # Document structure only: model recovery decisions are reviewed separately.
+        for fixture in ("ready_sop.md", "ready_sop_with_recovery.md"):
+            ready = (FIXTURES / fixture).read_text(encoding="utf-8")
+            draft = ready.replace("Status: Ready", "Status: Draft")
+            variants = (
+                ("ready", ready, (), 0, None),
+                ("draft", draft, (), 1, "SOP status must be Ready"),
+                ("draft-preview", draft, ("--allow-draft",), 0, None),
+                (
+                    "missing-actions",
+                    re.sub(r"(?ms)^## Allowed Actions\n.*?(?=^## )", "", ready),
+                    (), 1, "missing required section: allowed actions",
+                ),
+                (
+                    "missing-validation",
+                    re.sub(r"(?ms)^## Validation\n.*?(?=^## )", "", ready),
+                    (), 1, "missing required section: validation",
+                ),
+                (
+                    "missing-step-output",
+                    re.sub(r"(?ms)^Expected Output:.*?(?=^Failure Handling:)", "", ready, count=1),
+                    (), 1, "Step 1 missing required field: expected output",
+                ),
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / fixture
+                for name, document, args, expected, diagnostic in variants:
+                    with self.subTest(fixture=fixture, variant=name):
+                        path.write_text(document, encoding="utf-8")
+                        result = self.run_checker(SOP_CHECKER, path, *args)
+                        self.assertEqual(result.returncode, expected, result.stderr)
+                        if diagnostic:
+                            self.assertIn(diagnostic, result.stderr)
+
     def test_sop_checker_enforces_ready_lifecycle_and_step_contract(self) -> None:
         ready = (FIXTURES / "ready_sop.md").read_text(encoding="utf-8")
 

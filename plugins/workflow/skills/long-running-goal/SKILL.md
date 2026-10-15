@@ -49,7 +49,7 @@ Ask only at a runtime hard stop: an uncovered authorization boundary (including 
 
 Missing credentials, files, tools, source inputs, subagents, connectors, worktrees or verifiers first require diagnosis and authorized recovery. Local absence or one failed method alone is not technical impossibility. Preserve required methods, gates, scope and acceptance criteria when changing strategy. If no authorized useful alternative exists, report the exact external dependency and wait for it; do not manufacture attempts, claim success, or silently relax a required gate.
 
-Stop the affected action, not at status checkpoints. Finish independent authorized work within the current milestone without bypassing gates or advancing past an incomplete milestone, unless the native runtime has already stopped execution. Record recovery evidence in the existing milestone so a context transition does not restart failed approaches.
+Stop the affected action, not at status checkpoints. Pause dependent steps after a failed gate, but continue authorized diagnosis, repair and independent work within the current milestone without bypassing gates or advancing past an incomplete milestone, unless the native runtime has already stopped execution. Record recovery evidence in the existing milestone so a context transition does not restart failed approaches.
 
 Temporary-cache housekeeping uses only preflight's recorded policy and owner paths. Never infer cleanup consent from YOLO scope, skipped grilling or generic cleanup language.
 

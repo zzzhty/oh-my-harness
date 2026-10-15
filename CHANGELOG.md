@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Prioritize declared, authorized SOP recovery before stopping on recoverable validation failures; keep explicit stops and report-only boundaries, and clarify that failed Goal gates pause dependent steps while authorized current-milestone repairs continue.
 - Add an explicit OpenClaw skills-only distribution using the existing owned directory projection lifecycle, with state, profile and home overrides and isolated-home regression coverage.
 - Keep public status, version, check, and doctor read-only and usable while a mutation lock is held; report degraded runtime failures without implicit repair.
 - Preserve pure JSON stdout for status/version and move command/bootstrap diagnostics to stderr.

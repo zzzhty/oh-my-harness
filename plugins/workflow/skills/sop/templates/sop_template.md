@@ -36,4 +36,4 @@ Expected Output: <Observable result.>
 
 ## Stop Conditions
 
-<How to handle missing inputs, permission gaps, failed required validation, and other procedure-specific stops. Add step-local failure handling only when different.>
+<Explicit termination, missing-input, safety and permission stops take priority. If this procedure permits recovery, declare shared or step-local diagnosis, repair or bounded retries within scope: pause dependent steps, keep report-only work non-mutating, and repeat unchanged required validation before continuing. Stop and report when recovery is unavailable, exhausted or needs more authorization; a procedure may instead terminate immediately.>

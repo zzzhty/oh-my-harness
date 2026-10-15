@@ -8,7 +8,7 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 - `orchestrate-subagents`: user-requested subagent orchestration using bounded `task_name` assignments, prompt-declared permissions, evidence consolidation, failure handling, and parent-owned integration.
 - `prompt-strategy-loop`: evidence-backed prompt and agent-strategy iteration with risk-proportional evaluation and bounded writeback.
 - `scope-discipline`: explicit scope-and-evidence discipline that rejects unsupported expansion, keeps necessary consequences, and supplies the shared necessity gate used by long-running-goal milestones.
-- `sop`: standard operating procedures for repeatable manual, agent-executed, or automated workflows with eight core sections: trigger, inputs, execution harness, allowed actions, steps, validation, output contract, and stop conditions; add further detail only when used.
+- `sop`: standard operating procedures for repeatable manual, agent-executed, or automated workflows with eight core sections: trigger, inputs, execution harness, allowed actions, steps, validation, output contract, and stop conditions. Declared authorized recovery pauses dependent steps until unchanged validation passes; explicit termination, safety and permission stops take priority. Recovery is optional; add further detail only when used.
 - `summary-in-html`: standalone HTML developer summaries and entry-first source-code walkthroughs for a project, directory, module, feature area, documentation chapter, or user-specified scope, with optional image assets when explicitly requested.
 
 ## Shared Vocabulary
