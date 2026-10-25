@@ -53,6 +53,7 @@ class HarnessRegistryTests(unittest.TestCase):
                 "opencode",
                 "openclaw",
                 "pi-agent",
+                "omp",
             },
         )
         codex = self.registry.harnesses["codex"]
@@ -303,6 +304,46 @@ class HarnessRegistryTests(unittest.TestCase):
                         plan.instruction_shadow_paths,
                         (home / ".pi/agent/AGENTS.override.md",),
                     )
+
+    def test_omp_uses_its_native_agent_directory_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "users" / "tester"
+            for os_name, materialization in (
+                ("posix", "directory-symlink"),
+                ("nt", "directory-junction"),
+            ):
+                with self.subTest(os_name=os_name):
+                    plan = resolve_harness_plan(
+                        self.registry,
+                        "omp",
+                        environ={},
+                        user_home=home,
+                        os_name=os_name,
+                    )
+
+                    self.assertEqual(plan.root, home / ".omp/agent")
+                    self.assertEqual(plan.skills_root, home / ".omp/agent/skills")
+                    self.assertEqual(plan.skills_materialization, materialization)
+                    self.assertEqual(plan.instructions_target, home / ".omp/agent/AGENTS.md")
+                    self.assertEqual(plan.instructions_materialization, "copy")
+                    self.assertEqual(plan.instruction_shadow_paths, ())
+
+            relocated = home / "config" / "omp-agent"
+            relocated_plan = resolve_harness_plan(
+                self.registry,
+                "omp",
+                environ={"PI_CODING_AGENT_DIR": str(relocated)},
+                user_home=home,
+            )
+            self.assertEqual(relocated_plan.root, relocated)
+            # Named profiles relocate OMP's agent directory and are not modeled here.
+            profile_plan = resolve_harness_plan(
+                self.registry,
+                "omp",
+                environ={"OMP_PROFILE": "work"},
+                user_home=home,
+            )
+            self.assertEqual(profile_plan.root, home / ".omp/agent")
 
     def test_bridge_ready_requires_two_regular_byte_identical_sources(self) -> None:
         original = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
