@@ -73,7 +73,7 @@ explicit skills-only capability where the client owns its instructions. Public c
 | `opencode` | — | `~/.config/opencode/skills` projection | `~/.config/opencode/AGENTS.md` |
 | `openclaw` | — | `<state-dir>/skills` projection (default `~/.openclaw/skills`) | None; skills only |
 | `pi-agent` | `pi` | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.pi/agent}/AGENTS.md` |
-| `omp` | — | `${PI_CODING_AGENT_DIR:-~/.omp/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.omp/agent}/AGENTS.md` |
+| `oh-my-pi` | `omp` | `${PI_CODING_AGENT_DIR:-~/.omp/agent}/skills` projection | `${PI_CODING_AGENT_DIR:-~/.omp/agent}/AGENTS.md` |
 
 Aliases are exact lowercase input names declared once in the registry. They
 resolve to the canonical ID before selecting paths or writing state. For example,
@@ -195,26 +195,32 @@ resolved the matching profile root. See the official [skills][openclaw-skills],
 [openclaw-cli]: https://docs.openclaw.ai/cli
 [openclaw-environment]: https://docs.openclaw.ai/help/environment
 
-### OMP agent
+### Oh My Pi agent
 
-The `omp` target projects the canonical skill directories into OMP's native
-user agent directory and manages `~/.omp/agent/AGENTS.md` as a copied global
-instructions file. OMP loads both natively: `~/.omp/agent/skills/<name>/SKILL.md`
-through its highest-priority native skill provider (which requires a
-`description` in each skill's frontmatter; the catalog satisfies this), and
-`~/.omp/agent/AGENTS.md` as the user context file that shadows every other
-tool's user-level context file inside OMP sessions. Keep that shadowing in
-mind when other targets also distribute global instructions.
+The `oh-my-pi` target projects the canonical skill directories into Oh My
+Pi's native user agent directory and manages `~/.omp/agent/AGENTS.md` as a
+copied global instructions file. Oh My Pi loads both natively:
+`~/.omp/agent/skills/<name>/SKILL.md` through its highest-priority native
+skill provider (which requires a `description` in each skill's frontmatter;
+the catalog satisfies this), and `~/.omp/agent/AGENTS.md` as the user
+context file that shadows every other tool's user-level context file inside
+Oh My Pi sessions. Keep that shadowing in mind when other targets also
+distribute global instructions.
 
-`PI_CODING_AGENT_DIR` is shared with the `pi-agent` target: it relocates OMP's
-default-profile agent directory. Installing both targets while it points at one
-directory records two consumers of the same skills root and the same
-`AGENTS.md`, following the existing shared-resource rule from
+`PI_CODING_AGENT_DIR` is shared with the `pi-agent` target: it relocates Oh
+My Pi's default-profile agent directory. Installing both targets while it
+points at one directory records two consumers of the same skills root and
+the same `AGENTS.md`, following the existing shared-resource rule from
 `vscode`/`copilot-cli`: removing one retains the resources the other still
-uses. Named OMP profiles (`omp --profile`, `OMP_PROFILE`, `PI_PROFILE`) are not
-modeled; they relocate the agent directory and ignore `PI_CODING_AGENT_DIR`, so
-this target always resolves the default profile's directory. Run OMP without a
-named profile when using this distribution.
+uses. Named Oh My Pi profiles (`omp --profile`, `OMP_PROFILE`, `PI_PROFILE`)
+are not modeled; they relocate the agent directory and ignore
+`PI_CODING_AGENT_DIR`, so this target always resolves the default profile's
+directory. Run Oh My Pi without a named profile when using this distribution.
+
+See [ADR 0025](docs/adr/0025-add-omp-agent-distribution.md) for the
+distribution boundary and
+[ADR 0026](docs/adr/0026-use-full-canonical-name-for-oh-my-pi.md) for the
+canonical-name decision.
 
 ## Lifecycle Manager
 

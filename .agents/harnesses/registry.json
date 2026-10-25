@@ -393,8 +393,9 @@
       },
       "extras": []
     },
-    "omp": {
-      "displayName": "OMP",
+    "oh-my-pi": {
+      "displayName": "Oh My Pi",
+      "aliases": ["omp"],
       "root": {
         "candidates": [
           {

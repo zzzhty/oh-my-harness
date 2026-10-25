@@ -1,4 +1,4 @@
-"""OMP agent lifecycle through the real CLI, local Git and isolated user homes."""
+"""Oh My Pi agent lifecycle through the real CLI, local Git and isolated user homes."""
 from __future__ import annotations
 
 import hashlib
@@ -20,9 +20,9 @@ from repo_skill_catalog import load_repo_skill_catalog
 
 
 @unittest.skipUnless(shutil.which("git"), "requires local Git")
-class OMPLifecycleTests(unittest.TestCase):
+class OhMyPiLifecycleTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="omh-omp-")
+        temporary = tempfile.TemporaryDirectory(prefix="omh-oh-my-pi-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.user = self.root / "user"
@@ -56,14 +56,14 @@ class OMPLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.git(self.origin, "add", "--all")
-        self.commit("OMP test fixture")
+        self.commit("Oh My Pi test fixture")
         self.git(self.origin, "clone", "--quiet", "--no-hardlinks", str(self.origin), str(self.repo))
         state = self.home / "state"
         state.mkdir()
         (state / "install.json").write_text(json.dumps({
             "product": "oh-my-harness", "status": "installing", "repository": str(self.origin),
             "revision": self.git(self.repo, "rev-parse", "HEAD").stdout.strip(),
-            "ref": "main", "harness": "omp",
+            "ref": "main", "harness": "oh-my-pi",
         }), encoding="utf-8")
         self.initial = (state / "install.json").read_bytes()
         self.catalog = load_repo_skill_catalog(self.repo)
@@ -90,7 +90,7 @@ class OMPLifecycleTests(unittest.TestCase):
 
     def plan(self):
         registry = load_harness_registry(self.repo / ".agents/harnesses/registry.json", repo_root=self.repo)
-        return resolve_harness_plan(registry, "omp", repo_root=self.repo,
+        return resolve_harness_plan(registry, "oh-my-pi", repo_root=self.repo,
                                     environ=self.env, user_home=self.user)
 
     def desired(self):
@@ -131,7 +131,9 @@ class OMPLifecycleTests(unittest.TestCase):
         self.cli("install", "omp", "--dry-run")
         self.assertEqual(self.snapshot(), before)
         self.cli("install", "omp", "--yes")
-        self.assertEqual(self.desired(), ["omp"])
+        self.assertEqual(self.desired(), ["oh-my-pi"])
+        self.assertTrue((self.home / "state/harnesses/oh-my-pi.json").exists())
+        self.assertFalse((self.home / "state/harnesses/omp.json").exists())
         plan = self.plan()
         self.assertEqual(
             (plan.root / "AGENTS.md").read_bytes(),
@@ -154,7 +156,7 @@ class OMPLifecycleTests(unittest.TestCase):
         self.assertTrue(projection.is_projection_link(removed))
         self.cli("remove", "omp", "--yes")
         self.assertEqual(self.desired(), [])
-        self.assertFalse((self.home / "state/harnesses/omp.json").exists())
+        self.assertFalse((self.home / "state/harnesses/oh-my-pi.json").exists())
         self.assertFalse(os.path.lexists(plan.root / "AGENTS.md"))
         for source in self.catalog.sources:
             self.assertFalse(os.path.lexists(plan.skills_root / source.name))
@@ -164,13 +166,13 @@ class OMPLifecycleTests(unittest.TestCase):
         self.env["PI_CODING_AGENT_DIR"] = str(self.user / "relocated agent")
         self.protect_user_files()
         self.cli("install", "omp", "--yes")
-        receipt = json.loads((self.home / "state/harnesses/omp.json").read_text())
+        receipt = json.loads((self.home / "state/harnesses/oh-my-pi.json").read_text())
         self.assertEqual(receipt["root"], str(self.user / "relocated agent"))
         self.assertFalse((self.user / ".omp").exists())
         changed = dict(self.env, PI_CODING_AGENT_DIR=str(self.user / "other-agent"))
         result = self.cli("remove", "omp", "--yes", environment=changed, success=False)
         self.assertIn("recorded root", result.stderr)
-        self.assertEqual(self.desired(), ["omp"])
+        self.assertEqual(self.desired(), ["oh-my-pi"])
         self.cli("refresh")
         self.cli("check")
         self.cli("remove", "omp", "--yes")
@@ -179,7 +181,7 @@ class OMPLifecycleTests(unittest.TestCase):
     def test_shared_relocated_agent_directory_with_pi_agent_keeps_last_consumer_resources(self):
         self.env["PI_CODING_AGENT_DIR"] = str(self.user / "shared agent")
         self.protect_user_files()
-        for first, second in (("omp", "pi-agent"), ("pi-agent", "omp")):
+        for first, second in (("oh-my-pi", "pi-agent"), ("pi-agent", "oh-my-pi")):
             with self.subTest(first=first):
                 self.cli("install", "omp", "pi-agent", "--yes")
                 plan = self.plan()

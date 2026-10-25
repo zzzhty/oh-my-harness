@@ -53,7 +53,7 @@ class HarnessRegistryTests(unittest.TestCase):
                 "opencode",
                 "openclaw",
                 "pi-agent",
-                "omp",
+                "oh-my-pi",
             },
         )
         codex = self.registry.harnesses["codex"]
@@ -106,7 +106,7 @@ class HarnessRegistryTests(unittest.TestCase):
         )
 
     def test_aliases_resolve_the_same_plan_without_adding_distributions(self) -> None:
-        expected = {"claude": "claude-code", "copilot": "copilot-cli", "gemini": "gemini-cli", "pi": "pi-agent"}
+        expected = {"claude": "claude-code", "copilot": "copilot-cli", "gemini": "gemini-cli", "pi": "pi-agent", "omp": "oh-my-pi"}
         self.assertEqual(self.registry.aliases, expected)
         self.assertTrue(set(expected).isdisjoint(self.registry.choices))
         with tempfile.TemporaryDirectory() as tmp:
@@ -305,7 +305,7 @@ class HarnessRegistryTests(unittest.TestCase):
                         (home / ".pi/agent/AGENTS.override.md",),
                     )
 
-    def test_omp_uses_its_native_agent_directory_surface(self) -> None:
+    def test_oh_my_pi_uses_its_native_agent_directory_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "users" / "tester"
             for os_name, materialization in (
@@ -315,7 +315,7 @@ class HarnessRegistryTests(unittest.TestCase):
                 with self.subTest(os_name=os_name):
                     plan = resolve_harness_plan(
                         self.registry,
-                        "omp",
+                        "oh-my-pi",
                         environ={},
                         user_home=home,
                         os_name=os_name,
@@ -331,15 +331,15 @@ class HarnessRegistryTests(unittest.TestCase):
             relocated = home / "config" / "omp-agent"
             relocated_plan = resolve_harness_plan(
                 self.registry,
-                "omp",
+                "oh-my-pi",
                 environ={"PI_CODING_AGENT_DIR": str(relocated)},
                 user_home=home,
             )
             self.assertEqual(relocated_plan.root, relocated)
-            # Named profiles relocate OMP's agent directory and are not modeled here.
+            # Named profiles relocate Oh My Pi's agent directory and are not modeled here.
             profile_plan = resolve_harness_plan(
                 self.registry,
-                "omp",
+                "oh-my-pi",
                 environ={"OMP_PROFILE": "work"},
                 user_home=home,
             )
