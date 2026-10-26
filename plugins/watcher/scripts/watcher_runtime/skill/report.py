@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a report-only Watcher skill usage report."""
+"""Generate a report-only Watcher skill evidence report."""
 
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ from .runtime_paths import (
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="watcher skill report",
-        description="Write a Watcher skill usage report under state reports/.",
+        description="Write a Watcher skill evidence report under state reports/.",
     )
-    parser.add_argument("--skill", help="Filter by effective skill name. Defaults to all skills.")
+    parser.add_argument("--skill", help="Filter by skill evidence identity (declared legacy names are folded). Defaults to all skills.")
     parser.add_argument("--since", default="1d", help="Evidence window such as 1d, 24h, or ISO timestamp.")
     parser.add_argument("--state-dir", help="Runtime state directory. Defaults to $CODEX_HOME/watcher/skill.")
     parser.add_argument("--log-file", help="Explicit JSONL log path. Overrides --state-dir logs/events.jsonl.")

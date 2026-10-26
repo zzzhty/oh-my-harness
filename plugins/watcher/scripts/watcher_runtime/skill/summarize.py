@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="watcher skill summarize",
         description="Summarize Watcher skill-domain JSONL logs.",
     )
-    parser.add_argument("--skill", help="Filter by effective skill name.")
+    parser.add_argument("--skill", help="Filter by skill evidence identity (declared legacy names are folded).")
     parser.add_argument("--since", help="Filter by relative time such as 1d or ISO timestamp.")
     parser.add_argument("--state-dir", help="Runtime state directory. Defaults to $CODEX_HOME/watcher/skill.")
     parser.add_argument("--log-file", help="Explicit JSONL log path. Overrides --state-dir logs/events.jsonl.")

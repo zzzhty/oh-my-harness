@@ -102,6 +102,7 @@ def normalize_event(event: dict[str, Any], args: argparse.Namespace) -> dict[str
             "supporting": [],
             "effective": [args.skill],
             "mentioned": [],
+            "execution_status": "unknown",
         }
 
     if args.tool:
@@ -157,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event-type")
     parser.add_argument("--workspace")
     parser.add_argument("--session-id")
-    parser.add_argument("--skill", help="Primary skill name for manual v2 skill attribution.")
+    parser.add_argument("--skill", help="Record a manual skill selection assertion (not verified execution).")
     parser.add_argument("--trigger-reason")
     parser.add_argument("--outcome")
     parser.add_argument("--failure-type")

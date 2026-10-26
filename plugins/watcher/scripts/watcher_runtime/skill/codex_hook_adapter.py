@@ -32,11 +32,6 @@ SCHEMA_VERSION_FILE = "schema-version.json"
 DEFAULT_ROLE = "entrypoint"
 VALID_ROLES = {"entrypoint", "wrapper", "discipline", "specialized"}
 VALID_ALIAS_MATCHES = {"exact", "phrase", "token"}
-FAILURE_TEXT_RE = re.compile(
-    r"(?:exit(?:ed)?\s+(?:with\s+)?(?:code|status)\s+[1-9]\d*|"
-    r"non[- ]zero\s+exit|traceback|exception|error)",
-    re.IGNORECASE,
-)
 TOKEN_RE_TEMPLATE = r"(?<![a-z0-9_-]){alias}(?![a-z0-9_-])"
 LOGICAL_GROUP_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -482,16 +477,6 @@ def match_all_monitored_skills(
     return matches
 
 
-def match_monitored_skill(
-    value: Any,
-    *,
-    state_dir: Path | None = None,
-    repo_root: str | Path | None = None,
-) -> dict[str, str] | None:
-    matches = match_all_monitored_skills(value, state_dir=state_dir, repo_root=repo_root)
-    return matches[0] if matches else None
-
-
 def supporting_skill_entries(primary_name: str, metadata: dict[str, Any]) -> list[dict[str, str]]:
     skills = metadata.get("skills") if isinstance(metadata.get("skills"), dict) else {}
     primary = skills.get(primary_name) if isinstance(skills.get(primary_name), dict) else {}
@@ -523,7 +508,6 @@ def attribution_from_primary(
     source: str,
     confidence: str,
     metadata: dict[str, Any],
-    mentioned_matches: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     primary_name = primary_match["name"]
     primary = {
@@ -537,25 +521,12 @@ def attribution_from_primary(
     }
     supporting = supporting_skill_entries(primary_name, metadata)
     effective = [primary_name] + [entry["name"] for entry in supporting]
-    mentioned = []
-    for match in mentioned_matches or []:
-        name = match["name"]
-        if name == primary_name:
-            continue
-        mentioned.append(
-            {
-                "name": name,
-                "source": source,
-                "matched_alias": match.get("matched_alias", ""),
-                "alias_kind": match.get("alias_kind", ""),
-                "match": match.get("match", ""),
-            }
-        )
     return {
         "primary": primary,
         "supporting": supporting,
         "effective": sorted(dict.fromkeys(effective)),
-        "mentioned": mentioned,
+        "mentioned": [],
+        "execution_status": "unknown",
     }
 
 
@@ -565,6 +536,7 @@ def empty_attribution() -> dict[str, Any]:
         "supporting": [],
         "effective": [],
         "mentioned": [],
+        "execution_status": "unknown",
     }
 
 
@@ -575,44 +547,27 @@ def infer_skill_attribution(
     repo_root: str | Path | None = None,
 ) -> dict[str, Any] | None:
     metadata = load_runtime_metadata(state_dir, repo_root=repo_root)
+    # These hooks expose text and optional selection fields, not a native
+    # skill-load/invocation record. Never promote text matches to execution.
+    attribution = empty_attribution()
     provided = payload.get("skill_name") or payload.get("skill")
     canonical = canonical_skill_name(provided, metadata)
     if canonical:
-        return attribution_from_primary(
+        attribution = attribution_from_primary(
             {"name": canonical, "matched_alias": str(provided), "alias_kind": "skill_name", "match": "exact"},
             source="provided",
             confidence="high",
             metadata=metadata,
         )
-
-    if "prompt" in payload:
-        matches = match_all_monitored_skills(payload.get("prompt"), metadata=metadata)
-        if matches:
-            return attribution_from_primary(
-                matches[0],
-                source="prompt_mention",
-                confidence="high",
-                metadata=metadata,
-                mentioned_matches=matches,
-            )
-
-    if "last_assistant_message" in payload:
-        matches = match_all_monitored_skills(payload.get("last_assistant_message"), metadata=metadata)
-        if matches:
-            return attribution_from_primary(
-                matches[0],
-                source="assistant_announcement",
-                confidence="medium",
-                metadata=metadata,
-                mentioned_matches=matches,
-            )
-
-    return None
+    for field, source in (("prompt", "prompt_mention"), ("last_assistant_message", "assistant_mention")):
+        for match in match_all_monitored_skills(payload.get(field), metadata=metadata):
+            attribution["mentioned"].append({**match, "source": source})
+    return attribution if attribution["primary"] or attribution["mentioned"] else None
 
 
 def user_skill_context(payload: dict[str, Any], attribution: dict[str, Any] | None) -> dict[str, Any] | None:
     primary = attribution.get("primary") if isinstance(attribution, dict) else None
-    if not isinstance(primary, dict) or primary.get("source") != "prompt_mention" or "prompt" not in payload:
+    if not isinstance(primary, dict) or primary.get("source") != "provided" or "prompt" not in payload:
         return None
     summary = summarize_json_value(payload.get("prompt"), limit=240)
     summary["matched_alias"] = primary.get("matched_alias", "")
@@ -662,7 +617,7 @@ def clear_turn_state(state_dir: Path, payload: dict[str, Any]) -> None:
 
 def state_skill_attribution(state: dict[str, Any]) -> dict[str, Any] | None:
     attribution = state.get("skill_attribution")
-    if not isinstance(attribution, dict) or not isinstance(attribution.get("primary"), dict):
+    if not isinstance(attribution, dict) or not (attribution.get("primary") or attribution.get("mentioned")):
         return None
     return attribution
 
@@ -679,6 +634,7 @@ def initial_turn_state(
         "skill_attribution": attribution,
         "tool_count": 0,
         "tool_failure_count": 0,
+        "tool_failure_source": "structured_tool_response",
         "tools_used": {},
         "started_at": utc_now(),
         "updated_at": utc_now(),
@@ -708,44 +664,22 @@ def camel_to_snake(value: str) -> str:
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", first).lower()
 
 
-def truthy_error_value(value: Any) -> bool:
-    if value in (None, False, "", [], {}):
-        return False
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        return lowered not in {"0", "false", "none", "null", "ok", "success"}
-    return True
-
-
-def has_failure_marker(value: Any) -> bool:
-    if isinstance(value, dict):
-        for key, item in value.items():
-            lowered = str(key).lower()
-            if lowered in {"exit_code", "exitcode", "return_code", "returncode", "status_code"}:
-                try:
-                    if int(item) != 0:
-                        return True
-                except (TypeError, ValueError):
-                    if truthy_error_value(item):
-                        return True
-            if lowered in {"error", "errors", "exception", "failure", "failed", "is_error"} and truthy_error_value(item):
-                return True
-            if has_failure_marker(item):
-                return True
-        return False
-    if isinstance(value, list):
-        return any(has_failure_marker(item) for item in value)
-    if isinstance(value, str):
-        return FAILURE_TEXT_RE.search(value) is not None
-    return False
-
-
 def detect_post_tool_outcome(tool_response: Any) -> tuple[str, str]:
-    if tool_response in (None, "", [], {}):
+    """Inspect only structured status fields, never text or nested tool content."""
+    if not isinstance(tool_response, dict):
         return "unknown", ""
-    if has_failure_marker(tool_response):
+    statuses = []
+    for key in ("exit_code", "exitcode", "return_code", "returncode"):
+        value = tool_response.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            statuses.append(value != 0)
+    for key in ("is_error", "isError", "failed"):
+        value = tool_response.get(key)
+        if isinstance(value, bool):
+            statuses.append(value)
+    if any(statuses):
         return "failure", "tool_error"
-    return "success", ""
+    return ("success", "") if statuses else ("unknown", "")
 
 
 def normalize_hook_payload(
@@ -762,14 +696,13 @@ def normalize_hook_payload(
         or infer_skill_attribution(payload, state_dir=state_dir, repo_root=repo_root)
         or empty_attribution()
     )
+    attribution = {**attribution, "execution_status": "unknown"}
     tool_name = payload.get("tool_name")
 
     outcome = "unknown"
     failure_type = ""
     if hook_event_name == "PostToolUse":
         outcome, failure_type = detect_post_tool_outcome(payload.get("tool_response"))
-    elif hook_event_name == "UserPromptSubmit" and attribution.get("primary"):
-        outcome = "success"
 
     event: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -792,6 +725,9 @@ def normalize_hook_payload(
             "tool_use_id": payload.get("tool_use_id"),
         },
     }
+
+    if hook_event_name == "PostToolUse":
+        event["codex"]["tool_outcome_source"] = "structured_tool_response" if outcome != "unknown" else "unavailable"
 
     usage_context = user_skill_context(payload, attribution)
     if usage_context is not None:
@@ -831,16 +767,16 @@ def normalize_hook_payload(
     return normalized
 
 
-def has_primary_attribution(event: dict[str, Any]) -> bool:
+def has_skill_evidence(event: dict[str, Any]) -> bool:
     attribution = event.get("skill_attribution")
-    return isinstance(attribution, dict) and isinstance(attribution.get("primary"), dict)
+    return isinstance(attribution, dict) and bool(attribution.get("primary") or attribution.get("mentioned"))
 
 
 def should_persist_event(event: dict[str, Any]) -> bool:
     if os.environ.get("WATCHER_SKILL_DEBUG_ALL_EVENTS", "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
 
-    if not has_primary_attribution(event):
+    if not has_skill_evidence(event):
         return False
 
     event_type = event.get("event_type")
@@ -868,6 +804,7 @@ def apply_turn_summary(event: dict[str, Any], state: dict[str, Any]) -> dict[str
         "task_outcome": "unknown",
         "tool_count": tool_count,
         "tool_failure_count": tool_failure_count,
+        "tool_failure_source": state.get("tool_failure_source", "unspecified_legacy"),
         "tools_used": tools_used,
     }
     if isinstance(state.get("user_skill_context"), dict):
@@ -901,7 +838,18 @@ def process_hook(
         repo_root=repo_root,
     )
     state = load_turn_state(target_state_dir, payload)
-    attribution = direct_attribution or state_skill_attribution(state)
+    # A new prompt starts a fresh turn. Later text evidence must not replace
+    # structured selection or discard earlier mentions in the same turn.
+    if hook_event_name == "UserPromptSubmit" or (
+        payload.get("turn_id") and state.get("turn_id") != payload["turn_id"]
+    ):
+        state = {}
+    previous = state_skill_attribution(state)
+    attribution = direct_attribution or previous
+    if previous and direct_attribution:
+        attribution = dict(direct_attribution if direct_attribution.get("primary") else previous)
+        mentions = previous.get("mentioned", []) + direct_attribution.get("mentioned", [])
+        attribution["mentioned"] = list({(item["name"], item.get("source")): item for item in mentions}.values())
     event = normalize_hook_payload(
         payload,
         skill_attribution=attribution,
@@ -920,6 +868,7 @@ def process_hook(
     elif persist and hook_event_name == "PostToolUse" and attribution:
         if not state:
             state = initial_turn_state(payload, attribution, None)
+        state["skill_attribution"] = attribution
         state = update_tool_stats(state, event)
         write_turn_state(target_state_dir, payload, state)
     elif hook_event_name == "Stop" and attribution:

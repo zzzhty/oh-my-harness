@@ -48,7 +48,7 @@ refresh, repair, check, doctor, and remove.
 
 ## Plugins
 
-- `watcher`: observes Codex skill usage, audits documentation drift, and packages `doc-alignment`, `housekeeping`, `skill-maintainer`, and `skill-compressor` workflows.
+- `watcher`: observes Codex skill evidence, audits documentation drift, and packages `doc-alignment`, `housekeeping`, `skill-maintainer`, and `skill-compressor` workflows.
 - `workflow`: packages reusable workflow skills, including continuation-ready long-running goal plans with frozen YOLO non-stops and runtime hard stops, SOP execution harnesses, prompt/strategy loops, explicit subagent orchestration, and standalone summaries.
 - `mattpocock-skills`: packages 20 locally maintained engineering skills derived from `mattpocock/skills`, with upstream attribution and native Codex metadata.
 
@@ -983,9 +983,9 @@ turns/
 
 The hook adapter records summaries, lengths, hashes, tool names, outcomes, and redacted metadata. It does not store full prompts, full assistant messages, full shell commands, full tool responses, file contents, secrets, or private business data.
 
-Watcher monitors the canonical repository skill set by default and can be narrowed with `WATCHER_SKILL_MONITORED_SKILLS`. Installed hooks embed the explicit repository root, so repository and harness-projection execution share the same source runtime and do not depend on plugin cache or working-directory inference. Because Codex hook payloads do not provide a stable native skill id, attribution is recorded as `provided`, `prompt_mention`, `assistant_announcement`, or `unknown`. Successful tool calls are counted in transient turn state but are not persisted as individual records; failed tool calls and one `turn_summary` are persisted for active monitored skills.
+Watcher monitors the canonical repository skill set by default and can be narrowed with `WATCHER_SKILL_MONITORED_SKILLS`. Installed hooks embed the explicit repository root, so repository and harness-projection execution share the same source runtime and do not depend on plugin cache or working-directory inference. Text matches are recorded as `prompt_mention` or `assistant_mention`, never as confirmed execution. Optional structured `skill_name`/`skill` fields record a `provided` selection assertion; they do not prove loading or invocation. The adapter has no supported native skill-load/invocation evidence, so `execution_status` remains `unknown`. Declared dependencies are metadata, not observed calls. Tool events are counted in transient turn state; only structured tool failures and one `turn_summary` are persisted alongside monitored prompt evidence by default. Task outcomes remain unknown unless separately recorded explicitly. Reports show evidence categories and coverage, fold declared legacy names without changing logs, and do not compute success/failure rates. See [Watcher evidence semantics](docs/adr/0027-report-watcher-evidence-without-execution-claims.md).
 
-When the user explicitly invokes a monitored skill, the adapter stores a redacted `user_skill_context` summary/hash for the extra information mentioned with that skill. This is intended as future skill-improvement evidence without retaining the raw prompt.
+When a hook supplies a structured monitored skill selection with a prompt, the adapter stores a redacted `user_skill_context` summary/hash for the extra information mentioned with that selection. Text-only matches retain the bounded prompt summary without asserting explicit selection. This is intended as future skill-improvement evidence without retaining the raw prompt.
 
 ## Validation
 

@@ -52,7 +52,7 @@ from watcher_runtime.skill.report_pipeline import (  # noqa: E402
     save_report_state,
     state_since,
     skill_logical_groups,
-    usage_rows,
+    evidence_rows,
     update_report_state,
 )
 from watcher_runtime.skill.propose_skill_patch import build_proposal, main as propose_main  # noqa: E402
@@ -689,7 +689,8 @@ class SkillWatcherTests(unittest.TestCase):
                         },
                         repo_root=REPO_ROOT,
                     )
-                    primary = prompt["skill_attribution"]["primary"]
+                    self.assertIsNone(prompt["skill_attribution"]["primary"])
+                    primary = prompt["skill_attribution"]["mentioned"][0]
                     self.assertEqual(primary["name"], current_name)
                     self.assertEqual(primary["source"], "prompt_mention")
                     self.assertEqual(primary["alias_kind"], "legacy")
@@ -718,12 +719,12 @@ class SkillWatcherTests(unittest.TestCase):
             for number, name in enumerate(sorted(retired_names))
         ]
         original_events = json.loads(json.dumps(events))
-        rows = {row["skill"]: row for row in usage_rows(events, skill_logical_groups(metadata))}
+        rows = {row["skill"]: row for row in evidence_rows(events, skill_logical_groups(metadata))}
         for name in retired_names:
-            self.assertEqual(rows[name]["primary_turns"], 1)
-            self.assertEqual(rows[name]["effective_turns"], 1)
+            self.assertEqual(rows[name]["unclassified_turns"], 1)
+            self.assertEqual(rows[name]["observed_turns"], 1)
             self.assertEqual(rows[name]["logical_group"], "")
-        self.assertEqual(rows["mattpocock-skills:code-review"]["supporting_turns"], len(events))
+        self.assertEqual(rows["mattpocock-skills:code-review"]["dependency_turns"], len(events))
         self.assertEqual(events, original_events)
 
     def test_retro_attribution_is_narrow_and_does_not_compose_other_workflows(self) -> None:
@@ -739,7 +740,8 @@ class SkillWatcherTests(unittest.TestCase):
                     {"hook_event_name": "UserPromptSubmit", "prompt": prompt},
                     repo_root=REPO_ROOT,
                 )
-                self.assertEqual(event["skill_attribution"]["primary"]["name"], retro)
+                self.assertIsNone(event["skill_attribution"]["primary"])
+                self.assertIn(retro, {item["name"] for item in event["skill_attribution"]["mentioned"]})
         # These checks cover attribution, not a model's decision to invoke a skill.
         for prompt in (
             "The task is complete", "The test failed again", "I like retro games",
@@ -828,6 +830,7 @@ class SkillWatcherTests(unittest.TestCase):
                 {
                     **base,
                     "hook_event_name": "UserPromptSubmit",
+                    "skill_name": "mattpocock-skills:diagnosing-bugs",
                     "prompt": "Use diagnose on flaky tests with sk-testsecret123456789",
                 },
                 state_dir=state_dir,
@@ -869,7 +872,7 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(dynamic_skills, tuple(watcher_identities))
         self.assertFalse(unknown["codex"]["persisted"])
         self.assertEqual(prompt["skill_attribution"]["primary"]["name"], "mattpocock-skills:diagnosing-bugs")
-        self.assertEqual(prompt["skill_attribution"]["primary"]["source"], "prompt_mention")
+        self.assertEqual(prompt["skill_attribution"]["primary"]["source"], "provided")
         self.assertTrue(prompt["codex"]["persisted"])
         self.assertIn("user_skill_context", prompt["codex"])
         self.assertFalse(success["codex"]["persisted"])
@@ -890,9 +893,9 @@ class SkillWatcherTests(unittest.TestCase):
             },
             repo_root=REPO_ROOT,
         )
-        self.assertEqual(sop_prompt["skill_attribution"]["primary"]["name"], "workflow:sop")
-        self.assertEqual(sop_prompt["skill_attribution"]["primary"]["source"], "prompt_mention")
-        self.assertEqual(sop_prompt["skill_attribution"]["primary"]["matched_alias"], "标准流程")
+        self.assertEqual(sop_prompt["skill_attribution"]["mentioned"][0]["name"], "workflow:sop")
+        self.assertEqual(sop_prompt["skill_attribution"]["mentioned"][0]["source"], "prompt_mention")
+        self.assertEqual(sop_prompt["skill_attribution"]["mentioned"][0]["matched_alias"], "标准流程")
 
         sop_assistant = normalize_hook_payload(
             {
@@ -901,9 +904,9 @@ class SkillWatcherTests(unittest.TestCase):
             },
             repo_root=REPO_ROOT,
         )
-        self.assertEqual(sop_assistant["skill_attribution"]["primary"]["name"], "workflow:sop")
-        self.assertEqual(sop_assistant["skill_attribution"]["primary"]["source"], "assistant_announcement")
-        self.assertEqual(sop_assistant["skill_attribution"]["primary"]["matched_alias"], "sop")
+        self.assertEqual(sop_assistant["skill_attribution"]["mentioned"][0]["name"], "workflow:sop")
+        self.assertEqual(sop_assistant["skill_attribution"]["mentioned"][0]["source"], "assistant_mention")
+        self.assertEqual(sop_assistant["skill_attribution"]["mentioned"][0]["matched_alias"], "sop")
 
         for ordinary_cleanup in (
             "Please clean up this parser implementation.",
@@ -927,7 +930,7 @@ class SkillWatcherTests(unittest.TestCase):
             repo_root=REPO_ROOT,
         )
         self.assertEqual(
-            disposable_cleanup["skill_attribution"]["primary"]["name"],
+            disposable_cleanup["skill_attribution"]["mentioned"][0]["name"],
             "watcher:housekeeping",
         )
 
@@ -1120,7 +1123,7 @@ class SkillWatcherTests(unittest.TestCase):
 
         self.assertTrue(result.persisted)
         self.assertEqual(result.hook_event_name, "UserPromptSubmit")
-        self.assertEqual(result.event["skill_attribution"]["primary"]["name"], "mattpocock-skills:diagnosing-bugs")
+        self.assertEqual(result.event["skill_attribution"]["mentioned"][0]["name"], "mattpocock-skills:diagnosing-bugs")
 
     def test_explicit_repo_root_resolves_runtime_from_agents_skill_symlink(self) -> None:
         payload = json.dumps(
@@ -1152,6 +1155,8 @@ class SkillWatcherTests(unittest.TestCase):
                         "observe",
                         "--repo-root",
                         str(REPO_ROOT),
+                        "--state-dir",
+                        str(Path(tmp) / "state"),
                         "--dry-run",
                     ],
                     cwd=cwd,
@@ -1167,7 +1172,7 @@ class SkillWatcherTests(unittest.TestCase):
             events[1]["skill_attribution"],
         )
         self.assertEqual(
-            events[0]["skill_attribution"]["primary"]["name"],
+            events[0]["skill_attribution"]["mentioned"][0]["name"],
             "mattpocock-skills:diagnosing-bugs",
         )
 
@@ -1700,12 +1705,12 @@ class SkillWatcherTests(unittest.TestCase):
         self.assertEqual(result.event_count, 2)
         self.assertEqual(result.outcome_counts["failure"], 1)
         self.assertEqual(result.outcome_counts["success"], 1)
-        self.assertIn("supporting-only", result.report)
+        self.assertIn("declared dependency", result.report)
         self.assertIn("`support`", result.report)
-        self.assertIn("## Usage By Logical Group", result.report)
-        self.assertIn("| explicit-workflows | 2 | 2 | 0 | `demo` |", result.report)
-        self.assertIn("| implicit-primitives | 1 | 0 | 1 | `support` |", result.report)
-        self.assertIn("| `demo` | entrypoint | explicit-workflows |", result.report)
+        self.assertIn("## Observations By Current Logical Group", result.report)
+        self.assertIn("| explicit-workflows | 2 | `demo` |", result.report)
+        self.assertIn("| implicit-primitives | 1 | `support` |", result.report)
+        self.assertIn("| `demo` | explicit-workflows |", result.report)
         self.assertIsNotNone(result.output)
         self.assertTrue(output_exists)
         self.assertEqual(result.state_path, state_dir / "report-state.json")

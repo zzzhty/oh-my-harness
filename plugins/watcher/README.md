@@ -21,13 +21,13 @@ $CODEX_HOME/watcher/
 
 On `SessionStart`, Watcher rebuilds `skill-metadata-cache.json` from the repository-authoritative callable catalog at `scripts/repo_skill_catalog.py` under one explicit oh-my-harness repository root. Marketplace metadata, plugin manifests, plugin cache, and the runtime cache never enumerate callable skills. A missing or invalid explicit repository root, canonical catalog failure, unsupported attribution-overlay schema, or invalid skill relationship stops the refresh visibly.
 
-Repository-owned `.codex-plugin/skill-watcher.json` files are non-callable attribution overlays keyed by durable namespaced Watcher identities. They retain roles, aliases, supporting-skill relationships, logical groups, and legacy mappings without defining the callable inventory. Declare `supporting_skills` only for unconditional dependencies that participate whenever the primary skill runs, because Watcher adds every declared dependency to effective usage; alternatives and conditional branches remain undeclared. Use `explicit-workflows` for skills whose contract requires explicit user selection or confirmation and `implicit-primitives` for skills the model may select from natural-language intent. Skill reports apply grouping at report time, so existing logs can be reclassified without rewriting historical events.
+Repository-owned `.codex-plugin/skill-watcher.json` files are non-callable attribution overlays keyed by durable namespaced Watcher identities. They retain roles, aliases, supporting-skill relationships, logical groups, and legacy mappings without defining the callable inventory. The `supporting_skills` overlay describes unconditional dependencies; alternatives and conditional branches remain undeclared. It does not prove those dependencies loaded or ran. Reports show these relationships as declared dependencies, not effective execution. Use `explicit-workflows` for skills whose contract requires explicit user selection or confirmation and `implicit-primitives` for skills the model may select from natural-language intent. Skill reports display current groups at report time; these categories do not establish historical selection or trigger policy. Only declared `legacy_names` mappings fold historical identities in the view, with raw identities and unmapped names retained. The cache is a projection of repository metadata, not a new authority.
 
 Packaged skills:
 
 - `doc-alignment`: audit or align documentation, scripts, skills, runbooks, operational entry points, and planning folders against current source of truth.
 - `housekeeping`: remove inventoried disposable files, generated caches, stale runtime artifacts, and post-migration physical clutter while preserving durable state.
-- `skill-maintainer`: analyze skill usage evidence and propose bounded `SKILL.md` maintenance updates without automatic source mutation.
+- `skill-maintainer`: analyze recorded skill evidence and propose bounded `SKILL.md` maintenance updates without automatic source mutation.
 - `skill-compressor`: reduce skill or plugin instruction footprint while preserving operational semantics.
 
 Current migration scope:
@@ -47,6 +47,50 @@ omh_tooling_python="${OH_MY_HARNESS_HOME:-$HOME/.oh-my-harness}/venv/bin/python"
 "$omh_tooling_python" -B scripts/watcher skill propose --skill watcher:doc-alignment --skill-dir skills/doc-alignment --since 7d
 "$omh_tooling_python" -B scripts/watcher migrate-state --dry-run
 ```
+
+### Skill evidence and report coverage
+
+`skill report` and `skill summarize` retain their CLI flags and output paths.
+Their tables count summarized-turn observations, not skill calls or false positives:
+
+| Evidence | Meaning | Execution status |
+| --- | --- | --- |
+| `mention` | A name/alias matched prompt or assistant text, including comparisons, negations, tables and quotations. | Unknown |
+| `selection` | A hook supplied `skill_name`/`skill`, or a manual collector recorded a selection assertion. | Unknown |
+| `dependency` | A supporting relationship was recorded from metadata. | Unknown |
+| `unclassified` | Historical attribution lacks a recognized evidence source. | Unknown |
+
+This adapter has no supported host evidence for verified skill loading or invocation.
+Even text such as “Use $skill” remains a mention unless a structured selection field
+is present. No additional announcement, per-turn recording or transcript scan is
+required. The existing bounded, redacted summary/hash policy remains in place;
+full conversations, file contents and complete tool responses are not collected.
+
+Only monitored evidence is persisted by default: prompt evidence, structured tool
+failure observations and a Stop summary. Other tool events contribute transient
+counts. Text such as “error” in a successful command's output is not failure evidence;
+only recognized top-level integer process exit fields or boolean error status fields
+are considered. Unsupported/text-only responses remain unknown. A tool failure is
+an observation, never a skill failure or task outcome. Reports distinguish new
+structured observations from historical failures with unspecified provenance.
+
+Tables deduplicate by session/turn (falling back to event ID, then content hash);
+the last summary for a repeated turn key wins. Exact duplicate event records are
+removed within a report window. Evidence columns, skills and groups overlap and
+must not be added as an execution total. Missing Stop, limited monitoring, filtered
+events and unavailable native skill IDs prevent a complete denominator. Reports
+count explicit `task_outcome` fields only, leave unknown unchanged and show no
+success/failure rates. Old raw event outcomes remain visible separately.
+
+Schema 2 and its historical attribution fields remain readable. `effective` is a
+preserved compatibility field, not an execution claim; new text matches have no
+primary and no effective/dependency expansion. Older `assistant_announcement`
+records are interpreted as mentions. Legacy identity folding and current grouping
+use the last repository-derived runtime metadata cache; without it, names remain
+raw and groups are unavailable. Filters accept canonical and declared legacy names.
+Logs, saved reports and existing incremental cursor keys are not rewritten. Old
+report implementations do not understand new mention-only records; use this report
+runtime to interpret both generations. See [ADR 0027](../../docs/adr/0027-report-watcher-evidence-without-execution-claims.md).
 
 `skill propose` requires the exact log identity in `--skill`; a directory basename cannot identify a namespaced skill. It includes a report for the same identity and window, or reuses `--report <path>` when that report matches both. The generated worksheet preserves the source and snapshot and names a separate candidate file. Materialize the proposed edit there before running the printed validation command; worksheet generation itself performs no candidate validation. A no-change decision needs no candidate.
 

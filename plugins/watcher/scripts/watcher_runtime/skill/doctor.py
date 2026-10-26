@@ -251,9 +251,9 @@ class Doctor:
         if "sk-doctorsecret" in raw:
             self.fail("sample event leaked a secret-like token")
             return
-        primary = event.get("skill_attribution", {}).get("primary", {})
-        if primary.get("name") != "mattpocock-skills:diagnosing-bugs":
-            self.fail("sample event did not infer the monitored diagnosing-bugs skill")
+        mentions = event.get("skill_attribution", {}).get("mentioned", [])
+        if not any(item.get("name") == "mattpocock-skills:diagnosing-bugs" for item in mentions):
+            self.fail("sample event did not observe the monitored diagnosing-bugs mention")
             return
         parsed = json.loads(raw.strip())
         if parsed.get("codex", {}).get("prompt_summary"):
