@@ -95,6 +95,8 @@ def run_git(repo: Path, args: list[str], *, allow_failure: bool = False) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,

@@ -33,11 +33,11 @@ class DocAuditEntryTests(unittest.TestCase):
             env = {k: v for k, v in os.environ.items() if k != "DOC_ALIGNMENT_STATE_DIR"}
             env.update(HOME=str(root / "home"), USERPROFILE=str(root / "home"),
                        CODEX_HOME=str(root / "home/.codex"), WATCHER_DOC_STATE_DIR=str(old.parent),
-                       PYTHONDONTWRITEBYTECODE="1")
+                       PYTHONDONTWRITEBYTECODE="1", PYTHONIOENCODING="cp1252")
 
             def run(*args: str) -> subprocess.CompletedProcess[str]:
                 return subprocess.run([sys.executable, "-B", str(SCRIPT), *args],
-                                      env=env, cwd=root, capture_output=True, text=True)
+                                      env=env, cwd=root, capture_output=True, text=True, encoding="utf-8")
 
             before = (repo / "README.md").read_bytes()
             help_result = run("--help")
@@ -48,6 +48,8 @@ class DocAuditEntryTests(unittest.TestCase):
             self.assertFalse(state.exists())
             doctor = run("doctor", "--config", str(config), "--state-dir", str(state))
             self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
+            self.assertIn(str(repo), doctor.stdout)
+            self.assertIn(str(state), doctor.stdout)
             report = run("report", "--config", str(config), "--state-dir", str(state),
                          "--mode", "commit-dependent", "--mark-audited", "--digest")
             self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
