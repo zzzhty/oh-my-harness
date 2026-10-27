@@ -1,8 +1,8 @@
 {
   "repos": [
     {
-      "name": "atm-harness",
-      "path": "${ATM_WATCHER_AUDIT_ROOT}",
+      "name": "content-source",
+      "path": "${DOC_ALIGNMENT_AUDIT_ROOT}",
       "profile": "current-authority",
       "docs": [
         "README.md",
@@ -11,7 +11,6 @@
         "docs/adr",
         "plugins/maintenance/README.md",
         "plugins/maintenance/.codex-plugin/plugin.json",
-        "plugins/maintenance/.codex-plugin/skill-watcher.json",
         "plugins/maintenance/skills",
         "plugins/workflow/README.md",
         "plugins/workflow/.codex-plugin/plugin.json",

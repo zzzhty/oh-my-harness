@@ -61,8 +61,8 @@ class RetroContractTests(unittest.TestCase):
             "Reserve prose for judgment calls",
             "do not move them to review-only guidance",
             "`workflow:prompt-strategy-loop` and use its report-only mode",
-            "`watcher:skill-maintainer` owns proposals",
-            "do not silently read Watcher state",
+            "`mattpocock-skills:writing-for-agents` workflow",
+            "do not silently read private historical state",
             "leave it unverified",
         ):
             self.assertIn(expected, RETRO)

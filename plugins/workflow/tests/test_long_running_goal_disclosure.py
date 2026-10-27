@@ -18,7 +18,6 @@ REFERENCES = {
 PREFLIGHT = SKILL_DIR / "components" / "planning-preflight.md"
 ATOMIC_TEMPLATE = SKILL_DIR / "templates" / "long_running_goal_template.md"
 SEQUENCE_TEMPLATE = SKILL_DIR / "templates" / "long_running_goal_sequence_template.md"
-WATCHER = SKILL_DIR.parents[1] / ".codex-plugin" / "skill-watcher.json"
 sys.path.insert(0, str(SKILL_DIR.parents[1] / "scripts"))
 
 from markdown_contract import missing_relative_links  # noqa: E402
@@ -116,11 +115,10 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         cutover = REFERENCES["cutover"].read_text(encoding="utf-8")
         self.assertIn("default/full-shadow/production comparison matrix", cutover)
 
-    def test_sequence_branch_discloses_canonical_contract_and_aliases(self) -> None:
+    def test_sequence_branch_discloses_canonical_contract(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         reference = REFERENCES["sequence"].read_text(encoding="utf-8")
         template = SEQUENCE_TEMPLATE.read_text(encoding="utf-8")
-        watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
 
         self.assertIn(
             "scripts/check_goal_sequence.py <sequence-file> [--allow-draft]",
@@ -149,12 +147,6 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertNotIn("<child-a>", resume)
         self.assertNotIn("<child-b>", resume)
 
-        aliases = {
-            item["value"]
-            for item in watcher["skills"]["workflow:long-running-goal"]["aliases"]
-        }
-        self.assertIn("long-running goal sequence", aliases)
-        self.assertIn("umbrella long-running goal", aliases)
 
     def test_sequence_template_link_examples_are_inert_until_instantiated(self) -> None:
         template = SEQUENCE_TEMPLATE.read_text(encoding="utf-8")
@@ -183,7 +175,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         self.assertIn("Default to `Disabled`", preflight)
         self.assertIn("not unconditional recursive deletion", preflight)
         close = REFERENCES["close"].read_text(encoding="utf-8")
-        self.assertIn("If `watcher:housekeeping` is unavailable", close)
+        self.assertIn("If `maintenance:housekeeping` is unavailable", close)
         self.assertIn("Before any command may write task-temporary data", execute)
         self.assertIn("bind every task-temporary producer", execute)
         self.assertIn("missing legacy field", close)
@@ -196,7 +188,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             self.assertIn("Task temporary cache root strategy", template)
             self.assertIn("Recorded task temporary cache roots", template)
             self.assertIn("Housekeeping boundary", template)
-            self.assertIn("watcher:housekeeping", template)
+            self.assertIn("maintenance:housekeeping", template)
 
         self.assertIn("every child records and honors its own policy", sequence_template)
         self.assertNotIn("| Housekeeping |", sequence_template)

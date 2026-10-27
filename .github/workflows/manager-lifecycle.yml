@@ -29,11 +29,9 @@ jobs:
       - name: Install isolated runner tooling dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile content and developer sources
-        run: python -m compileall -q scripts tests runtimes/watcher plugins/maintenance plugins/workflow
+        run: python -m compileall -q scripts tests plugins/maintenance plugins/workflow
       - name: Content tooling tests
         run: python -m unittest discover -s tests -p "test_*.py"
-      - name: Historical runtime and evidence tests
-        run: python -m unittest discover -s runtimes/watcher/tests -p "test_*.py"
       - name: Independent maintenance skill tests
         run: python -m unittest discover -s plugins/maintenance/tests -p "test_*.py"
       - name: Workflow tests

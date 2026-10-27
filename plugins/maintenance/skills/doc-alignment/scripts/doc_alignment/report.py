@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a report-only Watcher doc audit summary for configured repos."""
+"""Generate a report-only doc-alignment audit summary for configured repos."""
 
 from __future__ import annotations
 
@@ -162,7 +162,7 @@ def render_digest(
         for classification in ("actionable", "owner-validator", "report-only")
     }
     lines = [
-        "# Watcher Doc Audit Digest",
+        "# Doc Alignment Audit Digest",
         "",
         f"- Generated: {generated_at}",
         f"- Config: `{config_path}`",
@@ -243,7 +243,7 @@ def render_audit_report(
     failures: list[str],
 ) -> str:
     lines = [
-        "# Watcher Doc Audit Report",
+        "# Doc Alignment Audit Report",
         "",
         f"- Generated: {generated_at}",
         f"- Config: `{config_path}`",
@@ -272,15 +272,15 @@ def render_audit_report(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="watcher doc report",
-        description="Write a report-only Watcher doc audit report under state reports/.",
+        prog="audit_docs.py report",
+        description="Write a report-only doc-alignment audit report under state reports/.",
     )
     parser.add_argument(
         "--config", default=str(DEFAULT_CONFIG), help="Repo config JSON path."
     )
     parser.add_argument(
         "--state-dir",
-        help="Runtime state directory. Defaults to $CODEX_HOME/watcher/doc.",
+        help="Runtime state directory. Explicit path or $DOC_ALIGNMENT_STATE_DIR; no historical state is read.",
     )
     parser.add_argument(
         "--mode",

@@ -1,24 +1,24 @@
 # Maintenance skills
 
-This plugin preserves four distinct interactive workflows:
+This plugin preserves three distinct interactive workflows:
 
 - `doc-alignment`: audit and align current documentation and operational guidance.
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
-- `skill-maintainer`: produce evidence-backed proposals without overwriting source skills.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
 
-Historical event processing and report helpers are optional Watcher runtime
-content at `$ATM_HARNESS_ROOT/runtimes/watcher`. This plugin contains no automatic
-hooks. Skill-watcher collection and hook activation are retired. Importing content or preparing Python never enables hooks.
+The audit and validation helpers belong to their consuming skills. Static skill
+installation needs no Python, and preparing a payload runtime never enables hooks.
 
-For runtime commands set `ATM_PAYLOAD_PYTHON` to the exact prepared interpreter
-recorded in the runtime receipt, then run `"$atm_tooling_python" -B scripts/watcher`
-from the runtime directory after assigning `atm_tooling_python="$ATM_PAYLOAD_PYTHON"`.
-The `maintenance-validation` group includes the hash-locked PyYAML dependency
-needed by proposal and candidate validation helpers. Static skills need no Python.
+`doc-alignment` owns `skills/doc-alignment/scripts/audit_docs.py`, its sibling
+`doc_alignment/` modules and `config/repos.example.json`. Resolve that skill's
+directory before running `"$atm_tooling_python" -B scripts/audit_docs.py`, with
+`atm_tooling_python="$ATM_PAYLOAD_PYTHON"` set to the exact prepared `maintenance`
+interpreter. Set an explicit `--state-dir` or `DOC_ALIGNMENT_STATE_DIR` outside the
+audited repository; there is no automatic discovery or migration of Watcher state.
+The helper retains fresh audit/report generation, configured profiles and commit
+thresholds while target repositories stay read-only. See its `references/doc-audit.md`.
 
-Stable attribution remains `watcher:doc-alignment`, `watcher:housekeeping`,
-`watcher:skill-maintainer`, and `watcher:skill-compressor`. The Rust canonical catalog
-maps the current `maintenance:*` selectors and earlier `doc-watcher:*` /
-`skill-watcher:*` names to those identities. Historical logs and reports are not
-rewritten. `.codex-plugin/skill-watcher.json` supplies attribution metadata only.
+OMH 1.1.0 removes `skill-maintainer` and its exclusive historical evidence and
+proposal pipeline. Use the existing `mattpocock-skills:writing-for-agents` skill
+for authoring or revising agent guidance. Its behavior and invocation policy are
+unchanged. The three maintenance skills retain their separate permission boundaries.

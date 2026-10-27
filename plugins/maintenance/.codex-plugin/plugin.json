@@ -1,15 +1,15 @@
 {
   "name": "maintenance",
-  "version": "1.2.0+codex.482517d07d58eb27",
-  "description": "Interactive documentation alignment, housekeeping, skill maintenance, and semantic compression workflows.",
+  "version": "1.1.0+codex.fb52ffb21cdd4973",
+  "description": "Interactive documentation alignment, housekeeping, and semantic compression workflows.",
   "author": {
     "name": "Local developer"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Maintenance",
-    "shortDescription": "Audit docs and maintain skills from evidence",
-    "longDescription": "Four interactive maintenance skills. Watcher collection and reporting are separate optional runtime content; installing these skills does not enable hooks.",
+    "shortDescription": "Audit docs, clean artifacts and compress skills",
+    "longDescription": "Three maintenance skills with their own optional audit helpers. OMH supplies no collection hooks or historical report reader.",
     "developerName": "Local developer",
     "category": "Productivity",
     "capabilities": [
@@ -17,7 +17,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Audit documentation drift, clean disposable artifacts, or maintain skills using the appropriate maintenance workflow"
+      "Audit documentation drift, clean disposable artifacts, or compress skill instructions using the appropriate maintenance workflow"
     ]
   }
 }
