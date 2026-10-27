@@ -1,0 +1,82 @@
+{
+  "releaseVersion": "1.2.0",
+  "packages": [
+    {
+      "name": "maintenance",
+      "path": "plugins/maintenance",
+      "kind": "skills"
+    },
+    {
+      "name": "mattpocock-skills",
+      "path": "plugins/mattpocock-skills",
+      "kind": "skills"
+    },
+    {
+      "name": "workflow",
+      "path": "plugins/workflow",
+      "kind": "skills"
+    }
+  ],
+  "runtimeGroups": [
+    {
+      "id": "maintenance",
+      "imports": [],
+      "minimumPython": [
+        3,
+        11
+      ],
+      "requirementsLock": null
+    },
+    {
+      "id": "workflow",
+      "imports": [],
+      "minimumPython": [
+        3,
+        11
+      ],
+      "requirementsLock": null
+    },
+    {
+      "id": "watcher",
+      "imports": [],
+      "minimumPython": [
+        3,
+        11
+      ],
+      "requirementsLock": null
+    },
+    {
+      "id": "maintenance-validation",
+      "imports": [
+        "yaml"
+      ],
+      "minimumPython": [
+        3,
+        11
+      ],
+      "requirementsLock": "runtimes/watcher/requirements-maintenance.lock"
+    }
+  ],
+  "runtimeBindings": {
+    "watcher:doc-alignment": "maintenance",
+    "watcher:skill-maintainer": "maintenance-validation",
+    "workflow:long-running-goal": "workflow",
+    "workflow:sop": "workflow",
+    "workflow:summary-in-html": "workflow"
+  },
+  "historicalIdentities": {
+    "maintenance:doc-alignment": "watcher:doc-alignment",
+    "maintenance:housekeeping": "watcher:housekeeping",
+    "maintenance:skill-compressor": "watcher:skill-compressor",
+    "maintenance:skill-maintainer": "watcher:skill-maintainer"
+  },
+  "schemaVersion": 1,
+  "product": "omh-content",
+  "compositions": {
+    "default": [
+      "maintenance",
+      "mattpocock-skills",
+      "workflow"
+    ]
+  }
+}

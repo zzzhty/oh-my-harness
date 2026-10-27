@@ -1,3 +1,5 @@
+> Historical runbook: the Python installer is retired by [ADR 0028](adr/0028-versioned-content-publishing.md). Use the current [content workflow](../README.md). Do not execute these old lifecycle steps against a previously managed installation.
+
 # Clean source rebuild boundaries
 
 The repository starts from one reviewed source snapshot. The owner retains the

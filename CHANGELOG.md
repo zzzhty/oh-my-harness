@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- Publish versioned OMH content under a shared export/import contract.
+- Retire the Python installer and automatic skill-watcher collector/hooks.
+- Preserve 30 skills, four independent maintenance workflows, catalog-only runtime access, and ADR 0027 historical evidence semantics.
+- Separate content declarations, immutable locks and installation receipts; imported content does not enable hooks.
+
 ## Unreleased
 
 - Prioritize declared, authorized SOP recovery before stopping on recoverable validation failures; keep explicit stops and report-only boundaries, and clarify that failed Goal gates pause dependent steps while authorized current-milestone repairs continue.
