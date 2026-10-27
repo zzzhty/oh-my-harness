@@ -3,9 +3,9 @@
 ## Authority Map
 
 - `agents/global-instructions.md` owns the global behavior distributed to every selected harness. This root file owns only repository-local routing and deltas; keep global policy out of it.
-- `.agents/harnesses/registry.json` is the distribution authority. Keep its schema and `scripts/harness_registry.py` consumer aligned in the same change.
+- `content-manifest.json` owns exported content, compositions and runtime requirements. ATM owns target policy and installation; use its pinned Rust export/import core, never add a second installer.
 - `plugins/*/skills/*/SKILL.md` is the canonical repository skill catalog. Plugin manifests, marketplace state, generated metadata, caches, and harness directories are projections.
-- `README.md` owns current lifecycle and validation entry points. Architecture decisions and migration invariants belong in `docs/adr/`.
+- `README.md` owns content release and validation entry points. Architecture decisions and migration invariants belong in `docs/adr/`.
 
 ## Conditional Guidance
 

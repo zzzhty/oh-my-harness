@@ -1,9 +1,9 @@
 {
   "harness": "codex",
-  "marketplace": "oh-my-harness",
+  "marketplace": "atm-harness",
   "plugins": [
     {
-      "name": "watcher",
+      "name": "maintenance",
       "install": true,
       "check": true
     },

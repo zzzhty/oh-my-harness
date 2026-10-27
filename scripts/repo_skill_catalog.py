@@ -22,7 +22,7 @@ def _require_yaml() -> Any:
         import yaml
     except ModuleNotFoundError as exc:  # pragma: no cover - exercised by the bootstrap contract
         raise SystemExit(
-            "PyYAML is required. Run `python3 scripts/bootstrap_tooling_env.py`, then invoke "
+            "PyYAML is required. Install requirements.txt in an isolated developer venv, then invoke "
             "this script with the oh-my-harness tooling Python."
         ) from exc
     return yaml

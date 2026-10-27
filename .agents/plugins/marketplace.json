@@ -1,14 +1,14 @@
 {
-  "name": "oh-my-harness",
+  "name": "atm-harness",
   "interface": {
-    "displayName": "Oh My Harness"
+    "displayName": "ATM Harness"
   },
   "plugins": [
     {
-      "name": "watcher",
+      "name": "maintenance",
       "source": {
         "source": "local",
-        "path": "./plugins/watcher"
+        "path": "./plugins/maintenance"
       },
       "policy": {
         "installation": "AVAILABLE",
