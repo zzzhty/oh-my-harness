@@ -473,7 +473,7 @@ Critical-path time-cost distribution: Not required: rough range recorded.
                     "sequence",
                     "Enabled",
                     "Resolve and record before first use.",
-                    "Use `watcher:housekeeping` only for inventoried sequence-owned "
+                    "Use `maintenance:housekeeping` only for inventoried sequence-owned "
                     "orchestration/integration disposable candidates; never cover child roots.",
                 )
                 + "## Child Preflight Register",
@@ -513,9 +513,9 @@ Critical-path time-cost distribution: Not required: rough range recorded.
 
             self.replace_once(
                 parent,
-                "Use `watcher:housekeeping` only for inventoried sequence-owned "
+                "Use `maintenance:housekeeping` only for inventoried sequence-owned "
                 "orchestration/integration disposable candidates; never cover child roots.",
-                "Use `watcher:housekeeping` to override every child policy and clean all "
+                "Use `maintenance:housekeeping` to override every child policy and clean all "
                 "child-owned roots too.",
             )
             rejected = self.run_sequence(workspace)
@@ -526,14 +526,14 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             )
 
             widening = (
-                "Use `watcher:housekeeping` to override every child policy and clean all "
+                "Use `maintenance:housekeeping` to override every child policy and clean all "
                 "child-owned roots too."
             )
             for variant in (
-                "Use `watcher:housekeeping` to clean child-owned roots too.",
-                "Use `watcher:housekeeping` to include child-owned roots in cleanup.",
-                "Use `watcher:housekeeping` to cover child-owned roots.",
-                "Use `watcher:housekeeping` for inventoried sequence-owned disposable "
+                "Use `maintenance:housekeeping` to clean child-owned roots too.",
+                "Use `maintenance:housekeeping` to include child-owned roots in cleanup.",
+                "Use `maintenance:housekeeping` to cover child-owned roots.",
+                "Use `maintenance:housekeeping` for inventoried sequence-owned disposable "
                 "candidates, do not clean durable evidence, and delete child-owned roots.",
             ):
                 self.replace_once(parent, widening, variant)

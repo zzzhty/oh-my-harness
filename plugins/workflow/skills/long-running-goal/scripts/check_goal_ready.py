@@ -334,14 +334,14 @@ def clause_is_negated(value: str) -> bool:
     )
 
 
-def boundary_has_affirmative_watcher_action(value: str) -> bool:
+def boundary_has_affirmative_housekeeping_action(value: str) -> bool:
     for clause in clauses(value):
-        if not re.search(r"(?i)\bwatcher:housekeeping\b", clause):
+        if not re.search(r"(?i)\bmaintenance:housekeeping\b", clause):
             continue
         if re.search(
             r"(?i)\b(?:no|not|never|without)\b[^.;]{0,40}"
-            r"(?:\bwatcher:housekeeping\b|\b(?:use|invoke|run|call|apply)\w*\b)|"
-            r"\bwatcher:housekeeping\b[^.;]{0,40}"
+            r"(?:\bmaintenance:housekeeping\b|\b(?:use|invoke|run|call|apply)\w*\b)|"
+            r"\bmaintenance:housekeeping\b[^.;]{0,40}"
             r"\b(?:no|not|never|prohibit(?:ed)?|forbid(?:den)?|disabled)\b",
             clause,
         ):
@@ -354,27 +354,27 @@ def boundary_has_affirmative_watcher_action(value: str) -> bool:
     return False
 
 
-def watcher_evidence_has_negative_status(value: str) -> bool:
+def housekeeping_evidence_has_negative_status(value: str) -> bool:
     for clause in clauses(value):
-        if not re.search(r"(?i)\bwatcher:housekeeping\b", clause):
+        if not re.search(r"(?i)\bmaintenance:housekeeping\b", clause):
             continue
         if re.search(
-            r"(?i)(?:\bno\b[^.;]{0,12}\bwatcher:housekeeping\b[^.;]{0,25}"
+            r"(?i)(?:\bno\b[^.;]{0,12}\bmaintenance:housekeeping\b[^.;]{0,25}"
             r"\b(?:action|invocation|execution|run|use[sd]?)\b|"
             r"\b(?:not|never)\b[^.;]{0,35}\b(?:use|invoke|run|execute)\w*\b"
-            r"[^.;]{0,25}\bwatcher:housekeeping\b|"
-            r"\bwithout\b[^.;]{0,25}\bwatcher:housekeeping\b)",
+            r"[^.;]{0,25}\bmaintenance:housekeeping\b|"
+            r"\bwithout\b[^.;]{0,25}\bmaintenance:housekeeping\b)",
             clause,
         ):
             return True
         if re.search(
-            r"(?i)\bwatcher:housekeeping\b[^A-Za-z0-9]{0,5}"
+            r"(?i)\bmaintenance:housekeeping\b[^A-Za-z0-9]{0,5}"
             r"(?:(?:was|is|remained)\s+)?"
             r"(?:unavailable|missing|failed|skipped|absent|bypassed|omitted|replaced)\b|"
-            r"\bwatcher:housekeeping\b[^.;]{0,45}"
+            r"\bmaintenance:housekeeping\b[^.;]{0,45}"
             r"\b(?:did\s+not|was\s+not|is\s+not|not|never)\b[^.;]{0,25}"
             r"\b(?:run|invoked|executed|used|occurred)\b|"
-            r"\bwatcher:housekeeping\b[^.;]{0,35}"
+            r"\bmaintenance:housekeeping\b[^.;]{0,35}"
             r"\b(?:only\s+planned|status(?:\s+was|\s+is|\s*[:=])?\s+unknown)\b",
             clause,
         ):
@@ -1018,12 +1018,12 @@ def main() -> int:
             )
 
         boundary = temporary_cache_fields.get("Housekeeping boundary", "")
-        boundary_has_watcher = bool(re.search(r"(?i)\bwatcher:housekeeping\b", boundary))
-        affirmative_boundary_watcher = boundary_has_affirmative_watcher_action(boundary)
+        boundary_has_housekeeping = bool(re.search(r"(?i)\bmaintenance:housekeeping\b", boundary))
+        affirmative_boundary_housekeeping = boundary_has_affirmative_housekeeping_action(boundary)
         if temporary_cache_policy == "enabled":
-            if not boundary_has_watcher or not affirmative_boundary_watcher:
+            if not boundary_has_housekeeping or not affirmative_boundary_housekeeping:
                 errors.append(
-                    "Enabled housekeeping requires watcher:housekeeping in the boundary"
+                    "Enabled housekeeping requires maintenance:housekeeping in the boundary"
                 )
             if not (
                 re.search(r"(?i)\binventor(?:y|ied|ize|ized)\b|盘点", boundary)
@@ -1038,11 +1038,11 @@ def main() -> int:
                 )
             ):
                 errors.append(
-                    "Enabled housekeeping boundary must limit watcher:housekeeping to "
+                    "Enabled housekeeping boundary must limit maintenance:housekeeping to "
                     "inventoried owner-specific disposable candidates"
                 )
         elif temporary_cache_policy == "disabled":
-            if affirmative_boundary_watcher or not re.search(
+            if affirmative_boundary_housekeeping or not re.search(
                 r"(?i)\b(?:preserv(?:e|ed|ing)|retain(?:ed|ing)?)\b|保留",
                 boundary,
             ):
@@ -1050,7 +1050,7 @@ def main() -> int:
                     "Disabled housekeeping boundary must retain recorded roots without cleanup"
                 )
         elif temporary_cache_policy == "not applicable":
-            if affirmative_boundary_watcher or not re.search(
+            if affirmative_boundary_housekeeping or not re.search(
                 r"(?i)\bno\b[^.\n]{0,60}\b(?:temporary\s+cache\s+)?roots?\b"
                 r"[^.\n]{0,30}\b(?:created|used|needed)\b|不适用|"
                 r"不(?:会|需).*(?:创建|使用).*(?:临时缓存)?根目录",
@@ -1343,7 +1343,7 @@ def main() -> int:
                         if recursive_delete_or_fallback:
                             errors.append(
                                 "temporary cache / housekeeping cannot close while "
-                                "watcher:housekeeping is unavailable or a raw recursive "
+                                "maintenance:housekeeping is unavailable or a raw recursive "
                                 "fallback is recorded"
                             )
                         if recorded_roots_state == "none-created":
@@ -1395,12 +1395,12 @@ def main() -> int:
                                 normalized_housekeeping_evidence = normalize_contractions(
                                     raw_housekeeping_evidence
                                 )
-                                unavailable_or_not_run = watcher_evidence_has_negative_status(
+                                unavailable_or_not_run = housekeeping_evidence_has_negative_status(
                                     normalized_housekeeping_evidence
                                 )
-                                watcher_action_failed = bool(
+                                housekeeping_action_failed = bool(
                                     re.search(
-                                        r"(?i)\bwatcher:housekeeping\b",
+                                        r"(?i)\bmaintenance:housekeeping\b",
                                         normalized_action,
                                     )
                                     and re.search(
@@ -1410,28 +1410,28 @@ def main() -> int:
                                         normalized_action,
                                     )
                                 )
-                                affirmative_watcher_action = re.search(
-                                    r"(?i)(?:\bwatcher:housekeeping\b[^.;\n]{0,35}"
+                                affirmative_housekeeping_action = re.search(
+                                    r"(?i)(?:\bmaintenance:housekeeping\b[^.;\n]{0,35}"
                                     r"\b(?:invoked|ran|run|executed|inventoried|cleaned|"
                                     r"removed|performed|completed)\b|"
                                     r"\b(?:invoked|ran|executed)\b[^.;\n]{0,35}"
-                                    r"\bwatcher:housekeeping\b)",
+                                    r"\bmaintenance:housekeeping\b)",
                                     normalized_action,
                                 )
                                 if (
                                     unavailable_or_not_run
-                                    or watcher_action_failed
+                                    or housekeeping_action_failed
                                     or recursive_delete_or_fallback
                                 ):
                                     errors.append(
                                         "Enabled housekeeping cannot close while "
-                                        "watcher:housekeeping is unavailable or a raw "
+                                        "maintenance:housekeeping is unavailable or a raw "
                                         "recursive fallback is recorded"
                                     )
-                                elif not affirmative_watcher_action:
+                                elif not affirmative_housekeeping_action:
                                     errors.append(
                                         "Enabled housekeeping Close evidence must record an "
-                                        "affirmative watcher:housekeeping action"
+                                        "affirmative maintenance:housekeeping action"
                                     )
                             if temporary_cache_policy == "disabled":
                                 affirmative_retention = re.search(

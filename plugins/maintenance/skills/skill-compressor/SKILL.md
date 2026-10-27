@@ -5,7 +5,7 @@ description: Reduce the instruction footprint of agent skills, plugin guidance, 
 
 # Skill Compressor
 
-Use this skill for behavior-preserving instruction reduction. Use `workflow:prompt-strategy-loop` when the requested change intentionally redesigns routing, permissions, safety, failure, or validation behavior. Use `skill-maintainer` when Watcher usage evidence should produce a proposal rather than direct compression. Deterministic scripts remain out of scope unless the user explicitly includes them.
+Use this skill for behavior-preserving instruction reduction. Use `workflow:prompt-strategy-loop` when the requested change intentionally redesigns routing, permissions, safety, failure, or validation behavior. Use `mattpocock-skills:writing-for-agents` for authoring or revising agent guidance outside behavior-preserving compression. Deterministic scripts remain out of scope unless the user explicitly includes them.
 
 ## Core Rule
 

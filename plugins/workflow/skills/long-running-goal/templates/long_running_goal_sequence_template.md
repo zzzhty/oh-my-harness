@@ -52,7 +52,7 @@ Task temporary cache root strategy: `<Enabled/Disabled: resolve the host platfor
 
 Recorded task temporary cache roots: `<one fully resolved owner-labeled absolute path entry per parent orchestration/integration root / Resolve and record before first use / None created / Not applicable>`
 
-Housekeeping boundary: `<Enabled uses watcher:housekeeping only for inventoried sequence-owned orchestration/integration disposable candidates; Disabled preserves and reports parent roots; Not applicable creates no parent root; every child records and honors its own policy; durable evidence lives outside the roots.>`
+Housekeeping boundary: `<Enabled uses maintenance:housekeeping only for inventoried sequence-owned orchestration/integration disposable candidates; Disabled preserves and reports parent roots; Not applicable creates no parent root; every child records and honors its own policy; durable evidence lives outside the roots.>`
 
 ## Template Use
 
@@ -140,7 +140,7 @@ Omit this section when no parent-owned actions await approval. Put child action 
 7. A child hard stop remains at the owning child. Keep its overall state `In Progress`, mark its atomic current milestone and mapped parent stage `Blocked`, and put `Runtime hard-stop evidence:` in both owning sections with a date, child ID, and breakpoint or attempted diagnostics. Promotion drift additionally names semantic drift/failed handoff and the required decision revalidation/external decision. Parent-only M0, Integration, or Close evidence uses the same date and diagnostics rule plus the stage owner token `sequence`, `integration`, or `close`. Do not skip or reorder children.
 8. Apply `components/checkpoint.md` before every parent milestone or Close becomes Done. Record commands, behavior, docs, rollback, risks, harness evidence, revision, and out-of-scope dirt; after a parent milestone records checkpoint evidence, confirm `components/milestone-scope-gate.md` before marking it Done or promoting the next child.
 9. Do not widen gates, hide failure, use fallback or alternate backends, report partial work as success, or convert a permission boundary into a non-stop.
-10. Only an explicit `Enabled` policy may invoke `watcher:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If watcher is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent; parent policy covers only its orchestration/integration roots. Never add housekeeping columns to the child registers.
+10. Only an explicit `Enabled` policy may invoke `maintenance:housekeeping`, and only for inventoried disposable candidates beneath the exact recorded owner root. Do not re-resolve the host temp root at Close or perform unconditional whole-directory deletion. If housekeeping is unavailable, keep parent Close/overall `In Progress` (`Blocked` only at a runtime hard stop), use no recursive-delete fallback, and change to `Disabled` only through explicit user preflight-policy evolution. Parent and child policies remain independent; parent policy covers only its orchestration/integration roots. Never add housekeeping columns to the child registers.
 11. Close only after every child is Closed, integration is Done, every parent/child housekeeping disposition is recorded, close evidence passes, current docs are synchronized, and active navigation is clean.
 
 12. Semantic changes to scope, owner, compatibility, dependency order, behavior, or external authorization invalidate affected markers and require decision revalidation; path, command, tool-version, or non-semantic baseline updates only rebaseline evidence.
@@ -258,7 +258,7 @@ Temporary cache / housekeeping evidence:
 - Recorded policy: `<Enabled / Disabled / Not applicable>`
 - Exact parent roots / Roots outcome: `<repeat each sequence-owned absolute path / None created>`
 - Child dispositions: `<each non-legacy child policy or legacy no-cleanup disposition evidence link; never inherit or override it>`
-- Action: `<Enabled watcher:housekeeping action / Disabled retained action / no-roots disposition>`
+- Action: `<Enabled maintenance:housekeeping action / Disabled retained action / no-roots disposition>`
 - Removed size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
 - Preserved size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`
 - Failed size: `<required only for Enabled concrete parent roots, for example 0 B; otherwise omit or record if useful>`

@@ -61,7 +61,7 @@ Task temporary cache root strategy: Resolve the host platform/runtime standard t
 
 Recorded task temporary cache roots: Resolve and record before first use.
 
-Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.
+Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.
 
 ## Loop Blueprint / Harness
 

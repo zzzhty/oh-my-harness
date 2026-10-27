@@ -12,7 +12,7 @@ Choose one document type:
 - `summary` (default): explain ownership, structure, behavior, and developer operations.
 - `source_walkthrough`: follow real entry points and function handoffs so a developer can take over unfamiliar code.
 
-Use Watcher `doc-alignment` instead when the task is to find stale or contradictory documentation.
+Use `maintenance:doc-alignment` instead when the task is to find stale or contradictory documentation.
 
 ## Workflow
 

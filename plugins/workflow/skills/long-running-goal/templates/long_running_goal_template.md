@@ -56,7 +56,7 @@ Task temporary cache root strategy：`<Enabled/Disabled: resolve the host platfo
 
 Recorded task temporary cache roots：`<one fully resolved owner-labeled absolute path entry per root / Resolve and record before first use / None created / Not applicable>`
 
-Housekeeping boundary：`<Enabled uses watcher:housekeeping only for inventoried task-owned disposable candidates; Disabled preserves and reports; Not applicable creates no root; durable evidence lives outside the roots.>`
+Housekeeping boundary：`<Enabled uses maintenance:housekeeping only for inventoried task-owned disposable candidates; Disabled preserves and reports; Not applicable creates no root; durable evidence lives outside the roots.>`
 
 ## 当前基线
 
@@ -220,7 +220,7 @@ Close 执行证据：
 8. Temporary cache / housekeeping evidence：
    - Recorded policy：`<Enabled / Disabled / Not applicable>`
    - Exact roots / Roots outcome：`<逐项重复 goal-owned absolute path / None created>`
-   - Action：`<Enabled 的 watcher:housekeeping 有界动作 / Disabled 的 preserved or retained 动作 / no-roots disposition>`
+   - Action：`<Enabled 的 maintenance:housekeeping 有界动作 / Disabled 的 preserved or retained 动作 / no-roots disposition>`
    - Removed size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
    - Preserved size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
    - Failed size：`<仅 Enabled concrete roots 必填，例如 0 B；其他情况删除此行或按需记录>`
