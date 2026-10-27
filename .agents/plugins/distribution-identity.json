@@ -1,13 +1,13 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:cb7a6931f3a6acdaed12f8b869231b400379c44357380128ca91e5b22f84f9bf",
+  "bundleIdentity": "sha256:94fd86b6ae73d43193142242e4344f9eba01a2954c14dd24cafe87e166bd48e4",
   "generationLength": 16,
   "plugins": [
     {
-      "contentSha256": "2a8222b5ce618c9b88b9357b3fd9e2f4c0938bfcb812dde4d05d09d4c2953878",
-      "generation": "2a8222b5ce618c9b",
+      "contentSha256": "4c93d747279c004d761f3d0143d1d97b0fa5f2e87ae7602e0446d60f1f81ef0b",
+      "generation": "4c93d747279c004d",
       "name": "maintenance",
-      "version": "1.1.0+codex.2a8222b5ce618c9b",
+      "version": "1.1.0+codex.4c93d747279c004d",
       "versionAuthority": "release"
     },
     {

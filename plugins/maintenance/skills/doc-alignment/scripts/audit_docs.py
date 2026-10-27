@@ -16,6 +16,11 @@ COMMANDS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Paths and reports may contain Unicode even when Windows redirects output
+    # through a legacy code page. Keep the helper's stream contract explicit.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     arguments = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=COMMANDS)
