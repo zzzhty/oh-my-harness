@@ -12,3 +12,8 @@ dist/
 .DS_Store
 backend/data/*.db
 config/repos.json
+
+# Local export validation and pinned Rust builder
+artifacts/
+.validation-cache/
+.atm-exporter/

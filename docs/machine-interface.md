@@ -1,3 +1,5 @@
+> Historical runbook: the Python installer is retired by [ADR 0028](adr/0028-publish-content-through-atm.md). Use the current [content workflow](../README.md). Do not execute these old lifecycle steps against an ATM-owned installation.
+
 # Machine interface (protocol 1)
 
 ATM and other local clients integrate with the OMH CLI, not its state files.
