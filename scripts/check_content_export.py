@@ -50,12 +50,39 @@ def main():
         assert not (temp / 'manager/venv').exists()
         assert not (home / '.codex/hooks.json').exists()
         assert not (home / '.openclaw').exists()
-        # Explicit helper health only; no native client invocation or hook event.
-        env['ATM_HARNESS_ROOT'] = str(payload)
-        script = payload / 'runtimes/watcher/scripts/watcher'
-        subprocess.run([sys.executable, '-B', str(script), 'skill', 'doctor', '--repo-root', str(payload)],
+        catalog = json.loads((payload / 'canonical-catalog.json').read_text())
+        skills = {item['id']: item for item in catalog['skills']}
+        assert len(skills) == 29
+        assert 'maintenance:doc-alignment' in skills
+        assert 'mattpocock-skills:writing-for-agents' in skills
+        assert not any('skill-maintainer' in name or name.startswith('watcher:') for name in skills)
+        assert catalog['attributionOverlays'] == []
+        assert not (payload / 'runtimes/watcher').exists()
+        manifest = json.loads((payload / 'content-manifest.json').read_text())
+        assert manifest['historicalIdentities'] == {}
+        assert {group['id'] for group in manifest['runtimeGroups']} == {'maintenance', 'workflow'}
+        assert set(manifest['runtimeBindings'].values()) == {'maintenance', 'workflow'}
+        # Prepare only the declared standard-library helper groups, at final
+        # paths inside this disposable manager. The static lifecycle above ran
+        # with no Python on PATH and created no runtimes.
+        prepared_python = None
+        for group in ('maintenance', 'workflow'):
+            result = run('harness', 'runtime', 'prepare', group, '--python',
+                         Path(sys.executable).absolute(), '--offline')
+            python = Path(result['prepared']['python'])
+            assert python.is_file() and python.is_relative_to(temp / 'manager/runtimes' / group)
+            if group == 'maintenance':
+                prepared_python = python
+        script = payload / skills['maintenance:doc-alignment']['path'] / 'scripts/audit_docs.py'
+        # Explicit skill helper health only; no client invocation or hook event.
+        subprocess.run([str(prepared_python), '-B', str(script), '--help'],
                        env=env, check=True, capture_output=True, timeout=30)
+        assert run('harness', 'status')['hooksEnabled'] is False
+        run('update', 'skills', '--harness', 'claude-code,codex')
+        run('uninstall', 'skills', '--harness', 'claude-code,codex')
+        assert run('harness', 'status')['harnessReceipts'] == {}
         print(json.dumps({'contentIdentity': imported['contentIdentity'], 'targets': ['claude-code', 'codex'],
+                          'skills': len(skills), 'preparedGroups': ['maintenance', 'workflow'],
                           'hooksEnabled': False, 'nativeClientInvocation': 'not tested'}))
 
 

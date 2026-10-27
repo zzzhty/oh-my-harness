@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check Watcher doc-domain config and runtime basics."""
+"""Check doc-alignment-domain config and runtime basics."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from .audit_runtime import (
     skill_root_candidates,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "repos.json"
 EXAMPLE_CONFIG = REPO_ROOT / "config" / "repos.example.json"
 
@@ -53,8 +53,8 @@ class Doctor:
             self.fail(f"{label} missing: {path}")
 
     def check_layout(self) -> None:
-        self.check_file(REPO_ROOT / "scripts" / "watcher", "Watcher CLI adapter")
-        runtime = REPO_ROOT / "scripts" / "watcher_runtime" / "doc"
+        self.check_file(REPO_ROOT / "scripts" / "audit_docs.py", "doc-alignment audit helper")
+        runtime = REPO_ROOT / "scripts" / "doc_alignment"
         for name in ("audit_repo.py", "report.py", "commit_counter.py", "doctor.py"):
             self.check_file(runtime / name, f"doc runtime {name}")
 
@@ -143,8 +143,8 @@ class Doctor:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="watcher doc doctor",
-        description="Check Watcher doc-domain config and runtime basics.",
+        prog="audit_docs.py doctor",
+        description="Check doc-alignment-domain config and runtime basics.",
     )
     parser.add_argument(
         "--config",
@@ -152,12 +152,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--state-dir",
-        help="Runtime state directory. Defaults to $CODEX_HOME/watcher/doc.",
+        help="Runtime state directory. Explicit path or $DOC_ALIGNMENT_STATE_DIR; no historical state is read.",
     )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _run_main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     doctor = Doctor()
     doctor.check_layout()
@@ -172,6 +172,14 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(f"doctor passed: {len(doctor.warnings)} warning(s)")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return _run_main(argv)
+    except AuditFailure as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

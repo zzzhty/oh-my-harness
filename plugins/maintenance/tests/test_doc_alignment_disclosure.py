@@ -14,15 +14,12 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parents[1] / "skills" / "doc-alignment"
 SKILL = SKILL_DIR / "SKILL.md"
 ALIGNMENT = SKILL_DIR / "references" / "alignment-reference.md"
-WATCHER_AUDIT = SKILL_DIR / "references" / "watcher-audit.md"
-WATCHER = SKILL_DIR.parents[1] / ".codex-plugin" / "skill-watcher.json"
-WATCHER_README = SKILL_DIR.parents[1] / "README.md"
-RUNTIME_ROOT = SKILL_DIR.parents[3] / "runtimes" / "watcher"
-WATCHER_SKILLS = SKILL_DIR.parent
-MAINTAINER = WATCHER_SKILLS / "skill-maintainer" / "SKILL.md"
-MAINTAINER_REFERENCES = WATCHER_SKILLS / "skill-maintainer" / "references"
-COMPRESSOR = WATCHER_SKILLS / "skill-compressor" / "SKILL.md"
-HOUSEKEEPING = WATCHER_SKILLS / "housekeeping" / "SKILL.md"
+DOC_AUDIT = SKILL_DIR / "references" / "doc-audit.md"
+MAINTENANCE_README = SKILL_DIR.parents[1] / "README.md"
+RUNTIME_ROOT = SKILL_DIR
+MAINTENANCE_SKILLS = SKILL_DIR.parent
+COMPRESSOR = MAINTENANCE_SKILLS / "skill-compressor" / "SKILL.md"
+HOUSEKEEPING = MAINTENANCE_SKILLS / "housekeeping" / "SKILL.md"
 
 
 class DocAlignmentDisclosureTests(unittest.TestCase):
@@ -38,31 +35,31 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
             "propose bounded fixes",
             text,
         )
-        self.assertIn("under `$CODEX_HOME/watcher/doc/` or an explicit output path", text)
+        self.assertIn("under an explicit `--state-dir` / `$DOC_ALIGNMENT_STATE_DIR` or output path", text)
         self.assertIn("target repositories remain read-only", text)
         self.assertIn(
             "run only non-mutating commands against target repositories",
             text,
         )
         self.assertIn(
-            "The only permitted writes are Watcher-owned report or runtime state",
+            "The only permitted writes are doc-alignment report or audit checkpoint state",
             text,
         )
         self.assertIn("Only implementation mode repairs root causes", text)
         self.assertIn("Use implementation mode when the user asks", text)
-        self.assertIn("references/watcher-audit.md", text)
+        self.assertIn("references/doc-audit.md", text)
         self.assertIn("references/alignment-reference.md", text)
         self.assertIn("unresolved target drift does not prevent completing the audit", text)
         self.assertIn("Leave target repositories unchanged", text)
 
-    def test_watcher_audit_reference_is_complete_for_operations_branch(self) -> None:
-        text = WATCHER_AUDIT.read_text(encoding="utf-8")
+    def test_doc_audit_reference_is_complete_for_operations_branch(self) -> None:
+        text = DOC_AUDIT.read_text(encoding="utf-8")
 
         self.assertIn("Trigger:", text)
-        self.assertIn("scripts/watcher doc doctor", text)
-        self.assertIn("scripts/watcher doc commit-counter", text)
-        self.assertIn("scripts/watcher doc report", text)
-        self.assertIn("scripts/watcher doc audit", text)
+        self.assertIn("scripts/audit_docs.py doctor", text)
+        self.assertIn("scripts/audit_docs.py commit-counter", text)
+        self.assertIn("scripts/audit_docs.py report", text)
+        self.assertIn("scripts/audit_docs.py audit", text)
         self.assertIn("owner-command", text)
         self.assertIn("authority_paths", text)
         self.assertIn("commit-dependent", text)
@@ -120,7 +117,7 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            package = root / "scripts" / "watcher_runtime"
+            package = root / "scripts" / "doc_alignment"
             package.mkdir(parents=True)
             source = package / "example.py"
             source.write_text("value = 1\n", encoding="utf-8")
@@ -137,24 +134,24 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(after, before)
 
-    def test_watcher_entry_with_documented_no_bytecode_flag_writes_no_cache(self) -> None:
+    def test_audit_entry_with_documented_no_bytecode_flag_writes_no_cache(self) -> None:
         alignment = ALIGNMENT.read_text(encoding="utf-8")
-        audit = WATCHER_AUDIT.read_text(encoding="utf-8")
-        self.assertIn('"$atm_tooling_python" -B scripts/watcher', alignment)
+        audit = DOC_AUDIT.read_text(encoding="utf-8")
+        self.assertIn('"$atm_tooling_python" -B scripts/audit_docs.py', alignment)
         self.assertNotRegex(audit, r'"\$atm_tooling_python" (?!-B\b)')
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             scripts = root / "scripts"
             scripts.mkdir()
-            shutil.copy2(RUNTIME_ROOT / "scripts" / "watcher", scripts / "watcher")
+            shutil.copy2(RUNTIME_ROOT / "scripts" / "audit_docs.py", scripts / "audit_docs.py")
             shutil.copytree(
-                RUNTIME_ROOT / "scripts" / "watcher_runtime",
-                scripts / "watcher_runtime",
+                RUNTIME_ROOT / "scripts" / "doc_alignment",
+                scripts / "doc_alignment",
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
             )
             completed = subprocess.run(
-                [sys.executable, "-B", str(scripts / "watcher"), "--help"],
+                [sys.executable, "-B", str(scripts / "audit_docs.py"), "--help"],
                 cwd=root,
                 capture_output=True,
                 check=False,
@@ -167,43 +164,14 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(cache_paths, [])
 
-    def test_callable_and_watcher_identities_remain_unchanged(self) -> None:
+    def test_callable_identity_and_invocation_mode_remain_unchanged(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
-        watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
-
         self.assertIn("name: doc-alignment", skill)
         self.assertNotIn("disable-model-invocation", skill)
-        self.assertIn("watcher:doc-alignment", watcher["skills"])
-        aliases = {
-            item["value"]
-            for item in watcher["skills"]["watcher:doc-alignment"]["aliases"]
-        }
-        self.assertIn("doc-alignment", aliases)
-        self.assertIn("documentation alignment", aliases)
 
 
-class WatcherSkillInstructionContractTests(unittest.TestCase):
-    def test_skill_maintainer_completion_is_reviewable_and_source_preserving(self) -> None:
-        skill = MAINTAINER.read_text(encoding="utf-8")
 
-        for requirement in (
-            "target skill",
-            "evidence window and event counts",
-            "snapshot and proposal paths",
-            "exact bounded edit or explicit no-change decision",
-            "validation commands and results",
-            "human-review boundary",
-            "blockers and assumptions",
-            "source `SKILL.md` remained unchanged",
-        ):
-            self.assertIn(requirement, skill)
-        self.assertIn("separate candidate path", skill)
-        self.assertIn("validation as pending", skill)
-        self.assertIn("## Candidate Validation", skill)
-        self.assertIn("route candidates that change invocation", skill.casefold())
-        self.assertFalse((MAINTAINER_REFERENCES / "patch-policy.md").exists())
-        self.assertFalse((MAINTAINER_REFERENCES / "validation-policy.md").exists())
-
+class MaintenanceSkillInstructionContractTests(unittest.TestCase):
     def test_skill_compressor_delegates_meaning_changes_to_one_review_owner(self) -> None:
         text = COMPRESSOR.read_text(encoding="utf-8")
 
@@ -217,29 +185,16 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
         self.assertIn("freeze this affected-meaning inventory as the equivalence oracle", text)
         self.assertNotIn("independent evaluation is required when compression changes", text)
 
-    def test_watcher_skills_keep_distinct_seams_and_ui_metadata(self) -> None:
+    def test_maintenance_skills_keep_distinct_seams_and_ui_metadata(self) -> None:
         housekeeping = HOUSEKEEPING.read_text(encoding="utf-8")
-        maintainer = MAINTAINER.read_text(encoding="utf-8")
-        readme = WATCHER_README.read_text(encoding="utf-8")
+        readme = MAINTENANCE_README.read_text(encoding="utf-8")
         self.assertIn("removal of physical disposable artifacts", housekeeping)
         self.assertIn("Keep it unchanged in this workflow", housekeeping)
         self.assertNotIn("Repair active semantic drift", housekeeping)
-        self.assertIn('"$ATM_PAYLOAD_PYTHON" -B', maintainer)
-        self.assertIn('"$atm_tooling_python" -B scripts/watcher', readme)
-
-        watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
-        housekeeping_metadata = watcher["skills"]["watcher:housekeeping"]
-        self.assertEqual(housekeeping_metadata["supporting_skills"], [])
-        housekeeping_aliases = {
-            alias["value"] for alias in housekeeping_metadata["aliases"]
-        }
-        for generic_alias in ("cleanup", "clean up", "repo cleanup"):
-            self.assertNotIn(generic_alias, housekeeping_aliases)
-        self.assertIn("remove disposable artifacts", housekeeping_aliases)
-        self.assertIn("clear generated caches", housekeeping_aliases)
+        self.assertIn('"$atm_tooling_python" -B scripts/audit_docs.py', readme)
 
         doc_alignment_metadata = (
-            WATCHER_SKILLS / "doc-alignment" / "agents" / "openai.yaml"
+            MAINTENANCE_SKILLS / "doc-alignment" / "agents" / "openai.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn("report-only audit mode", doc_alignment_metadata)
         self.assertIn("Do not modify target files", doc_alignment_metadata)
@@ -248,9 +203,8 @@ class WatcherSkillInstructionContractTests(unittest.TestCase):
             "doc-alignment",
             "housekeeping",
             "skill-compressor",
-            "skill-maintainer",
         ):
-            metadata = WATCHER_SKILLS / skill_name / "agents" / "openai.yaml"
+            metadata = MAINTENANCE_SKILLS / skill_name / "agents" / "openai.yaml"
             self.assertTrue(metadata.is_file(), metadata)
             self.assertIn(f"${skill_name}", metadata.read_text(encoding="utf-8"))
 

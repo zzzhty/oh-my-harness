@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 from pathlib import Path
 
@@ -12,7 +11,6 @@ SCOPE_SKILL = SCOPE_ROOT / "SKILL.md"
 NECESSITY_GATE = SCOPE_ROOT / "references" / "necessity-gate.md"
 MILESTONE_GATE = LONG_RUNNING_ROOT / "components" / "milestone-scope-gate.md"
 EXECUTE = LONG_RUNNING_ROOT / "references" / "execute-and-close.md"
-WATCHER = WORKFLOW_ROOT / ".codex-plugin" / "skill-watcher.json"
 
 
 class ScopeDisciplineTests(unittest.TestCase):
@@ -83,21 +81,6 @@ class ScopeDisciplineTests(unittest.TestCase):
             self.assertNotIn("Scope budget", text)
             self.assertNotIn("Validation budget", text)
             self.assertNotIn("Maximum tool count", text)
-
-    def test_watcher_records_scope_discipline_without_static_lrg_dependency(self) -> None:
-        watcher = json.loads(WATCHER.read_text(encoding="utf-8"))
-        scope = watcher["skills"]["workflow:scope-discipline"]
-        long_running = watcher["skills"]["workflow:long-running-goal"]
-
-        self.assertEqual(scope["role"], "discipline")
-        self.assertEqual(scope["logical_group"], "explicit-workflows")
-        self.assertEqual(scope["supporting_skills"], [])
-        self.assertEqual(long_running["supporting_skills"], [])
-        aliases = {item["value"] for item in scope["aliases"]}
-        self.assertEqual(
-            aliases,
-            {"workflow:scope-discipline", "scope-discipline", "scope discipline"},
-        )
 
     def test_third_party_design_attribution_is_preserved(self) -> None:
         notice = (SCOPE_ROOT / "NOTICE.md").read_text(encoding="utf-8")

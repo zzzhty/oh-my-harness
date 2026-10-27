@@ -27,7 +27,7 @@ Consider only categories supported by the session:
 
 For proposed agent-guidance edits, load `writing-for-agents` through the active harness's supported skill-loading mechanism. If a candidate changes invocation, routing, permissions, safety, failure handling, or validation behavior, load `workflow:prompt-strategy-loop` and use its report-only mode before recommending the change. Reuse still-valid evaluation evidence and run only missing required review; do not start a second broad review ritual. If a required method is unavailable, identify the blocked candidate and leave it unverified; other supported findings may still be reported.
 
-`watcher:skill-maintainer` owns proposals about a target skill from Watcher skill-domain logs and its candidate validation. Use that workflow when that is the user's task; do not silently read Watcher state or recreate its pipeline here. This retrospective owns session-level environment and process diagnosis, not a second skill-maintenance system.
+This retrospective owns session-level environment and process diagnosis. Use the existing `mattpocock-skills:writing-for-agents` workflow for separately requested agent-guidance authoring; do not silently read private historical state or expand this report-only task into implementation.
 
 ## Deliver and stop
 

@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""Shared Watcher doc audit runtime primitives.
-
-The CLI scripts and audit cockpit are adapters over this module. Keep file
-format, config, state, and report metadata rules here so those rules have one
-test surface.
-"""
+"""Config and current audit checkpoints owned by doc-alignment."""
 
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
 import json
-import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -42,37 +35,6 @@ CONFIG_HASH_KEYS = (
     "commit_threshold",
 )
 
-
-def resolve_config_path(
-    *,
-    plugin_root: Path,
-    raw: str | None = None,
-    configured: str | None = None,
-) -> Path:
-    selected = raw or configured
-    if selected:
-        path = expand_path(selected)
-        if not path.is_absolute():
-            path = (plugin_root / path).resolve()
-        return path
-
-    private_config = plugin_root / "config" / "repos.json"
-    if private_config.exists():
-        return private_config
-    return plugin_root / "config" / "repos.example.json"
-
-
-def resolve_audit_state_dir(
-    raw: str | None = None, configured: str | None = None
-) -> Path:
-    selected = raw or configured
-    if selected:
-        return expand_path(selected)
-    env_state_dir = os.environ.get("WATCHER_DOC_STATE_DIR")
-    if env_state_dir:
-        return expand_path(env_state_dir)
-    codex_home = expand_path(os.environ.get("CODEX_HOME", "~/.codex"))
-    return codex_home / "watcher" / "doc"
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -277,85 +239,6 @@ def repo_status(repo_config: dict[str, Any], state: dict[str, Any]) -> dict[str,
     }
 
 
-def finding_records(current_state: dict[str, Any]) -> list[dict[str, str]]:
-    findings = current_state.get("findings")
-    if not isinstance(findings, list):
-        return []
-    records: list[dict[str, str]] = []
-    for item in findings:
-        if not isinstance(item, dict):
-            continue
-        records.append(
-            {
-                "fingerprint": str(item.get("fingerprint") or ""),
-                "classification": str(item.get("classification") or "actionable"),
-                "severity": str(item.get("severity") or "Unknown"),
-                "title": str(item.get("title") or "Untitled finding"),
-                "evidence": str(item.get("evidence") or ""),
-            }
-        )
-    return records
-
-
-def repo_read_status(
-    repo_config: dict[str, Any], state: dict[str, Any]
-) -> dict[str, Any]:
-    name = repo_name(repo_config)
-    raw_path = repo_config.get("path")
-    current_state = repo_state(state, name)
-    current_config_hash = repo_config_hash(repo_config)
-    base: dict[str, Any] = {
-        "name": name,
-        "configured_path": str(raw_path or ""),
-        "profile": str(repo_config.get("profile") or "default"),
-        "docs": docs_paths(repo_config),
-        "skill_root_candidates": skill_root_candidates(repo_config),
-        "authority_paths": authority_paths(repo_config),
-        "watch_terms": list(repo_config.get("watch_terms") or []),
-        "link_validation": repo_config.get("link_validation") or "markdown-relative",
-        "finding_policy": str(repo_config.get("finding_policy") or "actionable"),
-        "check_change_alignment": bool(repo_config.get("check_change_alignment", True)),
-        "recent_limit": int(repo_config.get("recent_limit") or 5),
-        "commit_threshold": int(repo_config.get("commit_threshold") or 0),
-        "state": current_state,
-        "findings": finding_records(current_state),
-        "config_hash": current_config_hash,
-        "last_config_hash": current_state.get("config_hash"),
-    }
-    if not raw_path:
-        return {
-            **base,
-            "status": "error",
-            "error": f"repo {name} is missing required path",
-        }
-    try:
-        status = repo_status(repo_config, state)
-    except AuditFailure as exc:
-        return {
-            **base,
-            "status": "error",
-            "error": str(exc),
-            "due": True,
-        }
-    return {
-        **base,
-        "status": "ok",
-        "path": status["path"],
-        "head": status["head"],
-        "last_audited_revision": status["last_audited_revision"],
-        "config_changed": status["config_changed"],
-        "commits_since_audit": status["commits_since_audit"],
-        "due": status["due"],
-        "config_hash": status["config_hash"],
-        "skill_root": status["skill_root"],
-    }
-
-
-def repo_statuses(
-    config: dict[str, Any], state: dict[str, Any]
-) -> list[dict[str, Any]]:
-    return [repo_read_status(repo_config, state) for repo_config in config["repos"]]
-
 
 def mark_current(
     state_dir: Path,
@@ -378,83 +261,3 @@ def mark_current(
         elif isinstance(previous, dict) and "findings" in previous:
             repos[item["name"]]["findings"] = previous["findings"]
     save_state(state_dir, state)
-
-
-def read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
-        raise AuditFailure(f"failed to read {path}: {exc}") from exc
-
-
-def parse_int_suffix(line: str) -> int | None:
-    match = re.search(r":\s*(\d+)\s*$", line)
-    return int(match.group(1)) if match else None
-
-
-def parse_report_lines(lines: list[str]) -> dict[str, Any]:
-    metadata: dict[str, Any] = {
-        "generated_at": None,
-        "config_path": None,
-        "audited_repos": None,
-        "skipped_repos": None,
-        "failed_repos": None,
-        "repo_sections": [],
-    }
-    for line in lines:
-        if line.startswith("- Generated:"):
-            metadata["generated_at"] = line.split(":", 1)[1].strip()
-        elif line.startswith("- Config:"):
-            metadata["config_path"] = line.split(":", 1)[1].strip().strip("`")
-        elif line.startswith("- Audited repos:"):
-            metadata["audited_repos"] = parse_int_suffix(line)
-        elif line.startswith("- Skipped repos:"):
-            metadata["skipped_repos"] = parse_int_suffix(line)
-        elif line.startswith("- Failed repos:"):
-            metadata["failed_repos"] = parse_int_suffix(line)
-        elif line.startswith("## Repo:"):
-            metadata["repo_sections"].append(line.split(":", 1)[1].strip())
-    return metadata
-
-
-def report_metadata(path: Path) -> dict[str, Any]:
-    text = read_text(path)
-    lines = text.splitlines()
-    title = next(
-        (line.removeprefix("# ").strip() for line in lines if line.startswith("# ")),
-        path.name,
-    )
-    stat = path.stat()
-    return {
-        "id": path.name,
-        "path": str(path),
-        "title": title,
-        "modified_at": dt.datetime.fromtimestamp(stat.st_mtime)
-        .astimezone()
-        .isoformat(timespec="seconds"),
-        "size_bytes": stat.st_size,
-        **parse_report_lines(lines[:200]),
-    }
-
-
-def list_reports(reports_dir: Path) -> list[dict[str, Any]]:
-    if not reports_dir.exists():
-        return []
-    reports = [
-        report_metadata(path) for path in reports_dir.glob("*.md") if path.is_file()
-    ]
-    return sorted(reports, key=lambda item: item["modified_at"], reverse=True)
-
-
-def safe_child_path(root: Path, name: str, *, label: str) -> Path:
-    if "/" in name or "\\" in name or not name:
-        raise AuditFailure(f"invalid {label}: {name}")
-    path = (root / name).resolve()
-    resolved_root = root.resolve()
-    try:
-        path.relative_to(resolved_root)
-    except ValueError as exc:
-        raise AuditFailure(f"invalid {label}: {name}") from exc
-    return path

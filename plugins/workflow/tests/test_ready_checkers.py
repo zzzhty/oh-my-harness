@@ -32,7 +32,7 @@ Checkpoint evidence: close revision recorded.
 Recorded policy: Enabled
 Exact roots:
 - goal-owned: /tmp/demo-goal-cache
-Action: `watcher:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.
+Action: `maintenance:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.
 Removed size: 1 KiB
 Preserved size: 2 KiB
 Failed size: 0 B
@@ -473,8 +473,8 @@ class ReadyCheckerTests(unittest.TestCase):
             "Explicit user confirmation recorded for this demo.",
             "Derived from the default Close behavior.",
         )
-        missing_watcher = ready.replace(
-            "Use `watcher:housekeeping` only for",
+        missing_housekeeping = ready.replace(
+            "Use `maintenance:housekeeping` only for",
             "Clean only",
         )
         hardcoded_root = ready.replace(
@@ -535,9 +535,9 @@ class ReadyCheckerTests(unittest.TestCase):
                 "Housekeeping decision source must record non-negated explicit user confirmation",
             ),
             (
-                "missing_watcher",
-                missing_watcher,
-                "Enabled housekeeping requires watcher:housekeeping in the boundary",
+                "missing_housekeeping",
+                missing_housekeeping,
+                "Enabled housekeeping requires maintenance:housekeeping in the boundary",
             ),
             (
                 "hardcoded_root",
@@ -759,12 +759,12 @@ class ReadyCheckerTests(unittest.TestCase):
                 ),
                 "must repeat every exact recorded root",
             ),
-            "missing_watcher_action": (
+            "missing_housekeeping_action": (
                 closed.replace(
-                    "Action: `watcher:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.",
+                    "Action: `maintenance:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.",
                     "Action: Confirmed disposable candidates were processed.",
                 ),
-                "must record an affirmative watcher:housekeeping action",
+                "must record an affirmative maintenance:housekeeping action",
             ),
         }
         for metric in ("Removed", "Preserved", "Failed", "Residual"):
@@ -782,7 +782,7 @@ class ReadyCheckerTests(unittest.TestCase):
             self.ready,
             ("Close housekeeping policy: Enabled", "Close housekeeping policy: Disabled"),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: Preserve and report every recorded root; keep durable evidence outside the cache root.",
             ),
         )
@@ -860,7 +860,7 @@ Action: No housekeeping action was needed because no roots were created.
             self.ready,
             ("Close housekeeping policy: Enabled", "Close housekeeping policy: Not applicable"),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: No task temporary cache root will be created; durable evidence remains outside temporary storage.",
             ),
         )
@@ -922,79 +922,79 @@ Action: No housekeeping action was needed because no roots were created.
             with self.subTest(name=name):
                 self.assert_goal_error(text, message)
 
-    def test_enabled_close_cannot_fallback_when_watcher_is_unavailable(self) -> None:
+    def test_enabled_close_cannot_fallback_when_housekeeping_is_unavailable(self) -> None:
         closed = self.close_goal(
             self.ready,
             recorded_roots="goal-owned: /tmp/demo-goal-cache",
             evidence=CLOSE_EVIDENCE,
         )
-        no_watcher_failures = closed.replace(
+        no_housekeeping_failures = closed.replace(
             "Failed size: 0 B",
-            "No `watcher:housekeeping` failures occurred.\nFailed size: 0 B",
+            "No `maintenance:housekeeping` failures occurred.\nFailed size: 0 B",
         )
         completed = self.run_goal(
-            no_watcher_failures,
+            no_housekeeping_failures,
             name="enabled-no-watcher-failures.md",
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
         action = (
-            "Action: `watcher:housekeeping` inventoried the exact root and removed only "
+            "Action: `maintenance:housekeeping` inventoried the exact root and removed only "
             "confirmed disposable candidates."
         )
         cases = {
             "unavailable": (
-                "Action: `watcher:housekeeping` was unavailable and was not invoked; "
+                "Action: `maintenance:housekeeping` was unavailable and was not invoked; "
                 "the root was left untouched."
             ),
             "posix_recursive_fallback": (
-                "Action: `watcher:housekeeping` was unavailable, so `rm -rf` removed the root."
+                "Action: `maintenance:housekeeping` was unavailable, so `rm -rf` removed the root."
             ),
             "powershell_recursive_fallback": (
-                "Action: `watcher:housekeeping` failed; `Remove-Item -Recurse -Force` "
+                "Action: `maintenance:housekeeping` failed; `Remove-Item -Recurse -Force` "
                 "removed the root."
             ),
-            "not_run": "Action: `watcher:housekeeping` was not run; the root was retained.",
+            "not_run": "Action: `maintenance:housekeeping` was not run; the root was retained.",
             "skipped": (
-                "Action: `watcher:housekeeping` was skipped; another bounded tool "
+                "Action: `maintenance:housekeeping` was skipped; another bounded tool "
                 "processed candidates."
             ),
             "no_action_occurred": (
-                "Action: No `watcher:housekeeping` action occurred; the root was retained."
+                "Action: No `maintenance:housekeeping` action occurred; the root was retained."
             ),
             "did_not_run": (
-                "Action: `watcher:housekeeping` did not run; the root was retained."
+                "Action: `maintenance:housekeeping` did not run; the root was retained."
             ),
             "contracted_not_invoked": (
-                "Action: `watcher:housekeeping` wasn't invoked; the root was retained."
+                "Action: `maintenance:housekeeping` wasn't invoked; the root was retained."
             ),
             "bypassed_with_unrelated_completion": (
-                "Action: `watcher:housekeeping` was bypassed; alternate cleanup completed."
+                "Action: `maintenance:housekeeping` was bypassed; alternate cleanup completed."
             ),
             "omitted_with_unrelated_completion": (
-                "Action: `watcher:housekeeping` was omitted; alternate cleanup completed."
+                "Action: `maintenance:housekeeping` was omitted; alternate cleanup completed."
             ),
             "replaced_with_unrelated_completion": (
-                "Action: `watcher:housekeeping` was replaced; alternate cleanup completed."
+                "Action: `maintenance:housekeeping` was replaced; alternate cleanup completed."
             ),
             "only_planned": (
-                "Action: `watcher:housekeeping` was only planned; status remained unknown."
+                "Action: `maintenance:housekeeping` was only planned; status remained unknown."
             ),
             "ran_but_failed": (
-                "Action: `watcher:housekeeping` ran but failed."
+                "Action: `maintenance:housekeeping` ran but failed."
             ),
             "executed_then_failed": (
-                "Action: `watcher:housekeeping` executed; it failed."
+                "Action: `maintenance:housekeeping` executed; it failed."
             ),
             "invoked_returned_failure": (
-                "Action: `watcher:housekeeping` was invoked and returned failure."
+                "Action: `maintenance:housekeeping` was invoked and returned failure."
             ),
         }
         for name, replacement in cases.items():
             with self.subTest(name=name):
                 self.assert_goal_error(
                     closed.replace(action, replacement),
-                    "cannot close while watcher:housekeeping is unavailable or a raw recursive fallback is recorded",
+                    "cannot close while maintenance:housekeeping is unavailable or a raw recursive fallback is recorded",
                 )
 
         fallback_outside_action = closed.replace(
@@ -1003,17 +1003,17 @@ Action: No housekeeping action was needed because no roots were created.
         )
         self.assert_goal_error(
             fallback_outside_action,
-            "cannot close while watcher:housekeeping is unavailable or a raw recursive fallback is recorded",
+            "cannot close while maintenance:housekeeping is unavailable or a raw recursive fallback is recorded",
         )
 
         unavailable_outside_action = closed.replace(
             "Removed size: 1 KiB",
-            "Watcher availability: `watcher:housekeeping` unavailable.\n"
+            "Housekeeping availability: `maintenance:housekeeping` unavailable.\n"
             "Removed size: 1 KiB",
         )
         self.assert_goal_error(
             unavailable_outside_action,
-            "cannot close while watcher:housekeeping is unavailable or a raw recursive fallback is recorded",
+            "cannot close while maintenance:housekeeping is unavailable or a raw recursive fallback is recorded",
         )
 
         powershell_outside_action = closed.replace(
@@ -1050,7 +1050,7 @@ Action: No housekeeping action was needed because no roots were created.
             self.ready,
             ("Close housekeeping policy: Enabled", "Close housekeeping policy: Disabled"),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: Preserve and report every recorded root; keep durable evidence outside the cache root.",
             ),
         )
@@ -1079,22 +1079,22 @@ Residual size: 0 B
             recorded_roots="goal-owned: /tmp/demo-goal-cache",
             evidence=disabled_evidence,
         )
-        disabled_negates_watcher = disabled_ready.replace(
+        disabled_negates_housekeeping = disabled_ready.replace(
             "Housekeeping boundary: Preserve and report every recorded root; keep durable evidence outside the cache root.",
-            "Housekeeping boundary: `watcher:housekeeping` must not run; retain and report every recorded root.",
+            "Housekeeping boundary: `maintenance:housekeeping` must not run; retain and report every recorded root.",
         )
         completed = self.run_goal(
-            disabled_negates_watcher,
+            disabled_negates_housekeeping,
             name="disabled-negated-watcher-boundary.md",
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
         cases = {
-            "disabled_boundary_still_enables_watcher": disabled_ready.replace(
+            "disabled_boundary_still_enables_housekeeping": disabled_ready.replace(
                 "Housekeeping boundary: Preserve and report every recorded root; keep durable evidence outside the cache root.",
-                "Housekeeping boundary: Use `watcher:housekeeping` for inventoried goal-owned disposable cache candidates.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` for inventoried goal-owned disposable cache candidates.",
             ),
-            "not_applicable_boundary_still_enables_watcher": replace_all(
+            "not_applicable_boundary_still_enables_housekeeping": replace_all(
                 self.ready,
                 ("Close housekeeping policy: Enabled", "Close housekeeping policy: Not applicable"),
                 (
@@ -1119,24 +1119,24 @@ Residual size: 0 B
                     "Recorded task temporary cache roots: Not applicable",
                 ),
                 (
-                    "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                    "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                     "Housekeeping boundary: No task temporary cache root is created; child roots may still be deleted.",
                 ),
             ),
             "enabled_boundary_permits_raw_recursive_delete": self.ready.replace(
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates; raw recursive deletion is permitted.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates; raw recursive deletion is permitted.",
             ),
             "enabled_negation_does_not_mask_raw_delete_permission": self.ready.replace(
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, do not remove durable evidence, and raw recursive deletion is permitted.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, do not remove durable evidence, and raw recursive deletion is permitted.",
             ),
         }
         messages = {
-            "disabled_boundary_still_enables_watcher": (
+            "disabled_boundary_still_enables_housekeeping": (
                 "Disabled housekeeping boundary must retain recorded roots without cleanup"
             ),
-            "not_applicable_boundary_still_enables_watcher": (
+            "not_applicable_boundary_still_enables_housekeeping": (
                 "Not applicable housekeeping boundary must record that no roots are created"
             ),
             "disabled_raw_recursive_delete": "raw recursive fallback is recorded",
@@ -1210,7 +1210,7 @@ Residual size: 0 B
                 "Recorded task temporary cache roots: Not applicable",
             ),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: No task temporary cache root will be created; durable evidence remains outside temporary storage.",
             ),
         )
@@ -1229,7 +1229,7 @@ Close 执行证据：
    - Recorded policy：Enabled
    - Exact roots / Roots outcome：
      - goal-owned: /tmp/demo-goal-cache
-   - Action：`watcher:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.
+   - Action：`maintenance:housekeeping` inventoried the exact root and removed only confirmed disposable candidates.
    - Removed size：1 KiB
    - Preserved size：2 KiB
    - Failed size：0 B
@@ -1553,7 +1553,7 @@ Checkpoint evidence：close revision recorded.
             ready,
             ("Close housekeeping policy: Enabled", "Close housekeeping policy: Disabled"),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: Preserve and report every recorded root; keep durable evidence outside the cache root.",
             ),
         )
@@ -1565,7 +1565,7 @@ Checkpoint evidence：close revision recorded.
                 "Recorded task temporary cache roots: Not applicable",
             ),
             (
-                "Housekeeping boundary: Use `watcher:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
+                "Housekeeping boundary: Use `maintenance:housekeeping` only for inventoried goal-owned disposable cache candidates, preserve unknown or unsafe content, and keep durable evidence outside the cache root.",
                 "Housekeeping boundary: No task temporary cache root will be created; durable evidence remains outside temporary storage.",
             ),
         )

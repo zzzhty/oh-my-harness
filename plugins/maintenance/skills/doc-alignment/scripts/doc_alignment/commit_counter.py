@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report commit-threshold trigger status for configured Watcher doc repos."""
+"""Report commit-threshold trigger status for configured doc-alignment repos."""
 
 from __future__ import annotations
 
@@ -20,17 +20,17 @@ from .audit_runtime import (
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="watcher doc commit-counter",
+        prog="audit_docs.py commit-counter",
         description="Show commit-threshold trigger status for configured repos.",
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Repo config JSON path.")
-    parser.add_argument("--state-dir", help="Runtime state directory. Defaults to $CODEX_HOME/watcher/doc.")
+    parser.add_argument("--state-dir", help="Runtime state directory. Explicit path or $DOC_ALIGNMENT_STATE_DIR; no historical state is read.")
     parser.add_argument("--mark-current", action="store_true", help="Mark current HEAD as audited for all configured repos.")
     return parser.parse_args(argv)
 
 
 def render_commit_counter(statuses: list[dict[str, object]]) -> str:
-    lines = ["# Watcher Doc Commit Counter", ""]
+    lines = ["# Doc Alignment Commit Counter", ""]
     for item in statuses:
         due = "due" if item["due"] else "skip"
         lines.append(

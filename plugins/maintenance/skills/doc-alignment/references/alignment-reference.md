@@ -11,7 +11,7 @@ rg --files <target>
 rg --hidden -n "<old-term>|<old-path>|<disputed-term>" <target> . --glob '!**/.git/**' --glob '!**/node_modules/**'
 ```
 
-Read entry points first: `AGENTS.md`, root and area READMEs, current development, usage, operations, architecture and validation guides, package commands, devcontainer and CI files, runbooks, subdirectory indexes, active plans, skill metadata, and relevant Watcher reports.
+Read entry points first: `AGENTS.md`, root and area READMEs, current development, usage, operations, architecture and validation guides, package commands, devcontainer and CI files, runbooks, subdirectory indexes, active plans, skill metadata, and explicitly supplied audit reports.
 
 Classify each file by its live role:
 
@@ -118,20 +118,20 @@ git diff --check -- <changed-paths>
 
 Add lightweight dry-runs or `--summary` commands when entry points provide them. Do not run heavyweight runtime suites for naming-only alignment unless behavior or gates changed.
 
-For Watcher doc-domain validation:
+For doc-alignment helper validation:
 
-Set `ATM_WATCHER_AUDIT_ROOT` to the target Git worktree for the example config.
-Run the following from `$ATM_HARNESS_ROOT/runtimes/watcher`, using the explicit
-prepared payload interpreter. The payload root and audited repository are
-separate inputs; do not infer either from the current working directory.
+Resolve this skill's directory and run the following from it. Set
+`DOC_ALIGNMENT_AUDIT_ROOT` to the target Git worktree and `DOC_ALIGNMENT_STATE_DIR`
+to the explicitly approved output directory. Use the prepared payload interpreter.
+The helper location and audited repository are separate inputs.
 
 ```bash
 atm_tooling_python="${ATM_PAYLOAD_PYTHON:?set explicit prepared payload interpreter}"
-"$atm_tooling_python" -B scripts/watcher doc doctor --config config/repos.example.json
+"$atm_tooling_python" -B scripts/audit_docs.py doctor --config config/repos.example.json
 "$atm_tooling_python" -B - <<'PY'
 from pathlib import Path
 
-for source in Path("scripts/watcher_runtime").rglob("*.py"):
+for source in Path("scripts/doc_alignment").rglob("*.py"):
     compile(source.read_bytes(), str(source), "exec")
 PY
 
