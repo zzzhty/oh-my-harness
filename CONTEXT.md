@@ -1,4 +1,4 @@
-# Watcher
+# OMH Content Hub
 
 This context describes the language used for canonical skill source, harness distributions, Watcher usage data, documentation audits, and plugin-provided skill systems.
 
@@ -7,7 +7,7 @@ This context describes the language used for canonical skill source, harness dis
 ### Harness Distribution
 
 **Canonical Skill Source**:
-The version-controlled repository content from which every discovery or distribution projection is derived.
+The version-controlled OMH content under plugins/*/skills/*/SKILL.md, from which versioned releases and client projections are derived.
 _Avoid_: plugin cache authority, marketplace authority, installed source
 
 **Catalog Skill Name**:
@@ -15,11 +15,11 @@ The bare name declared by a skill's `SKILL.md` frontmatter and used as the repos
 _Avoid_: harness-independent invocation identity, plugin-qualified identity, physical directory name
 
 **Harness**:
-A named distribution target that owns one declared plan for skills, its instructions capability, root resolution, materialization, reconciliation, and optional runtime extras. A skills-only harness explicitly owns no global instructions target.
+A client target resolved and managed by ATM according to local policy; content imports do not select or enable targets.
 _Avoid_: skills target plus instructions target, mode, product name without a registry entry
 
 **Harness Registry**:
-The strict repository-owned JSON authority at `.agents/harnesses/registry.json` that declares supported harnesses and their structured distribution behavior.
+The ATM-owned local policy that declares supported target adapters and host paths. OMH content does not supply this policy.
 _Avoid_: shell path table, command template registry, duplicated wrapper defaults
 
 **Harness Plan**:
@@ -61,35 +61,35 @@ _Avoid_: Codex invocation identity, Watcher skill identity
 ### Watcher Attribution and Runtime
 
 **Primary Skill**:
-The entry skill that a turn is directly attributed to through an explicit signal or the strongest detected match.
+A historical event field containing an asserted entry-skill attribution. Its source determines whether it is a selection assertion, text mention or unclassified observation; it does not prove execution.
 _Avoid_: active skill, single skill context
 
 **Supporting Skill**:
-A skill that is directly used or required by the primary skill's workflow but is not the turn's entry point.
+A historical attribution field for a declared dependency or asserted supporting role. Its presence does not prove that skill loaded or executed.
 _Avoid_: secondary skill, indirect skill, dependency skill
 
 **Effective Skill**:
-Any skill whose discipline was exercised in a turn, including both the primary skill and supporting skills.
+A legacy persisted attribution label retained for reading old records. Current reports classify its evidence and leave execution unknown.
 _Avoid_: combined usage, actual skill
 
 **Effective Turns**:
-The count of turn summaries where a skill appears as either the primary skill or a supporting skill.
+A legacy count based on effective attribution fields, retained as historical terminology. Current reports use observed, mention, selection and dependency counts without execution claims.
 _Avoid_: primary turns, skill mentions
 
 **Primary Turns**:
-The count of turn summaries where a skill is the primary skill.
+The legacy count of turn summaries with a primary attribution field; an attribution count does not establish skill execution.
 _Avoid_: effective turns, raw events
 
 **Supporting Turns**:
-The count of turn summaries where a skill appears as a supporting skill.
+The legacy count of turn summaries with supporting attribution fields; these can reflect declared dependencies only.
 _Avoid_: primary turns, mentioned turns
 
 **Supporting-only Skill**:
-A skill with no primary turns but at least one supporting turn in the reporting window.
+A legacy report label for a skill with supporting records and no primary records. Current reports describe dependency observations.
 _Avoid_: unused skill, zero-hit skill
 
 **Zero Effective Usage**:
-A reporting result where a skill has no primary turns and no supporting turns in the reporting window.
+A legacy report label for missing primary/supporting observations in a window. It cannot establish that a skill was unused.
 _Avoid_: zero primary usage, low usage
 
 **Skill Dependency Map**:
@@ -117,7 +117,7 @@ A metadata classification that explains how a skill is normally used in a skill 
 _Avoid_: usage count bucket, deletion signal
 
 **Runtime Metadata Cache**:
-A Watcher-generated runtime projection of the canonical repository catalog plus skill attribution overlays, used by hooks and reports after SessionStart.
+A historical metadata cache or explicit projection of the versioned canonical catalog JSON, used by reports. No SessionStart collector refreshes it.
 _Avoid_: callable source of truth, plugin-cache authority, hand-maintained allowlist
 
 **Skill Attribution**:
@@ -125,7 +125,7 @@ The structured explanation of why a turn is associated with primary, supporting,
 _Avoid_: skill name, active skill
 
 **Turn Summary**:
-The turn-level usage fact emitted at the end of a monitored turn and used as the default source for usage reporting.
+A persisted turn-level observation used by historical reports. It may contain mentions, selection assertions, dependencies and unknown outcomes; it does not prove execution.
 _Avoid_: raw event aggregate, tool event count
 
 **Tool Failure Observation**:
@@ -137,7 +137,7 @@ An explicit reset of Watcher skill-domain runtime state from one event schema to
 _Avoid_: automatic compatibility, mixed-schema log
 
 **Watcher Consolidation**:
-Combining watcher plugin packaging, shared runtime helpers, validation, and maintenance surfaces while preserving separate skill invocation boundaries.
+The historical packaging decision that combined shared helpers; current maintenance skills retain distinct invocation boundaries after the runtime split.
 _Avoid_: skill merger, giant watcher skill
 
 **Watcher Runtime Root**:
@@ -145,7 +145,7 @@ The consolidated runtime state root at `$CODEX_HOME/watcher/`, with domain-speci
 _Avoid_: shared flat reports directory, old per-plugin runtime root
 
 **Watcher Plugin**:
-The canonical plugin package named `watcher` that owns both documentation audit and skill usage watcher domains.
+The retired packaging that combined maintenance skills and Watcher runtime. Current callable skills live in maintenance; historical report/audit helpers live in runtimes/watcher.
 _Avoid_: doc-watcher as umbrella, skill-watcher as umbrella
 
 **Legacy Attribution Name**:
@@ -153,5 +153,23 @@ An old skill identity kept only as reporting and migration metadata so historica
 _Avoid_: active skill name, compatibility entrypoint
 
 **Watcher CLI**:
-The consolidated command entrypoint `scripts/watcher`, organized by domain subcommands such as `skill` and `doc`.
+The explicit report/audit entrypoint runtimes/watcher/scripts/watcher, organized by skill and doc domains. Skill observation and hook installation are retired.
 _Avoid_: many top-level watcher wrappers, flat universal report command
+
+### Content Release and Installation
+
+**Content Manifest**:
+OMH's versioned declaration of packages, internal resources, compositions and optional runtime requirements.
+_Avoid_: installation receipt, target-path policy
+
+**Version Lock**:
+A locally selected immutable source revision, release artifact and verified content inventory; generated by the shared Rust exporter.
+_Avoid_: latest-version selector, install state
+
+**Install Receipt**:
+ATM's record of actual target roots, owned resources, runtime references and recovery state.
+_Avoid_: upstream manifest, content cache
+
+**Composition**:
+A named complete set of content packages in one release; native plugin identities always describe whole packages.
+_Avoid_: partial native plugin, automatically enabled hooks
