@@ -13,8 +13,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-DEFAULT_STATE_DIR = CODEX_HOME / "watcher" / "doc"
 ENTRY_FILES = (
     "README.md",
     "AGENTS.md",
@@ -72,9 +70,10 @@ class AuditFailure(RuntimeError):
 
 
 def resolve_state_dir(raw: str | None = None) -> Path:
-    return expand_path(
-        raw or os.environ.get("WATCHER_DOC_STATE_DIR") or DEFAULT_STATE_DIR
-    )
+    selected = raw or os.environ.get("DOC_ALIGNMENT_STATE_DIR")
+    if not selected:
+        raise AuditFailure("set --state-dir or DOC_ALIGNMENT_STATE_DIR to an explicit skill state directory")
+    return expand_path(selected)
 
 
 def expand_path(raw: str | Path) -> Path:
@@ -96,6 +95,8 @@ def run_git(repo: Path, args: list[str], *, allow_failure: bool = False) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
@@ -453,7 +454,7 @@ def bounded_output(value: str, *, limit: int = 2000) -> str:
     text = value.strip()
     if len(text) <= limit:
         return text
-    return f"{text[:limit]}\n... output truncated by Watcher ..."
+    return f"{text[:limit]}\n... output truncated by doc-alignment ..."
 
 
 def run_owner_link_validator(repo: Path, config: dict[str, Any]) -> dict[str, Any]:
@@ -772,7 +773,7 @@ def render_report(result: dict[str, Any]) -> str:
     ]
 
     lines = [
-        f"# Watcher Doc Audit: {result['name']}",
+        f"# Doc Alignment Audit: {result['name']}",
         "",
         f"- Generated: {result['generated_at']}",
         f"- Repo: `{result['repo']}`",
@@ -927,7 +928,7 @@ def write_report(path: Path, report: str) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="watcher doc audit",
+        prog="audit_docs.py audit",
         description="Collect read-only documentation drift evidence for one Git repo.",
     )
     parser.add_argument("--repo", required=True, help="Local Git repository path.")
@@ -989,7 +990,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--since-ref", help="Git ref to diff against HEAD.")
     parser.add_argument(
         "--state-dir",
-        help="Runtime state directory. Defaults to $CODEX_HOME/watcher/doc.",
+        help="Runtime state directory. Explicit path or $DOC_ALIGNMENT_STATE_DIR; no historical state is read.",
     )
     parser.add_argument(
         "--output", help="Audit report output path. Defaults to state audits/."

@@ -9,15 +9,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "skills" / "doc-alignment" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from watcher_runtime.doc.audit_repo import (  # noqa: E402
+from doc_alignment.audit_repo import (  # noqa: E402
     AuditFailure,
     audit_repository,
     render_report,
 )
-from watcher_runtime.doc.report import (  # noqa: E402
+from doc_alignment.report import (  # noqa: E402
     audit_repo_from_config,
     run_generate_report,
 )
@@ -46,7 +46,7 @@ def initialize_repo(root: Path) -> Path:
     return repo
 
 
-class WatcherDocAuditProfileTests(unittest.TestCase):
+class DocAlignmentAuditProfileTests(unittest.TestCase):
     def test_default_discovery_includes_dev_docs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = initialize_repo(Path(tmp))
