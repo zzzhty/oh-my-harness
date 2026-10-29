@@ -9,7 +9,7 @@ Use a red → green → refactor loop to implement one behavior at a time. Reuse
 
 ## Choose the behavior and interface
 
-State the behavior the next test will protect. Prefer an existing interface that exposes it. When that interface or test boundary needs design, load `codebase-design` through the active harness's supported skill-loading mechanism for the shared interface and seam principles. If unavailable, report the dependency and the blocked design step. An internal interface is appropriate when it protects an independent behavior or regression that a higher-level check does not cover.
+State the behavior the next test will protect. For each proposed seam, give a one-line note on what it catches and what it misses. Prefer an existing interface that exposes it. When that interface or test boundary needs design, load `codebase-design` through the active harness's supported skill-loading mechanism for the shared interface and seam principles. If unavailable, report the dependency and the blocked design step. An internal interface is appropriate when it protects an independent behavior or regression that a higher-level check does not cover.
 
 Reuse already confirmed boundaries. Resolve new product or interface decisions only when they materially affect the task; routine test placement within the agreed design does not require another confirmation.
 

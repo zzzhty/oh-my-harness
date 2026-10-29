@@ -1,6 +1,7 @@
 # ADR 0029: Skill-owned helpers
 
-Status: accepted for the 1.1.0 preparation; publication is a separate approval.
+Status: accepted for the 1.1.0 preparation. Publication required separate approval;
+see the dated release-status correction below.
 
 ## Decision
 
@@ -10,8 +11,17 @@ Users distributing through other tools own those tools.
 The historical 1.0.0 baseline is `0b5f4dd4aabeb92f97ca8f97852cc58a37dd3cf0`,
 the earlier architecture with the old distribution mechanism and Watcher
 collection hooks, including the evidence-reporting fix. The 1.1.0 content-publishing line follows.
-Neither planned release is implied to exist by changing the source version.
-The withdrawn 1.2.0 draft, its tag and assets are retained unchanged for recovery.
+Changing a source version alone does not publish a release.
+
+### Release-status correction — 2026-10-29
+
+The preparation originally proposed retaining the withdrawn 1.2.0 draft, tag
+and assets for recovery. That retention plan was superseded: the obsolete
+remote tag, release and assets have been deleted. Historical
+[v1.0.0](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0) and the corrected
+[v1.1.0](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0) are published.
+Local recovery backups and existing Home data are not remote release assets
+and were not deleted by that release cleanup.
 
 OMH 1.1.0 removes historical Watcher report reading, attribution compatibility,
 state migration, collection and the skill-maintainer evidence/proposal pipeline.

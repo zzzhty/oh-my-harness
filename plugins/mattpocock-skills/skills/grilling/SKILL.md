@@ -5,7 +5,7 @@ description: Stress-test a plan, decision or idea through focused questions. Use
 
 Stress-test the user's plan, decision or idea through a **design tree**: decisions and the questions that depend on them. Start with already confirmed decisions and the intended scope.
 
-Work in manageable rounds. The **frontier** contains consequential questions whose prerequisites are settled. Ask the most useful independent questions together, with concise options and a recommendation when justified; wait for answers before resolving dependent decisions. Use the environment's question interface when available.
+Work in manageable rounds. The **frontier** contains consequential questions whose prerequisites are settled. Ask the most useful independent questions together, with concise options and a recommendation when justified; wait for answers before resolving dependent decisions. Use the environment's question interface when available. When presenting a recommendation as a yes/no question, word it so yes accepts that recommendation; do not invert its meaning. A reply settles only the stated decision, not unrelated permissions.
 
 Look up facts from the repository or available sources yourself. Delegate bounded fact-finding only when useful and authorized. While evidence is pending, continue with independent questions rather than asking the user to reconstruct information you can inspect.
 
