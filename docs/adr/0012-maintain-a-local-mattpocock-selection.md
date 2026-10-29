@@ -1,7 +1,12 @@
 # ADR 0012: Maintain a local Matt Pocock selection
 
-> The decision remains current. Original local baseline and worktree observations
-> below refer to the private pre-rebuild archive. Upstream provenance is unchanged.
+> The local-selection decision remains current. Original local baseline and worktree
+> observations below refer to the private pre-rebuild archive. Upstream provenance
+> is unchanged. Distribution/lifecycle details below, including `omh update` and
+> Watcher, were superseded by [ADR 0028](0028-publish-content-through-atm.md) and
+> [ADR 0029](0029-pure-hub-with-skill-owned-helpers.md): ATM distributes the selected
+> content through an OMH release lock/archive. This clarification is dated 2026-10-29;
+> the original implementation record is preserved below.
 
 Status: Accepted for implementation on 2026-09-08.
 

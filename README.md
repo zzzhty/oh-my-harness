@@ -18,11 +18,15 @@ OMH versions its content independently of the ATM application. **1.1.0** names
 the pure Hub release line; ATM **0.2.0** consumes its exact revision and content lock.
 Neither product's version requires the other product to use the same number.
 
-The planned `v1.0.0` release records the last pre-Hub source baseline,
+The published historical [`v1.0.0` release](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0) records the last pre-Hub source baseline,
 `e0ce46da5e1cbca5313a6db14401cdfa07b4d5a7`, including the Watcher evidence fix.
 It is the last baseline containing the old distribution mechanism and Watcher
 automatic collection hooks. It is not the current Hub and has no `.omh` content
-assets. The withdrawn `v1.2.0` release remains a draft with its original tag and assets for recovery; it is not the current content release.
+assets. The obsolete `v1.2.0` tag, release and attached assets were removed during
+the October 2026 history correction; they are not a retained recovery draft.
+The published [`v1.1.0` release](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
+records the corrected Hub baseline. Existing local backups and installed data
+are separate from remote release availability.
 
 Existing 1.2.0 caches, receipts and runtime directories keep their original
 identities. Selecting 1.1.0 is an explicit ATM content migration: import its new
@@ -133,6 +137,7 @@ version boundary, retired capabilities and the skill-owned helper migration.
 [ADR 0028](docs/adr/0028-publish-content-through-atm.md) records the installer,
 package and ownership transition and maps retired implementation tests to ATM's
 Rust gates. [ADR 0027](docs/adr/0027-report-watcher-evidence-without-execution-claims.md)
-owns historical report evidence semantics. Earlier ADRs, lifecycle runbooks and
+owns historical report evidence semantics. Earlier ADRs, retired lifecycle runbooks and dated pre-rebuild entries in
 `dev_docs/` remain historical evidence; they do not authorize restarting the retired
-installer or collector. No server, accounts or marketplace service is required.
+installer or collector. Current upstream selections and validation are recorded in
+[the upstream review record](dev_docs/mattpocock-upstream-review.md). No server, accounts or marketplace service is required.

@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Recommend the smallest useful entrypoint for the user's task. Reuse the current request and decisions; a clear implementation task can go straight to work. These are choices, not a mandatory sequence.
 
+Before stating what a skill does or recommending a step be skipped, read that skill's `SKILL.md`; this router's summaries are orientation, not the source of truth. If the skill is unavailable, report that limit rather than guessing. Reading it does not invoke its workflow.
+
 | Need | Skill |
 | --- | --- |
 | Stress-test an idea or decision | `/grill-me`, using `/grilling` |
