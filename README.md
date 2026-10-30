@@ -14,8 +14,9 @@ replacement skill or installation CLI is added.
 
 ## Independent release versions
 
-OMH versions its content independently of the ATM application. **1.1.0** names
-the pure Hub release line; ATM **0.2.0** consumes its exact revision and content lock.
+OMH versions its content independently of the ATM application. The current content
+version is **1.1.1**, a patch release in the pure Hub line introduced by **1.1.0**.
+ATM **0.2.0** consumes an explicitly selected exact revision and content lock.
 Neither product's version requires the other product to use the same number.
 
 The published historical [`v1.0.0` release](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0) records the last pre-Hub source baseline,
@@ -33,6 +34,10 @@ identities. Selecting 1.1.0 is an explicit ATM content migration: import its new
 lock/archive, preview the target changes and apply them separately. Do not edit
 installed receipts, relabel old caches or restore the retired Python installer.
 Publishing this version does not migrate an existing Home installation.
+
+The [1.1.1 release notes](docs/releases/1.1.1.md) describe the selected Matt
+v1.3.2 instruction changes. Upstream review versions and OMH content versions
+are separate; an existing ATM lock stays pinned until explicitly updated.
 
 ## Distribution boundary
 
@@ -121,7 +126,7 @@ checkout run the same pinned Rust executable:
 ```sh
 atm harness export --source /absolute/oh-my-harness --output /absolute/omh.omh \
   --repository https://github.com/zzzhty/oh-my-harness --revision <full-commit-sha> \
-  --url https://github.com/zzzhty/oh-my-harness/releases/download/v1.1.0/omh.omh
+  --url https://github.com/zzzhty/oh-my-harness/releases/download/v1.1.1/omh.omh
 ```
 
 The exporter refuses existing outputs. Publish `omh.omh` and `omh.lock.json` on the
