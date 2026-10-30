@@ -1,5 +1,7 @@
 # Matt Pocock 上游审查记录
 
+> Follow-up — 2026-10-30: the selected changes were merged in [PR #3](https://github.com/zzzhty/oh-my-harness/pull/3), validated on all CI platforms and distributed to Home. The dated preparation results below retain their original scope; see [1.1.1 release notes](../docs/releases/1.1.1.md) for the release handoff.
+
 > Entries dated before the repository rebuild are historical design and validation
 > records: their local commits, PR numbers, installed-state observations and CI
 > results refer to the private pre-rebuild archive, not the current installation.

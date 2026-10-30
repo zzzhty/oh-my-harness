@@ -1,5 +1,7 @@
 # Matt Pocock v1.3.2 release selection — 2026-10-29
 
+> Follow-up — 2026-10-30: the selected changes were merged in [PR #3](https://github.com/zzzhty/oh-my-harness/pull/3), validated on all CI platforms and distributed to Home. The dated preparation results below retain their original scope; see [1.1.1 release notes](../docs/releases/1.1.1.md) for the release handoff.
+
 ## Scope and evidence
 
 - User requested stale OMH wording corrections, selective upstream adoption and independent branch validation. No push, PR, merge, release, installation or history rewrite is part of this change.
