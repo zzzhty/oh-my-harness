@@ -7,7 +7,7 @@ argument-hint: "What would you like to learn about?"
 
 # Teach
 
-Use the current directory as a persistent teaching workspace. Ground each session in the user's mission, demonstrated understanding, and teaching preferences.
+Use the current directory as a persistent teaching workspace. Ground each session in the user's mission, demonstrated understanding, and teaching preferences. Workspace paths below resolve from the directory where this skill was invoked, not the installed skill directory. The `*-FORMAT.md` references resolve from this skill's own directory.
 
 ## Workspace Owners
 
@@ -32,7 +32,7 @@ Honor a specific learning request. Otherwise use the mission and learning record
 Balance three needs according to the topic:
 
 - **Knowledge:** gather high-quality, high-trust sources first, especially while `RESOURCES.md` is sparse. Ground factual claims in those sources rather than parametric memory, record the sources, and cite them in lessons. Teach only the knowledge needed for the skill; keep acquisition easy to understand.
-- **Skills:** follow knowledge with interactive practice and immediate feedback, ideally automatic. Use quizzes, light browser tasks, or guided real-world steps as appropriate. Keep quiz choices comparable in length and formatting so presentation does not reveal the answer; do not force exact word or character counts.
+- **Skills:** follow knowledge with interactive practice and immediate feedback, ideally automatic. Use quizzes, light browser tasks, or guided real-world steps as appropriate. Keep quiz choices comparable in length and formatting so presentation does not reveal the answer; do not force exact word or character counts. Vary the correct answer position across questions so answer order does not reveal it.
 - **Wisdom:** attempt to answer judgment questions, then seek opportunities to test understanding with reputable communities or practitioners. Suggest suitable online or offline communities within the user's constraints and respect a preference not to join.
 
 Distinguish in-the-moment fluency from long-term retention. Build retention through retrieval practice and spacing; use interleaving for skills practice only. Desirable difficulty belongs in practice, not in explanations of new knowledge.

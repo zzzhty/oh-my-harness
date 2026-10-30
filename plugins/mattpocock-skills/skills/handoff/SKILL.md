@@ -5,7 +5,7 @@ argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-Write a compact handoff so another session, directory, harness or person can continue the work. Use the user's requested destination; otherwise save to the operating system's temporary directory and report its absolute path. A handoff does not require a formal goal contract.
+Write a compact handoff so another session, directory, harness or person can continue the work. Use the user's requested destination; otherwise resolve the operating system's temporary directory (`$TMPDIR`, otherwise `/tmp`, on Unix; `%TEMP%` on Windows) and report the absolute path. If the configured directory is unavailable, report the path problem rather than silently writing into the workspace. A handoff does not require a formal goal contract.
 
 Include the objective, confirmed decisions and their reasons, relevant environment/branch state, completed work and verification, unresolved questions or blockers, and the next concrete action. Tailor the emphasis to the user's stated next task. Add suggested skills only where they help that task.
 

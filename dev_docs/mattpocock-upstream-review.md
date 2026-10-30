@@ -1,13 +1,14 @@
 # Matt Pocock 上游审查记录
 
-> Pre-rebuild historical design and validation record. Repository commit IDs, PR
-> numbers, installed-state observations and CI results below refer to the private
-> pre-rebuild archive. They are not evidence for this repository's new root or
-> current installation. Upstream release pins and attribution remain applicable.
+> Entries dated before the repository rebuild are historical design and validation
+> records: their local commits, PR numbers, installed-state observations and CI
+> results refer to the private pre-rebuild archive, not the current installation.
+> The 2026-10-29 entry below is a current repository review. Upstream release pins
+> and attribution remain applicable.
 
 更新步骤由[插件 README](../plugins/mattpocock-skills/README.md#upstream-updates)维护。本文件记录已检查的上游范围、选择结果和待处理项；“已审查”不表示整版已合入。
 
-最后完整审查的上游版本：`v1.3.1`，提交 `24fe0ef7737efae15c87225755e9f6f5965e4888`。完整分类只推进审查覆盖；不表示全部采纳。
+最后完整审查的上游版本：`v1.3.2`，提交 `d1478fcb140db0b93c0c8df17bcfd311844749d0`。完整分类只推进审查覆盖；不表示全部采纳。
 
 ## 2026-09-08：初始化本地选编基线
 
@@ -34,3 +35,11 @@
 - 当前 114 条分类为 adopt 4、adapt 18、skip 89、defer 3；当前 Matt catalog 为 20。仅 implement-spec 的三个路径继续 defer。
 - retro 是授权会话证据上的可选提案/no-change 入口，与 Watcher skill-maintainer 职责不同；不搜索私有会话/cache，不自动改 source/hooks/CI/权限，不发布、不创建后台任务，不增加原交付门禁。来源、静态反例和补充验收见[详细记录](mattpocock-v1.3.1-review.md#2026-10-05-补充显式会话复盘-retro)。
 - 补充已通过独立静态语义/权限审查、全部 owning checks 及生成身份检查；root 353 tests 中剩 1 个既有 zsh 空 PATH 宿主失败（345 passed、7 skipped）。精确补充 head 的远端 CI 以 PR #23 Evidence 为准；未执行用户安装、合并或部署。
+
+## 2026-10-29：选择性采纳正式 v1.3.2
+
+- 正式发布触发，范围 `24fe0ef7737efae15c87225755e9f6f5965e4888` → `d1478fcb140db0b93c0c8df17bcfd311844749d0`；51 个提交、72 个净路径完整分类。没有检查或合入 release 后的 main 变化。
+- 本地起点：`b0ea6081585558e3a31fcdc267175fbd3e5d22c9`，独立分支 `codex/mattpocock-v1.3.2-review`。
+- adopt 2、adapt 9、skip 60、defer 1；[逐路径决定、实际落点与验证](mattpocock-v1.3.2-review.md)。fresh-context 意图在现有全局 delegation owner 中适配一次，不复制到多个技能或强制增加子代理。
+- 保留 20 个 Matt 技能、原始 v1.2.3 归因和现有调用/授权边界。所选改动只应用于本地源分支，未推送、发布、安装或更改已有 release。
+- v1.3.1 的 implement-spec 三个原始暂缓路径继续保留，本次新增改动也暂缓。完整审查覆盖不等于整版同步；未完成的验证见本轮详细记录。

@@ -29,6 +29,7 @@
 ## Delegation policy
 
 - Use subagents only when explicitly requested or authorized by the active environment/plan. Broad read-only review requests authorize read-only subagents, not writes; this does not invoke `$orchestrate-subagents`. Use that skill when invoked.
+- For independent review, research or alternative-design work, prefer a fresh subagent context with a self-contained brief and raw evidence rather than inheriting the full conversation. Follow the active harness's context controls; if isolation is unavailable, disclose that limit instead of claiming independent context. This does not require delegation or override its authorization.
 - Assign bounded work with inputs, outputs, and stop conditions. Read-only assignments must state read-only permission and forbid writes; write-capable assignments need disjoint write ownership. Avoid tiny, tightly coupled, or racing assignments.
 - The main agent owns planning, decisions, integration, verification, and conclusions. Subagents report concise evidence, paths, commands, and blockers.
 
