@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $group = $args[0]
 if ($group -cnotmatch '^[A-Za-z0-9_-]+$') { throw 'Invalid runtime group' }
-$python = if (Test-Path Env:OMH_PYTHON) { $env:OMH_PYTHON } else { (Get-Content -LiteralPath (Join-Path $PSScriptRoot "$group.python") -Raw).TrimEnd("`r", "`n") }
+$python = if (Test-Path Env:OMH_PYTHON) { $env:OMH_PYTHON } else { (Get-Content -LiteralPath (Join-Path $PSScriptRoot "$group.python") -Raw -Encoding UTF8).TrimEnd("`r", "`n") }
 if ($python -notmatch '^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+[\\/])') { throw 'Prepare a runtime or set an absolute OMH_PYTHON venv interpreter' }
 # .NET Framework and modern PowerShell both use the Windows native argv rule.
 # ProcessStartInfo avoids PowerShell 5 dropping empty native arguments.
