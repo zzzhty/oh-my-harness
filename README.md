@@ -1,148 +1,159 @@
 # Oh My Harness
 
-OMH maintains versioned skills, their script resources and compositions.  imports
-and distributes these releases through one Rust core. OMH no longer installs a
-Python lifecycle manager or maintains a second active home beside.
+OMH maintains versioned skills, helper resources and compositions. It can install
+its skills independently through a small Python distributor. 
+can distribute the same content through its Rust core and call OMH's runtime
+implementation with explicit interpreter and deployment paths.
 
 The default composition contains 29 skills in `maintenance`, `workflow` and
-`mattpocock-skills`. The three maintenance skills remain independent callable
-workflows: doc-alignment, housekeeping and skill-compressor.
-The 1.1.0 boundary retires Watcher collection, hooks and historical report support.
-Skill-owned auditing and new report generation remain supported. The retired skill-maintainer workflow is replaced by the existing
-`mattpocock-skills:writing-for-agents` for agent-guidance authoring; no new
-replacement skill or installation CLI is added.
+`mattpocock-skills`. Watcher collection, automatic hooks and historical report
+readers remain retired. Preparing Python does not invoke skills or enable hooks.
 
-## Independent release versions
+## Standalone installation
 
-OMH versions its content independently of the application. The current content
-version is **1.1.1**, a patch release in the pure Hub line introduced by **1.1.0**.
- **0.2.0** consumes an explicitly selected exact revision and content lock.
-Neither product's version requires the other product to use the same number.
+From this checkout, use Python 3.11 or newer. The distributor uses only the
+standard library; `requirements.txt` is for developer validation.
 
-The published historical [`v1.0.0` release](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0) records the last pre-Hub source baseline,
-`0b5f4dd4aabeb92f97ca8f97852cc58a37dd3cf0`, including the Watcher evidence fix.
-It is the last baseline containing the old distribution mechanism and Watcher
-automatic collection hooks. It is not the current Hub and has no `.omh` content
-assets. The obsolete `v1.2.0` tag, release and attached assets were removed during
-the October 2026 history correction; they are not a retained recovery draft.
-The published [`v1.1.0` release](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
-records the corrected Hub baseline. Existing local backups and installed data
-are separate from remote release availability.
+```sh
+/absolute/python3 -B -m omh plan --harness codex
+/absolute/python3 -B -m omh install --harness codex --offline
+/absolute/python3 -B -m omh status --harness codex
+/absolute/python3 -B -m omh update --harness codex --offline
+/absolute/python3 -B -m omh uninstall --harness codex
+```
 
-Existing 1.2.0 caches, receipts and runtime directories keep their original
-identities. Selecting 1.1.0 is an explicit content migration: import its new
-lock/archive, preview the target changes and apply them separately. Do not edit
-installed receipts, relabel old caches or restore the retired Python installer.
-Publishing this version does not migrate an existing Home installation.
+`--harness codex` projects skill directories into `~/.codex/skills`;
+`--harness claude-code` uses `~/.claude/skills`. `--skills-root /absolute/path/skills`
+selects another directory. These standalone adapters install skills and their
+resources; they do not edit client configuration or global instructions. Codex
+uses directory skill names here. the previous owner's Codex adapter preserves native plugin
+identities and installs its registry-selected instructions.
 
-The [1.1.1 release notes](docs/releases/1.1.1.md) describe the selected Matt
-v1.3.2 instruction changes. Upstream review versions and OMH content versions
-are separate; an existing lock stays pinned until explicitly updated.
+Standalone state defaults to `~/.oh-my-harness` (`--home` overrides it). Python
+venvs live under its `runtimes/<group>/<identity>` directory. `--deployment-root`
+changes venv storage, independently of the skill target. `--python` selects the
+absolute bootstrap interpreter; otherwise an explicit `OMH_PYTHON` is used, then
+the interpreter running the standalone command. There is no project-venv or PATH
+search. `prepare` prepares runtimes without installing skills. `install` and
+`update` may also prepare them. `plan` and `status` never create environments or
+run pip. Commands require absolute paths for overrides.
 
-## Distribution boundary
+Use `--external-venv /absolute/venv` to reuse a verified environment without
+modifying it. Its Python version, imports and locked dependency versions must
+satisfy every selected group. No environment is deleted by uninstall; managed
+versions and failed partial attempts remain available for inspection/recovery.
+Explicit prepare can resume an interrupted OMH-owned environment at the same
+final path. A valid environment is reused based on its actual interpreter; unknown
+incompatible directories are preserved. Helpers never repair environments.
+Managed creation uses private executable copies; complete venvs are never moved. An offline group with dependencies needs hash-matching wheels under
+`<home>/cache/wheels`; the current groups use only the standard library.
 
-OMH publishes content and its contracts. It does not provide an installation CLI,
-a Python installable package, a second distribution engine, or maintained hook
-content. Audit and validation helpers belong to their consuming skills and are not
-automatic hooks. Compatibility must not restore the retired collector. The official installer is the Rust `` CLI from the repository; it can be built and used
-without the desktop application. Python is needed only for explicitly selected
-content helpers, not static skill distribution.
+The target's `.omh-owner.json` records its sole owner, file digests and managed
+paths. Updates restore missing files and can install an absent target. Unrelated
+files and empty directories in a projected skill are preserved; only a conflicting
+write or removal of a user-modified managed file blocks the transaction. A shared
+`.omh-owner.lock` serializes both distributors. Failed writes roll back through
+a durable journal; after a hard interruption use `python -B -m omh recover` with
+the same `--home` and target. Uncommitted rollback preserves post-failure user
+edits; committed recovery finishes cleanup without rejecting later user changes. Handoff
+between OMH and is explicit: uninstall with the current owner, inspect the
+target and recovery state, then install with the new owner. Neither takes over
+an existing installation automatically.
 
-Users distributing the content without maintain their own shell scripts,
-client adapters and ownership rules. Those tools are outside OMH's compatibility
-and installation policy. Do not treat a content release as permission to replace
-client configuration or take ownership of an existing installation.
+## Python helpers in either mode
 
-## Content and ownership
+OMH owns one implementation for venv preparation, validation and helper startup:
+`plugins/workflow/scripts/omh_runtime.py`, runtime protocol 1. It does not maintain
+an installed-state database. Standalone supplies its defaults; supplies its
+bootstrap Python, deployment root and optional external venv. remains the
+only owner of the previous owner's target receipts and transactions. Static distribution
+needs no Python.
 
-- `plugins/*/skills/*/SKILL.md` is the authored skill source. Invocation and
-  permission boundaries stay with each skill; importing does not invoke it.
-- `content-manifest.json` declares packages, the default composition and optional
-  runtime groups. It contains no target paths or executable install instructions.
-- The shared Rust exporter produces a `.omh` archive and a separate version lock
- pinning repository, revision, release asset and verified bytes. keeps the
-  installed receipt separately, protecting user changes and one physical owner.
-- Skill-associated helpers are packaged inside the owning skill. `doc-alignment`
-  declares its audit scripts and config; its explicit state directory does not
-  discover or migrate historical Watcher data. Only the `maintenance` and
-  `workflow` standard-library Python groups remain; no unused YAML venv is shipped.
-- `agents/global-instructions.md` owns distributed global policy; `AGENTS.md` owns
-  local source routing. [CONTEXT.md](CONTEXT.md) defines the domain language.
+The installation owner persists `.omh-runtime` beside the skill root (above the
+native plugin cache for Codex). Both launchers read that stable binding:
 
- uses its own `~/.` cache, receipts and selected final-path Python venvs.
-Static skill distribution needs no Python. Script runtimes use an explicitly
-prepared interpreter; project `.venv` and global Python are outside its ownership.
-Existing `.oh-my-harness` installations need an explicit adoption/migration
-with retained backups. Do not run historical installer commands or delete an old
-manager until its receipts, target references and recovery state have been handled.
+```sh
+sh /absolute/harness/.omh-runtime/run.sh workflow /absolute/skill/scripts/check_sop_ready.py /absolute/sop.md
+```
 
-## Consume a locked release
+On Windows, use `& 'C:\absolute\harness\.omh-runtime\run.ps1' workflow ...`.
+Arguments are forwarded as argv, including spaces and empty values. Neither a
+new agent session nor helper execution needs the original checkout or an install
+process's environment. An explicit absolute `OMH_PYTHON` overrides the bound venv
+for that invocation. Invalid overrides fail; validation never falls back or
+installs dependencies. The runtime isolates Python-specific environment settings.
+Each consuming skill documents its group and its own output/permission boundary.
 
-Select and review the release lock before importing it. Example commands use
-absolute paths and never enable hooks:
+## managed installation
+
+the previous owner's Rust CLI owns local target policy, content acquisition, plans, receipts,
+transactions and recovery. It calls OMH runtime code only for selected helper
+preparation or execution. It never calls the standalone installer.
 
 ```sh
  harness import --lock /absolute/omh.lock.json --archive /absolute/omh.omh
-# Read the returned source path; selecting and applying it are separate steps.
- harness sync --source /absolute/verified/cache
- harness plan refresh --harness claude-code,codex
- update skills --harness claude-code,codex
+ harness bootstrap --source /absolute/verified/cache
+ harness plan install --harness claude-code,codex
+ install skills --harness claude-code,codex
+ harness runtime prepare workflow --python /absolute/python3 \
+  --deployment-root /absolute/runtime-storage --offline
 ```
 
-For a new installation use `bootstrap --source` instead of `sync`, then
-`plan install` and `install skills`. Omit `--archive` only to acquire the exact
-HTTPS release artifact named by the locally selected lock. A complete verified
-cache works offline. Client loading/invocation needs separate acceptance from
-successful disk distribution. See .
+Use `sync --source` for an existing manager. Add `--external-venv` to reuse an
+existing OMH or other venv; records external lifecycle ownership and never
+removes it. Runtime preparation switches target bindings and receipt in one
+Rust journal. The [runtime/ownership contract](docs/adr/0030-independent-distribution-and-shared-runtime.md)
+and [compatibility audit](docs/runtime-compatibility-audit.md)
+defines the boundary. Native client loading/invocation remains a separate
+acceptance check from filesystem distribution and helper execution.
 
-## Validate and export content
+## Versions and validation
 
-Use an isolated developer venv with `requirements.txt`. Developer tests use Python;
-that does not make Python part of the previous owner's static distribution path.
+The latest published OMH content is **1.1.1**; the dual-mode implementation in this
+working tree is unpublished. The first supporting release and content lock
+must be selected separately after both repositories pass validation. Existing
+locks, caches, receipts and historical runtime markers retain their identities.
+A content release never migrates a Home installation by itself.
+
+The published [`v1.0.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0)
+records the earlier lifecycle and Watcher baseline. [`v1.1.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
+and [1.1.1](docs/releases/1.1.1.md) record the content-publishing line. The withdrawn old
+1.2.0 tag/release/assets were deleted, and are not a rollback coordinate. No old
+Watcher, hooks, git self-updater or historical state migration is restored.
+
+Use an isolated developer venv with `requirements.txt`:
 
 ```sh
-python -m unittest discover -s tests -p 'test_*.py'
-python -m unittest discover -s plugins/maintenance/tests -p 'test_*.py'
-python -m unittest discover -s plugins/workflow/tests -p 'test_*.py'
+python -B -m unittest discover -s tests -p 'test_*.py'
+python -B -m unittest discover -s plugins/maintenance/tests -p 'test_*.py'
+python -B -m unittest discover -s plugins/workflow/tests -p 'test_*.py'
 ```
 
-After all packaged edits and their tests, update generations once with
-`python scripts/update_plugin_generations.py --release-version <version>`, then
-run `python scripts/check_plugin_generations.py`. Preserve upstream notices and
-local adaptations. Generation identity verifies package bytes, not semantic
-instruction equivalence.
+After final packaged edits and owning tests, run
+`python scripts/update_plugin_generations.py --release-version <version>` once,
+then `python scripts/check_plugin_generations.py`. Plugin byte identity remains
+`sha256-canonical-plugin-tree-v1`. `plugins/*/skills/*/SKILL.md` is authoring
+source; caches and client projections are not.
 
-`` pins the shared Rust exporter. Build `cli` from that
- revision; do not copy its implementation into OMH. Run:
+`` pins the released Rust archive exporter. The archive
+contract remains compatible; it carries the shared runtime as package resources,
+and excludes the standalone installer. Export/import remains Rust-owned:
 
 ```sh
-python scripts/check_content_export.py /absolute/path/to/
+python scripts/check_content_export.py /absolute/
+# Candidate integration (includes new runtime binding and handoff checks):
+python scripts/check_content_export.py /absolute/candidate- --shared-runtime
 ```
 
-This checks export, import, skill-owned helpers and both client adapters
-inside a temporary Home. To produce release artifacts, from a clean committed
-checkout run the same pinned Rust executable:
+The new runtime flow requires provider-bearing content. Historical content
+without protocol 1 remains statically distributable; preparing a runtime reports
+that a supporting release must be selected. Candidate integration is validated
+locally against both worktrees; publishing and advancing either repository pin
+are separate steps requiring committed, available revisions.
 
-```sh
- harness export --source /absolute/oh-my-harness --output /absolute/omh.omh \
-  --repository https://github.com/zzzhty/oh-my-harness --revision <full-commit-sha> \
-  --url https://github.com/zzzhty/oh-my-harness/releases/download/v1.1.1/omh.omh
-```
-
-The exporter refuses existing outputs. Publish `omh.omh` and `omh.lock.json` on the
-release for that exact tested revision; never replace an existing version's
-assets. Normal CI validates Linux/macOS/Windows on Python 3.11/3.12. Release
-publication is explicit after those checks pass.
-
-## Decisions and history
-
-[ADR 0029](docs/adr/0029-pure-hub-with-skill-owned-helpers.md) records the 1.0/1.1
-version boundary, retired capabilities and the skill-owned helper migration.
-
-[ADR 0028](docs/adr/0028-versioned-content-publishing.md) records the installer,
-package and ownership transition and maps retired implementation tests to the previous owner's
-Rust gates. [ADR 0027](docs/adr/0027-report-watcher-evidence-without-execution-claims.md)
-owns historical report evidence semantics. Earlier ADRs, retired lifecycle runbooks and dated pre-rebuild entries in
-`dev_docs/` remain historical evidence; they do not authorize restarting the retired
-installer or collector. Current upstream selections and validation are recorded in
-[the upstream review record](dev_docs/mattpocock-upstream-review.md). No server, accounts or marketplace service is required.
+For release archives, use the pinned ` harness export` with the exact clean
+commit, repository and immutable release URL. Never replace an existing version's
+assets. CI validates Python 3.11/3.12 on Linux/macOS/Windows. See [ADR 0030](docs/adr/0030-independent-distribution-and-shared-runtime.md)
+for the current decision; [ADR 0028](docs/adr/0028-versioned-content-publishing.md)
+and [ADR 0029](docs/adr/0029-pure-hub-with-skill-owned-helpers.md) preserve the
+superseded pure-Hub boundary and retirement history.

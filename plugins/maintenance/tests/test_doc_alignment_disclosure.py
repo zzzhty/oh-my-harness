@@ -101,15 +101,14 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         ):
             self.assertIn(semantic, text)
         self.assertNotIn("compileall", text)
-        self.assertIn('omh_tooling_python="${OMH_PAYLOAD_PYTHON:?set explicit prepared payload interpreter}"', text)
-        self.assertNotRegex(text, r'"\$omh_tooling_python" (?!-B\b)')
+        self.assertIn('omh_runtime="<harness-root>/.omh-runtime/run.sh"', text)
         self.assertIn('compile(source.read_bytes(), str(source), "exec")', text)
         self.assertIn("In report-only mode, use the alignment rules as audit criteria", text)
 
     def test_documented_python_syntax_check_does_not_write_bytecode(self) -> None:
         text = ALIGNMENT.read_text(encoding="utf-8")
         match = re.search(
-            r'"\$omh_tooling_python" -B - <<\'PY\'\n(?P<program>.*?)\nPY',
+            r'sh "\$omh_runtime" maintenance - <<\'PY\'\n(?P<program>.*?)\nPY',
             text,
             flags=re.DOTALL,
         )
@@ -137,8 +136,8 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
     def test_audit_entry_with_documented_no_bytecode_flag_writes_no_cache(self) -> None:
         alignment = ALIGNMENT.read_text(encoding="utf-8")
         audit = DOC_AUDIT.read_text(encoding="utf-8")
-        self.assertIn('"$omh_tooling_python" -B scripts/audit_docs.py', alignment)
-        self.assertNotRegex(audit, r'"\$omh_tooling_python" (?!-B\b)')
+        self.assertIn('sh "$omh_runtime" maintenance scripts/audit_docs.py', alignment)
+        self.assertIn('sh "$omh_runtime" maintenance scripts/audit_docs.py', audit)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -191,7 +190,7 @@ class MaintenanceSkillInstructionContractTests(unittest.TestCase):
         self.assertIn("removal of physical disposable artifacts", housekeeping)
         self.assertIn("Keep it unchanged in this workflow", housekeeping)
         self.assertNotIn("Repair active semantic drift", housekeeping)
-        self.assertIn('"$omh_tooling_python" -B scripts/audit_docs.py', readme)
+        self.assertIn('sh "$omh_runtime" maintenance scripts/audit_docs.py', readme)
 
         doc_alignment_metadata = (
             MAINTENANCE_SKILLS / "doc-alignment" / "agents" / "openai.yaml"

@@ -1,5 +1,7 @@
 # ADR 0029: Skill-owned helpers
 
+> Installer/runtime exclusivity is superseded by [ADR 0030](0030-independent-distribution-and-shared-runtime.md). Retirement history below remains evidence.
+
 Status: accepted for the 1.1.0 preparation. Publication required separate approval;
 see the dated release-status correction below.
 

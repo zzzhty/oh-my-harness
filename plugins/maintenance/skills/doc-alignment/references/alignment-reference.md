@@ -72,7 +72,7 @@ Avoid names that encode old product semantics, local machine details, or impleme
 Use the helper when it fits:
 
 ```bash
-"${OMH_PAYLOAD_PYTHON:?set explicit prepared payload interpreter}" -B <skill-folder>/scripts/check_planning_tree.py <planning-root>
+sh "<harness-root>/.omh-runtime/run.sh" maintenance "<skill-folder>/scripts/check_planning_tree.py" <planning-root>
 ```
 
 
@@ -122,13 +122,14 @@ For doc-alignment helper validation:
 
 Resolve this skill's directory and run the following from it. Set
 `DOC_ALIGNMENT_AUDIT_ROOT` to the target Git worktree and `DOC_ALIGNMENT_STATE_DIR`
-to the explicitly approved output directory. Use the prepared payload interpreter.
+to the explicitly approved output directory. Use the owner-installed `maintenance` launcher; its persistent binding selects
+the interpreter, with an explicit validated `OMH_PYTHON` override when supplied.
 The helper location and audited repository are separate inputs.
 
 ```bash
-omh_tooling_python="${OMH_PAYLOAD_PYTHON:?set explicit prepared payload interpreter}"
-"$omh_tooling_python" -B scripts/audit_docs.py doctor --config config/repos.example.json
-"$omh_tooling_python" -B - <<'PY'
+omh_runtime="<harness-root>/.omh-runtime/run.sh"
+sh "$omh_runtime" maintenance scripts/audit_docs.py doctor --config config/repos.example.json
+sh "$omh_runtime" maintenance - <<'PY'
 from pathlib import Path
 
 for source in Path("scripts/doc_alignment").rglob("*.py"):

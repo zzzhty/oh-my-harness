@@ -6,13 +6,13 @@ This plugin preserves three distinct interactive workflows:
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
 
-The audit and validation helpers belong to their consuming skills. Static skill
+The audit and validation helpers belong to their consuming skills. static skill
 installation needs no Python, and preparing a payload runtime never enables hooks.
 
 `doc-alignment` owns `skills/doc-alignment/scripts/audit_docs.py`, its sibling
 `doc_alignment/` modules and `config/repos.example.json`. Resolve that skill's
-directory before running `"$omh_tooling_python" -B scripts/audit_docs.py`, with
-`omh_tooling_python="$OMH_PAYLOAD_PYTHON"` set to the exact prepared `maintenance`
+directory before running `sh "$omh_runtime" maintenance scripts/audit_docs.py`, with
+the owner-installed `.omh-runtime` launcher bound to the prepared `maintenance`
 interpreter. Set an explicit `--state-dir` or `DOC_ALIGNMENT_STATE_DIR` outside the
 audited repository; there is no automatic discovery or migration of Watcher state.
 The helper retains fresh audit/report generation, configured profiles and commit
