@@ -64,12 +64,23 @@ The goal document, milestone states, validation, commits or equivalent revisions
 Use the deterministic owners for the affected lifecycle:
 
 ```bash
-python <skill-folder>/scripts/check_goal_ready.py [--allow-draft] <goal-file>
-python <skill-folder>/scripts/check_goal_sequence.py <sequence-file> [--allow-draft]
-python <skill-folder>/scripts/check_md_links.py <planning-root>
-python <skill-folder>/scripts/check_todo_index.py [--mode active|closed|absent] [--archived-goal <archive-path>] <goal-file> <index-file> [<index-file> ...]
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_goal_ready.py" [--allow-draft] <goal-file>
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_goal_sequence.py" <sequence-file> [--allow-draft]
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_md_links.py" <planning-root>
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_todo_index.py" [--mode active|closed|absent] [--archived-goal <archive-path>] <goal-file> <index-file> [<index-file> ...]
 ```
 
 Creation/upgrade follows its Draft/Ready criteria and maintains active navigation. Execution advances only after scope, validation, review, rollback, risk and checkpoint evidence are recorded. Close must satisfy `references/close.md`, including every milestone, docs, temporary-cache disposition, active navigation, archive/delete handling and close evidence.
 
 Report goal path, lifecycle state, current/next milestone, triggered branches, authority and hard-stop boundary, validation evidence, blockers and residual risk.
+
+## Runtime
+
+Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
+on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
+group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
+skills root (or above its native plugin cache); read its group binding when
+resolving the harness root. The owner persists the interpreter there. An explicit
+absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
+override stops execution. If unprepared, ask the installation owner to prepare
+the group. Running a helper never creates an environment or installs packages.

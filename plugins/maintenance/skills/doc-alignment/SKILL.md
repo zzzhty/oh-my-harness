@@ -35,3 +35,14 @@ Use implementation mode when the user asks to align, update, reorganize, prune, 
 Report the mode, scope, current truth, entry points reviewed, evidence, changed or proposed semantics, moved or preserved history, validation commands and results, unresolved conflicts, and preserved legacy identifiers.
 
 Report-only completion requires the scoped inventory, evidence-backed findings, recommendations, and disclosed coverage gaps; unresolved target drift does not prevent completing the audit. Leave target repositories unchanged. Implementation completes when the affected guidance is aligned and its required checks pass.
+
+## Runtime
+
+Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
+on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
+group (`maintenance`), script path and arguments. Locate `.omh-runtime` beside the harness
+skills root (or above its native plugin cache); read its group binding when
+resolving the harness root. The owner persists the interpreter there. An explicit
+absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
+override stops execution. If unprepared, ask the installation owner to prepare
+the group. Running a helper never creates an environment or installs packages.

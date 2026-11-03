@@ -14,14 +14,15 @@ Resolve this skill's directory, then run the commands below from that directory.
 Set `DOC_ALIGNMENT_AUDIT_ROOT` to the target Git worktree for the example config.
 Set `DOC_ALIGNMENT_STATE_DIR` to a dedicated output directory outside the target
 repository. The helper requires this explicit state path (or `--state-dir`) and
-never discovers or migrates old Watcher logs/reports. Use the exact prepared
-`maintenance` interpreter from the ATM runtime receipt. These are skill audit
+never discovers or migrates old Watcher logs/reports. Use the owner-installed `maintenance` launcher below. Its persistent binding
+selects the prepared interpreter; an explicit absolute `OMH_PYTHON` overrides it
+and is validated without installing dependencies. These are skill audit
 helpers; importing content or preparing Python never enables hooks.
 
 ```bash
-atm_tooling_python="${ATM_PAYLOAD_PYTHON:?set explicit prepared payload interpreter}"
-"$atm_tooling_python" -B scripts/audit_docs.py doctor --config config/repos.example.json
-"$atm_tooling_python" -B scripts/audit_docs.py report --config config/repos.example.json --mode commit-dependent --mark-audited --digest
+omh_runtime="<harness-root>/.omh-runtime/run.sh"
+sh "$omh_runtime" maintenance scripts/audit_docs.py doctor --config config/repos.example.json
+sh "$omh_runtime" maintenance scripts/audit_docs.py report --config config/repos.example.json --mode commit-dependent --mark-audited --digest
 ```
 
 Run `scripts/audit_docs.py commit-counter` only when a separate threshold-status preview is needed; `doc report` computes eligibility itself.
@@ -29,7 +30,7 @@ Run `scripts/audit_docs.py commit-counter` only when a separate threshold-status
 Use `config/repos.json` when an approved private config exists. For one repository:
 
 ```bash
-"$atm_tooling_python" -B scripts/audit_docs.py audit --repo <repo-path> --name <repo-name> --print-report
+sh "$omh_runtime" maintenance scripts/audit_docs.py audit --repo <repo-path> --name <repo-name> --print-report
 ```
 
 When commit-dependent report skips a repository, record it as skipped. Configuration changes can make a repository due below its commit threshold. A normal repository audit covers its configured profile set; use a profile selector only for an explicit narrow run and do not treat unselected profiles as disabled. If any repository fails, surface the repository, command or path, and exact failure text.

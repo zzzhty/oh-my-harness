@@ -23,3 +23,14 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 - `Runtime hard stops`: authorization boundaries stop the affected action immediately; technical recovery changes strategy after the first two runtime-reported native Goal failures and honors the third native Codex Goal stop; see the [goal contract](skills/long-running-goal/SKILL.md).
 
 [Planning preflight](skills/long-running-goal/components/planning-preflight.md) owns required methods, sourced completion/reuse/skip evidence, and authorization coverage. [Sequence child goals](skills/long-running-goal/references/sequence-child-goals.md) applies that contract to the parent and child registers. `grill-with-docs` remains the explicit Matt entrypoint; Workflow composes its underlying methods.
+
+## Helper runtime
+
+`long-running-goal`, `sop` and `summary-in-html` use the `workflow` Python group.
+Invoke their helpers through the owner-installed `.omh-runtime/run.sh` (POSIX)
+or `run.ps1` (Windows), with the group followed by script path and argv. OMH owns
+`scripts/omh_runtime.py` for environment preparation, validation and startup;
+ATM calls that implementation with explicit runtime paths. It does not call
+the standalone installer or create a second OMH installed-state database.
+Bindings persist across sessions. An explicit absolute `OMH_PYTHON` selects a
+validated venv and invalid overrides fail without fallback.

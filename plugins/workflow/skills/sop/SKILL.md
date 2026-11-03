@@ -32,8 +32,8 @@ Resolve the newest request against the existing SOP before taking action:
 6. Validate:
 
 ```bash
-python <skill-folder>/scripts/check_sop_ready.py [--allow-draft] <sop-file>
-python <skill-folder>/scripts/check_sop_links.py <sop-root-or-file>
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_sop_ready.py" [--allow-draft] <sop-file>
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_sop_links.py" <sop-root-or-file>
 ```
 
 ## Execute
@@ -49,3 +49,14 @@ python <skill-folder>/scripts/check_sop_links.py <sop-root-or-file>
 ## Completion
 
 A reusable SOP has eight core sections: Trigger, Inputs, Execution Harness, Allowed Actions, Steps, Validation, Output Contract, and Stop Conditions. Each step names its action and expected output; add local failure handling or completion criteria only when the shared stop and validation rules are insufficient. Recovery is optional: when used, declare its shared or step-local path, any retry limit and required revalidation; an explicitly terminating procedure may stop directly. Summary, preconditions, separate working directory, forbidden actions, update rules, and reuse prompt are optional. The checker accepts only `Ready` by default; `--allow-draft` validates a non-executable `Draft`. Passing a check never grants additional action permissions.
+
+## Runtime
+
+Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
+on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
+group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
+skills root (or above its native plugin cache); read its group binding when
+resolving the harness root. The owner persists the interpreter there. An explicit
+absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
+override stops execution. If unprepared, ask the installation owner to prepare
+the group. Running a helper never creates an environment or installs packages.

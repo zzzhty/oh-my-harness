@@ -98,8 +98,8 @@ The reusable resume prompt must direct the next agent to re-read the parent and 
 Validate with the current Python interpreter:
 
 ```bash
-python <skill-folder>/scripts/check_goal_sequence.py <sequence-file>
-python <skill-folder>/scripts/check_goal_sequence.py <sequence-file> --allow-draft
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_goal_sequence.py" <sequence-file>
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_goal_sequence.py" <sequence-file> --allow-draft
 ```
 
 The second form permits the parent to remain lifecycle `Draft`; registered future children may remain `Draft` in either mode. Neither mode permits a missing or inconsistent preflight. The checker composes `check_goal_ready.py` for the parent and every linked live or archived child goal, then validates markers, register identity, strict order, dependencies, current-child cardinality, child/parent state mapping, handoff evidence, promotion policy, closeout revisions, and integration/Close ordering. Fix legacy narrative plans by migrating them to the canonical template; do not add a fallback parser.

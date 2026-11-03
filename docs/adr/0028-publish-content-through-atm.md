@@ -4,6 +4,8 @@ status: accepted
 
 # Publish OMH content through ATM
 
+> Installer/runtime exclusivity is superseded by [ADR 0030](0030-independent-distribution-and-shared-runtime.md). Retirement history below remains evidence.
+
 OMH owns versioned skills, script resources, compositions and content releases.
 ATM owns installation, target paths, receipts, isolated runtimes and recovery.
 The user authorized this transition and retirement of skill-watcher collection.
