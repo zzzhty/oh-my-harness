@@ -23,7 +23,7 @@ Use `maintenance:doc-alignment` instead when the task is to find stale or contra
 Before mode-specific authoring, both document types share only this evidence-inventory stage. Collect a read-only inventory:
 
 ```bash
-python <skill-folder>/scripts/collect_summary_inputs.py --root <repo-root> --scope <scope-path> --out <artifact>.inputs.json
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/collect_summary_inputs.py" --root <repo-root> --scope <scope-path> --out <artifact>.inputs.json
 ```
 
 Inspect candidate evidence from source, README/AGENTS files, package configuration, tests, scripts, and nearby docs. Record only the files and source-of-truth status needed to support the requested scope; mode-specific authoring determines later inspection.
@@ -38,14 +38,14 @@ Inspect candidate evidence from source, README/AGENTS files, package configurati
 1. Read `references/artifact-schema.md`, write the structured JSON next to the target, and render:
 
 ```bash
-python <skill-folder>/scripts/render_summary_html.py --input <summary>.json --out <summary>.html
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/render_summary_html.py" --input <summary>.json --out <summary>.html
 ```
 
 2. When the user explicitly requests generated visuals, read `references/visual_asset_contract.md` and include accessible asset metadata. Otherwise keep the artifact text-first.
 3. Validate and fix failures before completion:
 
 ```bash
-python <skill-folder>/scripts/check_summary_html.py <summary>.html
+sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_summary_html.py" <summary>.html
 ```
 
 ## Completion
@@ -53,3 +53,14 @@ python <skill-folder>/scripts/check_summary_html.py <summary>.html
 Report the scope, document type, HTML path, supporting assets, evidence paths or commands, validation result, and blind spots.
 
 The result is standalone, source-grounded, and useful without remote fonts or scripts. Reader progress controls are navigation, not verification evidence. Preserve an existing summary unless replacement was requested; otherwise choose a more specific or versioned filename.
+
+## Runtime
+
+Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
+on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
+group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
+skills root (or above its native plugin cache); read its group binding when
+resolving the harness root. The owner persists the interpreter there. An explicit
+absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
+override stops execution. If unprepared, ask the installation owner to prepare
+the group. Running a helper never creates an environment or installs packages.

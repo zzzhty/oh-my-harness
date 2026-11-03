@@ -41,7 +41,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "Ask only at a runtime hard stop",
             "Never infer cleanup consent",
             "Use native goal tools only on an explicit active-conversation request",
-            "check_goal_ready.py [--allow-draft] <goal-file>",
+            'check_goal_ready.py" [--allow-draft] <goal-file>',
         ):
             self.assertIn(semantic, text)
         create = REFERENCES["create"].read_text(encoding="utf-8")
@@ -121,7 +121,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         template = SEQUENCE_TEMPLATE.read_text(encoding="utf-8")
 
         self.assertIn(
-            "scripts/check_goal_sequence.py <sequence-file> [--allow-draft]",
+            'scripts/check_goal_sequence.py" <sequence-file> [--allow-draft]',
             skill,
         )
         self.assertIn("Long-Running Goal Sequence", reference)

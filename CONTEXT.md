@@ -15,7 +15,7 @@ The bare name declared by a skill's `SKILL.md` frontmatter and used as the repos
 _Avoid_: harness-independent invocation identity, plugin-qualified identity, physical directory name
 
 **Harness**:
-A client target resolved and managed by ATM according to local policy; content imports do not select or enable targets.
+A client target resolved by its installation owner according to local policy; content imports do not select or enable targets.
 _Avoid_: skills target plus instructions target, mode, product name without a registry entry
 
 **Harness Registry**:
@@ -81,9 +81,18 @@ A locally selected immutable source revision, release artifact and verified cont
 _Avoid_: latest-version selector, install state
 
 **Install Receipt**:
-ATM's record of actual target roots, owned resources, runtime references and recovery state.
+The installation owner's record of actual target roots, owned resources, runtime references and recovery state. OMH standalone and ATM keep separate receipts for separate owned targets.
 _Avoid_: upstream manifest, content cache
 
 **Composition**:
 A named complete set of content packages in one release; native plugin identities always describe whole packages.
 _Avoid_: partial native plugin, automatically enabled hooks
+
+**Standalone Distribution**:
+OMH directory skill projection with an OMH target receipt, shared owner lock and recoverable file journal. ATM native adapters retain their own policy and receipts.
+
+**Runtime Deployment Root**:
+Storage for final-path Python venvs, distinct from a harness skill target. OMH owns the shared preparation/verification/startup implementation; the installation owner supplies defaults or explicit paths.
+
+**Runtime Binding**:
+Owner-generated `.omh-runtime` files that persist the interpreter and dependency contract across sessions. `OMH_PYTHON` is an explicit invocation override, never an automatic PATH fallback.
