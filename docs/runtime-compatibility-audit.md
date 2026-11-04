@@ -1,5 +1,15 @@
 # Runtime compatibility and recovery audit
 
+> Audit context — 2026-11-03: the compatibility decisions below were recorded
+> before publication and remain part of the implementation. Their publication
+> status and validation limits describe that checkpoint. The later
+> [1.1.1 reissue](releases/1.1.1.md) and
+> [ADR 0030 lifecycle update](adr/0030-independent-distribution-and-shared-runtime.md#publication-and-acceptance-update--2026-11-03)
+> record the subsequent native CI, ATM lock adoption and separately authorized
+> Linux Home acceptance. The original audit text is retained below.
+
+## Implementation audit checkpoint — before publication
+
 Scope: the unpublished OMH standalone / ATM shared-runtime implementation. The
 2026-11-03 follow-up asks for useful recovery and less compatibility machinery.
 Published locks, receipts, archives and retired-feature history are preserved.
