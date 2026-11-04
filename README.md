@@ -109,15 +109,22 @@ acceptance check from filesystem distribution and helper execution.
 
 ## Versions and validation
 
-The latest published OMH content is **1.1.1**; the dual-mode implementation in this
-working tree is unpublished. The first supporting release and content lock
-must be selected separately after both repositories pass validation. Existing
-locks, caches, receipts and historical runtime markers retain their identities.
-A content release never migrates a Home installation by itself.
+The latest published OMH content is **1.1.1, reissued on 2026-11-03**. Its source
+checkout includes the standalone Python distributor; its content archive includes
+the shared runtime provider. 
+adopted the verified reissued assets. See the [release record](docs/releases/1.1.1.md)
+for exact source and asset coordinates, CI coverage and the separately authorized
+Linux Home refresh.
+
+The reissue explicitly replaced the original 1.1.1 tag and assets. Old locks still
+identify the superseded bytes and need a reviewed update; the version number alone
+does not identify the payload. Existing installations change through their owner's
+explicit plan/apply workflow. Publication does not migrate a Home installation.
 
 The published [`v1.0.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0)
 records the earlier lifecycle and Watcher baseline. [`v1.1.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
-and [1.1.1](docs/releases/1.1.1.md) record the content-publishing line. The withdrawn old
+and the original 2026-10-30 1.1.1 publication record the content-publishing line; the reissue
+adds independent distribution and the shared runtime. The withdrawn old
 1.2.0 tag/release/assets were deleted, and are not a rollback coordinate. No old
 Watcher, hooks, git self-updater or historical state migration is restored.
 
@@ -141,19 +148,23 @@ and excludes the standalone installer. Export/import remains Rust-owned:
 
 ```sh
 python scripts/check_content_export.py /absolute/
-# Candidate integration (includes new runtime binding and handoff checks):
-python scripts/check_content_export.py /absolute/candidate- --shared-runtime
+# Shared-runtime integration (includes binding and owner-handoff checks):
+python scripts/check_content_export.py /absolute/compatible- --shared-runtime
 ```
 
-The new runtime flow requires provider-bearing content. Historical content
-without protocol 1 remains statically distributable; preparing a runtime reports
-that a supporting release must be selected. Candidate integration is validated
-locally against both worktrees; publishing and advancing either repository pin
-are separate steps requiring committed, available revisions.
+The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
+provider remains statically distributable; explicit runtime preparation reports
+`HARNESS_RUNTIME_PROVIDER_REQUIRED` until supporting content is selected. Native
+CI covers standalone behavior and the previous owner's basic runtime/helper flow; the full paired
+external-venv, handoff and relocation check has Linux evidence. Native client
+skill discovery, model calls and interactive Home GUI use are outside the reissue's
+acceptance claims. The [release record](docs/releases/1.1.1.md) separates these scopes.
 
 For release archives, use the pinned ` harness export` with the exact clean
-commit, repository and immutable release URL. Never replace an existing version's
-assets. CI validates Python 3.11/3.12 on Linux/macOS/Windows. See [ADR 0030](docs/adr/0030-independent-distribution-and-shared-runtime.md)
+commit, repository and versioned release URL. Keep published versions' assets
+immutable; the 2026-11-03 reissue was an explicitly authorized exception recorded
+with both old and new coordinates. CI validates Python 3.11/3.12 on
+Linux/macOS/Windows. See [ADR 0030](docs/adr/0030-independent-distribution-and-shared-runtime.md)
 for the current decision; [ADR 0028](docs/adr/0028-versioned-content-publishing.md)
 and [ADR 0029](docs/adr/0029-pure-hub-with-skill-owned-helpers.md) preserve the
 superseded pure-Hub boundary and retirement history.

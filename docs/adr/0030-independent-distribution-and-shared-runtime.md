@@ -5,6 +5,12 @@ installation require separate actions. This supersedes the installer/runtime
 exclusivity in ADR 0028 and ADR 0029. Their retirement of Watcher, hooks, old report
 readers and git self-update remains in force.
 
+> Lifecycle update — 2026-11-03: this decision was implemented and published in
+> the [1.1.1 reissue](../releases/1.1.1.md), then applied in a
+> separately authorized Linux Home refresh. References below to unpublished
+> generations and fixed content pins describe the implementation phase. The
+> architecture and ownership decision remains in force.
+
 ## Decision
 
 OMH is independently usable. A standard-library Python entrypoint (`python -m omh`)
@@ -130,3 +136,18 @@ behavior. File-based conflict protection replaces whole-directory drift rejectio
 in standalone projections. Owner fields are semantic identities; formatting and
 local annotations do not confer a different owner. Target transactions still
 compare exact before-images, and runtime/target overlap checks remain bidirectional.
+
+## Publication and acceptance update — 2026-11-03
+
+OMH [PR #5](https://github.com/zzzhty/oh-my-harness/pull/5) merged as
+`74f6145b77041bd50654bbe3e53a7900399a5c68`; the v1.1.1 tag and reissued assets
+integrated the provider.
+Publication, consumer-lock selection and Home application were distinct actions.
+
+OMH's six native CI jobs and the previous owner's ten main CI jobs passed. The native CLI
+smoke now exercises both runtime groups and all four installed helper consumers
+on Linux/macOS/Windows. Full paired external reuse, owner handoff and relocation
+remain locally verified on Linux. The later Linux Home acceptance verified owned
+files, preserved configuration, persistent helper startup and Python 3.13.15;
+it did not test native client skill discovery, model calls or an interactive GUI
+session. Exact coordinates and evidence are owned by the [release record](../releases/1.1.1.md).
