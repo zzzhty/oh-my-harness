@@ -13,6 +13,7 @@ REFERENCES = {
     "sequence": SKILL_DIR / "references" / "sequence-child-goals.md",
     "cutover": SKILL_DIR / "references" / "production-cutover.md",
     "execute": SKILL_DIR / "references" / "execute-and-close.md",
+    "recovery": SKILL_DIR / "references" / "adaptive-recovery.md",
     "close": SKILL_DIR / "references" / "close.md",
 }
 PREFLIGHT = SKILL_DIR / "components" / "planning-preflight.md"
@@ -56,6 +57,9 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
         # Instruction-contract regressions, not a simulation of native Goal counting.
         skill = SKILL.read_text(encoding="utf-8")
         execute = REFERENCES["execute"].read_text(encoding="utf-8")
+        recovery = REFERENCES["recovery"].read_text(encoding="utf-8")
+        self.assertIn("adaptive-recovery.md", execute)
+        self.assertIn("references/adaptive-recovery.md", skill)
         for clause in (
             "After the first runtime-reported native Goal failure:", "After the second runtime-reported native Goal failure:",
             "At the third runtime-reported native Goal failure/stop:", "Once that native boundary occurs, do not launch another recovery attempt",
@@ -67,7 +71,7 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "without pointless attempts", "do not skip a child",
         ):
             with self.subTest(clause=clause):
-                self.assertIn(clause, execute)
+                self.assertIn(clause, recovery)
         self.assertIn("neither implements a second counter", skill)
         self.assertIn("Native stop signals take precedence", skill)
         self.assertNotIn("at least three attempts or distinct approaches", skill)
@@ -95,7 +99,9 @@ class LongRunningGoalDisclosureTests(unittest.TestCase):
             "Enter Close",
         ):
             self.assertIn(trigger, skill)
-        for reference in REFERENCES.values():
+        for name, reference in REFERENCES.items():
+            if name == "recovery":
+                continue  # Conditional failure method, not a lifecycle completion branch.
             text = reference.read_text(encoding="utf-8")
             self.assertIn("Completion criterion:", text)
 
