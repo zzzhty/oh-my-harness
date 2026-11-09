@@ -15,7 +15,8 @@ from urllib.parse import quote
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SHARED = Path(__file__).resolve().parents[3] / "scripts"
+OMH_SHARED_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
+SHARED = OMH_SHARED_SCRIPTS
 sys.path.insert(0, str(SHARED))
 DEFAULT_TEMPLATE = SCRIPT_DIR.parent / "templates" / "summary.html"
 WALKTHROUGH_STYLES = """

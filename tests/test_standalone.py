@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -162,6 +163,79 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
         self.assertIn('Unowned',result['error']['message'])
         self.assertFalse((self.skills.parent/st.OWNER).exists())
+    @unittest.skipIf(os.name=='nt','POSIX launcher shim')
+    def test_launcher_shim_imports_from_a_hostile_source_path(self):
+        source = str(self.source)
+        self.assertIn("'", source)
+        self.assertIn('$()', source)
+        self.assertIn('空间', source)
+        self.install()
+        shim = Path.home()/'.local/bin/omh'
+        script = shim.read_text(encoding='utf-8')
+        self.assertIn('空间', script)
+        self.assertNotIn('\\u7a7a', script)
+        self.assertIn('$()', script)
+        self.assertIn(shlex.quote(source), script)
+        env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
+        env['PATH'] = ''
+        result = subprocess.run([str(shim), '--help'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('usage', result.stdout.lower())
+    def test_status_json_matches_runtime_summary(self):
+        self.install()
+        code, result = self.call_overview()
+        self.assertEqual(code, 0, result)
+        self.assertEqual([item['id'] for item in result['runtimes']], ['workflow'])
+        self.assertRegex(result['runtimes'][0]['version'], r'^3\.\d+')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            text_code = st.main(['status', '--source', str(self.source), '--home', str(self.home)])
+        self.assertEqual(text_code, 0)
+        text = output.getvalue()
+        self.assertIn(f"workflow({result['runtimes'][0]['version']})", text)
+        self.assertIn('—', text)
+        if os.name != 'nt': self.assertIn('→', text)
+    def test_home_lock_refuses_competing_index_update(self):
+        self.home.mkdir(parents=True)
+        program = (
+            'import sys\nfrom pathlib import Path\nfrom omh import standalone as st\n'
+            'try:\n'
+            '    st.remember_target(Path(sys.argv[1]), Path(sys.argv[2]), "codex", Path(sys.argv[3]), True)\n'
+            'except st.rt.RuntimeFailure as error:\n'
+            '    print(error.code)\n'
+            '    raise SystemExit(1)\n'
+        )
+        with rt.lock(self.home / st.HOME_LOCK):
+            result = subprocess.run([sys.executable, '-B', '-c', program, str(self.home), str(self.root/'t'), str(self.root/'skills')],
+                cwd=ROOT, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('HARNESS_RUNTIME_BUSY', result.stdout)
+        st.remember_target(self.home, self.root/'one', 'codex', self.root/'one'/'skills', True)
+        st.remember_target(self.home, self.root/'two', 'claude-code', self.root/'two'/'skills', True)
+        recorded = json.loads((self.home / st.TARGETS_FILE).read_text())
+        self.assertEqual(set(recorded), {str(self.root/'one'), str(self.root/'two')})
+    def test_stdout_reconfigure_failure_is_a_json_error(self):
+        class Stream(io.TextIOBase):
+            def __init__(self):
+                super().__init__()
+                self.parts = []
+            def write(self, text):
+                self.parts.append(text)
+                return len(text)
+            def reconfigure(self, **kwargs):
+                raise OSError('refused')
+        stream = Stream()
+        with contextlib.redirect_stdout(stream):
+            code = st.main(['status', '--home', str(self.home)])
+        self.assertEqual(code, 1)
+        payload = json.loads(''.join(stream.parts))
+        self.assertEqual(payload['error']['code'], 'OMH_INVALID')
+        self.assertIn('stdout encoding', payload['error']['message'])
+    def test_stdlib_group_does_not_install_pip(self):
+        root = Path(self.prepared['root'])
+        pip = root / ('Scripts/pip.exe' if os.name == 'nt' else 'bin/pip')
+        self.assertFalse(pip.exists())
+        self.assertTrue((root / 'pyvenv.cfg').is_file())
     @unittest.skipIf(os.name=='nt','POSIX launcher shim')
     def test_launcher_shim_honors_an_explicit_bin_directory(self):
         bin_dir = self.root/'custom bin 空间'
@@ -414,6 +488,15 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(list(actual.iterdir()),[])
 
 class RuntimeTests(unittest.TestCase):
+    def test_failed_process_keeps_stderr_and_stdout_tails(self):
+        with self.assertRaises(rt.RuntimeFailure) as caught:
+            rt.run_process(sys.executable, ['-c', 'import sys; sys.stderr.write("pip exploded\\n"); raise SystemExit(3)'])
+        self.assertIn('stderr:', str(caught.exception))
+        self.assertIn('pip exploded', str(caught.exception))
+        with self.assertRaises(rt.RuntimeFailure) as caught:
+            rt.run_process(sys.executable, ['-c', 'import sys; sys.stdout.write("ensurepip missing\\n"); raise SystemExit(1)'])
+        self.assertIn('stdout:', str(caught.exception))
+        self.assertIn('ensurepip missing', str(caught.exception))
     def test_lock_grammar_and_platform_paths(self):
         spec={**SPEC,'requirementsLock':'requirements.lock'}
         valid='FakeDep==1.0 --hash=sha256:'+'a'*64+'\n'

@@ -16,6 +16,31 @@ HELPERS = (
     ('summary-in-html', 'collect_summary_inputs.py', 'workflow'),
     ('doc-alignment', 'audit_docs.py', 'maintenance'),
 )
+PROJECTED_HELPERS = (
+    'long-running-goal/scripts/check_goal_ready.py',
+    'long-running-goal/scripts/check_goal_sequence.py',
+    'long-running-goal/scripts/check_md_links.py',
+    'long-running-goal/scripts/check_todo_index.py',
+    'summary-in-html/scripts/render_summary_html.py',
+    'sop/scripts/check_sop_links.py',
+    'sop/scripts/check_sop_ready.py',
+)
+SHARED_PROBE = '''
+import importlib.util
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+sys.path.insert(0, str(path.parent))
+spec = importlib.util.spec_from_file_location("omh_helper_probe_" + path.stem, path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+shared = Path(module.OMH_SHARED_SCRIPTS).resolve()
+marker = shared / "markdown_contract.py"
+if not marker.is_file():
+    raise SystemExit(f"shared module missing: {marker}")
+print(shared)
+'''
 
 
 def standalone(env, *arguments, timeout=120):
@@ -56,6 +81,17 @@ def check_installed_helpers(home, env):
     for skill, helper, group in HELPERS:
         result = launcher(home, env, home / '.codex/skills' / skill / 'scripts' / helper, '--help', group=group)
         assert result.returncode == 0, (skill, result.stdout, result.stderr)
+    support = (home / '.codex/.omh-support/workflow').resolve()
+    assert (support / 'markdown_contract.py').is_file()
+    for relative in PROJECTED_HELPERS:
+        script = home / '.codex/skills' / relative
+        text = script.read_text(encoding='utf-8')
+        assert 'OMH_SHARED_SCRIPTS = Path(' in text, relative
+        assert 'parents[3]' not in text, relative
+        result = subprocess.run([sys.executable, '-B', '-c', SHARED_PROBE, str(script)],
+            capture_output=True, text=True, encoding='utf-8', timeout=30)
+        assert result.returncode == 0, (relative, result.stdout, result.stderr)
+        assert result.stdout.strip() == str(support), (relative, result.stdout, result.stderr)
 
 
 def main():
@@ -81,10 +117,13 @@ def main():
         assert status.returncode == 0 and target['state'] == 'installed' and target['owner'] == 'omh'
         assert target['modified'] == {} and target['recoveryRequired'] is False
         overview = subprocess.run([str(Path(sys.executable).absolute()), '-B', '-m', 'omh', 'status',
-            '--home', str(state)], cwd=ROOT, env=env, capture_output=True, text=True,
-            encoding='utf-8', errors='replace', timeout=60)
+            '--home', str(state)], cwd=ROOT, env=env, capture_output=True, timeout=60)
         assert overview.returncode == 0, overview.stdout + overview.stderr
-        assert str(skills.parent) in overview.stdout and 'installed' in overview.stdout
+        overview_text = overview.stdout.decode('utf-8')
+        assert '—'.encode('utf-8') in overview.stdout
+        assert str(skills.parent) in overview_text and 'installed' in overview_text
+        assert {'maintenance', 'workflow'} <= {item['id'] for item in payload['runtimes']}
+        assert all(item['version'] for item in payload['runtimes'])
         receipt_files = json.loads((home / '.codex/.omh-owner.json').read_text())['files']
         projected = {name.split('/')[1] for name in receipt_files
                      if name.startswith('skills/') and name.count('/') >= 2}

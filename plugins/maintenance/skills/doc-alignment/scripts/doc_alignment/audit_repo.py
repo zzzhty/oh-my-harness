@@ -295,15 +295,23 @@ def find_broken_links(repo: Path, doc_files: list[Path]) -> list[dict[str, Any]]
             if target.startswith("<") and target.endswith(">"):
                 target = target[1:-1]
             target_path = (file_path.parent / target).resolve()
+            line = text[: match.start()].count("\n") + 1
             try:
-                target_path.relative_to(repo)
+                target_path.relative_to(repo.resolve())
             except ValueError:
+                broken.append(
+                    {
+                        "file": file_path.relative_to(repo).as_posix(),
+                        "line": line,
+                        "target": match.group(1),
+                        "reason": "outside-repository",
+                    }
+                )
                 continue
             exists = (
                 target_path.is_dir() if target.endswith("/") else target_path.exists()
             )
             if not exists:
-                line = text[: match.start()].count("\n") + 1
                 broken.append(
                     {
                         "file": file_path.relative_to(repo).as_posix(),
@@ -558,13 +566,22 @@ def build_findings(
             )
         )
     for item in broken_links:
+        outside = item.get("reason") == "outside-repository"
         findings.append(
             classify_finding(
                 {
                     "severity": "High",
-                    "title": "Markdown link target does not resolve",
+                    "title": (
+                        "Markdown link target is outside the repository"
+                        if outside
+                        else "Markdown link target does not resolve"
+                    ),
                     "evidence": f"{item['file']}:{item['line']} -> {item['target']}",
-                    "recommendation": "Update the link or move the target into the documented location.",
+                    "recommendation": (
+                        "Retarget the link inside the repository or mark it as an external URL."
+                        if outside
+                        else "Update the link or move the target into the documented location."
+                    ),
                 },
                 policy=finding_policy,
             )

@@ -12,7 +12,8 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote, urlsplit
 
-SHARED = Path(__file__).resolve().parents[3] / "scripts"
+OMH_SHARED_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
+SHARED = OMH_SHARED_SCRIPTS
 sys.path.insert(0, str(SHARED))
 
 from markdown_contract import render_errors, strip_fenced_blocks  # noqa: E402
@@ -322,7 +323,13 @@ def _relative_markdown_target(
     if split.scheme or split.netloc or not decoded_path or portable_absolute:
         errors.append(f"{subject} must target a relative local Markdown file; found {target}")
         return None
-    resolved = (sequence_path.parent / decoded_path).resolve()
+    sequence_root = sequence_path.parent.resolve()
+    resolved = (sequence_root / decoded_path).resolve()
+    try:
+        resolved.relative_to(sequence_root)
+    except ValueError:
+        errors.append(f"{subject} target escapes the sequence directory: {target}")
+        return None
     if resolved.suffix.casefold() != ".md":
         errors.append(f"{subject} must target a Markdown file; found {target}")
         return None

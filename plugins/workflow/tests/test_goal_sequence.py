@@ -1033,6 +1033,19 @@ Critical-path time-cost distribution: Not required: rough range recorded.
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("child-a-decisions.md", result.stderr)
 
+    def test_live_goal_link_must_stay_inside_the_sequence_directory(self) -> None:
+        with self.sequence_workspace() as workspace:
+            outside = workspace.parent / "outside.md"
+            outside.write_text((workspace / "children" / "child-a.md").read_text(encoding="utf-8"), encoding="utf-8")
+            self.replace_once(
+                workspace / "sequence.md",
+                "[child-a](children/child-a.md)",
+                "[child-a](../outside.md)",
+            )
+            result = self.run_sequence(workspace)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("escapes the sequence directory", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

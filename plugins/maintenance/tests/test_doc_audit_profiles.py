@@ -341,6 +341,30 @@ class DocAlignmentAuditProfileTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertFalse((state_dir / "repo-state.json").exists())
 
+    def test_links_outside_the_repository_are_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = initialize_repo(Path(tmp))
+            (repo / "README.md").write_text(
+                "[Up](../outside.md)\n[Root](/omh-outside-link.md)\n",
+                encoding="utf-8",
+            )
+            run(["git", "add", "README.md"], repo)
+            run(["git", "commit", "-m", "links"], repo)
+            result = audit_repository(
+                repo=repo,
+                name="demo",
+                docs=["README.md"],
+                check_change_alignment=False,
+            )
+
+        self.assertEqual(
+            [item.get("reason") for item in result["broken_links"]],
+            ["outside-repository", "outside-repository"],
+        )
+        self.assertTrue(
+            any(item["title"] == "Markdown link target is outside the repository" for item in result["findings"])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

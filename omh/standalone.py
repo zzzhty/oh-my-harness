@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 import tomllib
 
@@ -38,6 +39,9 @@ SHIM_NAME = 'omh'
 # ADR 0034: the home keeps an index of targets it installed. The index is a
 # hint for status; each target's receipt remains the truth and is verified live.
 TARGETS_FILE = 'targets.json'
+# Serializes home-index read-modify-write. Non-blocking, same as the target lock.
+HOME_LOCK = '.omh-home.lock'
+SHARED_ASSIGNMENT = re.compile(br'(?m)^OMH_SHARED_SCRIPTS[ \t]*=[ \t]*[^\r\n]+')
 
 def load_targets(home):
     raw = data(home / TARGETS_FILE)
@@ -48,10 +52,11 @@ def save_targets(home, value):
     else: (home / TARGETS_FILE).unlink(missing_ok=True)
 
 def remember_target(home, root, harness, skills, installed):
-    targets = load_targets(home)
-    if installed: targets[str(root)] = dict(harness=harness, skillsRoot=str(skills))
-    else: targets.pop(str(root), None)
-    save_targets(home, targets)
+    with rt.lock(home / HOME_LOCK):
+        targets = load_targets(home)
+        if installed: targets[str(root)] = dict(harness=harness, skillsRoot=str(skills))
+        else: targets.pop(str(root), None)
+        save_targets(home, targets)
 
 def target_state(home, root):
     item = dict(target=str(root))
@@ -89,31 +94,37 @@ def overview(home):
 def clean(item):
     return item['state'] == 'installed' and not item['modified'] and not item['recoveryRequired']
 
-def runtime_summary(home):
+def runtime_version(prepared):
+    root = prepared.get('root') if isinstance(prepared, dict) else None
+    if not root: return ''
+    line = data(Path(root) / 'pyvenv.cfg')
+    if not line: return ''
+    for part in line.decode('utf-8', 'replace').splitlines():
+        if part.startswith('version = '): return part[10:].strip()
+    return ''
+
+def runtime_entries(home):
+    """Group id and pyvenv.cfg version. This is the machine form of the text summary."""
     raw = data(home / 'runtime-state.json')
-    if raw is None: return ''
-    summary = []
-    for group, prepared in sorted(json.loads(raw).items()):
-        config = Path(prepared['root']) / 'pyvenv.cfg'
-        version = ''
-        line = data(config)
-        if line:
-            for part in line.decode('utf-8', 'replace').splitlines():
-                if part.startswith('version = '): version = part[10:].strip()
-        summary.append(f"{group}({version})" if version else group)
-    return ' '.join(summary)
+    if raw is None: return []
+    return [dict(id=group, version=runtime_version(prepared))
+            for group, prepared in sorted(json.loads(raw).items())]
+
+def runtime_summary(entries):
+    return ' '.join(f"{item['id']}({item['version']})" if item['version'] else item['id'] for item in entries)
 
 def print_overview(home, items, as_json):
+    entries = runtime_entries(home)
+    shim = data(home / 'shim.json')
     if as_json:
-        shim = data(home / 'shim.json')
-        print(json.dumps(dict(home=str(home), launcher=json.loads(shim) if shim else None, targets=items)))
+        print(json.dumps(dict(home=str(home), launcher=json.loads(shim) if shim else None,
+                              runtimes=entries, targets=items)))
         return
     print(f"omh home: {home}")
-    shim = data(home / 'shim.json')
     if shim:
         record = json.loads(shim)
         print(f"launcher: {record['path']} → {record['source']}")
-    runtimes = runtime_summary(home)
+    runtimes = runtime_summary(entries)
     if runtimes: print(f"runtimes: {runtimes}")
     print()
     for item in items:
@@ -144,9 +155,10 @@ def shim_owned(content):
     return content is not None and content.split(b'\n', 2)[1:2] == [SHIM_MARKER.encode()]
 
 def shim_script(source, python):
+    # shlex.quote keeps Unicode literal and stops `$()` / quotes from being shell syntax.
     return ('#!/bin/sh\n' + SHIM_MARKER + '\n'
-            + f'export PYTHONPATH={json.dumps(str(source))}\n'
-            + f'exec {json.dumps(str(python))} -B -m omh "$@"\n').encode()
+            + f'export PYTHONPATH={shlex.quote(str(source))}\n'
+            + f'exec {shlex.quote(str(python))} -B -m omh "$@"\n').encode()
 
 def shim_preflight(bin_dir):
     if os.name == 'nt': return
@@ -313,8 +325,22 @@ def prepare_runtimes(source, home, python, deployment, external, offline):
             python=str(python), deploymentRoot=str(deployment), externalVenv=str(external) if external else None,
             wheelCache=str(home / 'cache/wheels'), offline=offline))
     # This is standalone configuration, never emitted by the runtime provider itself.
-    rt.atomic(home / 'runtime-state.json', rt.encode(result))
+    # The lock covers the publish only; venv creation stays outside it.
+    with rt.lock(home / HOME_LOCK):
+        rt.atomic(home / 'runtime-state.json', rt.encode(result))
     return result
+
+def bind_shared_scripts(content, support):
+    """Rewrite the one OMH_SHARED_SCRIPTS assignment to the installed support directory.
+
+    The constant is the contract. The repository expression may change shape;
+    a missing or repeated assignment fails closed instead of shipping a stale path.
+    """
+    if b'OMH_SHARED_SCRIPTS' not in content: return content
+    assignment = ('OMH_SHARED_SCRIPTS = Path(' + json.dumps(str(support)) + ')').encode()
+    updated, count = SHARED_ASSIGNMENT.subn(assignment, content)
+    if count != 1: rt.fail('Helper shared-script binding must be a single assignment', 'OMH_INVALID')
+    return updated
 
 def projected(source, skills, prepared, harness):
     root = skills.parent
@@ -337,11 +363,10 @@ def projected(source, skills, prepared, harness):
             if not (skill / 'SKILL.md').is_file(): rt.fail('Incomplete skill')
             slot = (skills / skill.name).relative_to(root).as_posix()
             slots.add(slot)
+            support = root / '.omh-support' / name
             for suffix, content in tree(skill).items():
                 if '__pycache__' in Path(suffix).parts or suffix.endswith('.pyc'): continue
-                if suffix.endswith('.py'):
-                    replacement = f'Path({json.dumps(str(root / ".omh-support" / name))})'
-                    content = content.decode().replace('Path(__file__).resolve().parents[3] / "scripts"', replacement).encode()
+                if suffix.endswith('.py'): content = bind_shared_scripts(content, support)
                 output[f'{slot}/{suffix}'] = content
         for suffix, content in tree(package_root / 'scripts').items():
             if '__pycache__' not in Path(suffix).parts and not suffix.endswith('.pyc'):
@@ -409,12 +434,15 @@ def main(argv=None):
     parser.add_argument('--operation', choices=['install', 'update', 'uninstall'], default='install')
     parser.add_argument('--json', action='store_true', help='Machine-readable status output')
     args = parser.parse_args(argv)
-    try:
-        # Deterministic UTF-8 output on every platform, including Windows
-        # pipes that would otherwise encode text in the legacy ANSI codepage.
-        sys.stdout.reconfigure(encoding='utf-8')
-    except (AttributeError, ValueError, OSError):
-        pass
+    # Deterministic UTF-8 on real text streams, including Windows pipes.
+    # In-process captures such as io.StringIO have no reconfigure method.
+    reconfigure = getattr(sys.stdout, 'reconfigure', None)
+    if reconfigure is not None:
+        try:
+            reconfigure(encoding='utf-8')
+        except (ValueError, OSError) as error:
+            print(json.dumps(dict(error=dict(code='OMH_INVALID', message=f'stdout encoding: {error}'))))
+            return 1
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
         if args.bin_dir is not None: args.bin_dir = rt.safe_path(args.bin_dir)

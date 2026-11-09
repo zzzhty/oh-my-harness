@@ -170,24 +170,39 @@ class WindowsJob:
         if self.handle:
             self.kernel.CloseHandle(self.handle); self.handle = None
 
+def process_tail(raw, limit=2000):
+    text = (raw or b'').decode('utf-8', 'replace').strip()
+    if len(text) <= limit: return text
+    return text[-limit:]
+
 def run_process(python, args, timeout=30, failure_code='HARNESS_RUNTIME_INVALID'):
     python = absolute(python)
     if not python.is_file(): fail('Explicit Python is missing', 'HARNESS_PYTHON_REQUIRED')
     try:
         process = subprocess.Popen([str(python), *map(str, args)], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=process_environment(), start_new_session=(os.name != 'nt'))
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=process_environment(), start_new_session=(os.name != 'nt'))
     except OSError:
         fail('Cannot execute explicit Python', 'HARNESS_PYTHON_REQUIRED')
     job = WindowsJob(process)
     try:
-        try: output, _ = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
+        try: output, err = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as expired:
             if os.name != 'nt': os.killpg(process.pid, signal.SIGKILL)
             else: process.kill()
             job.close()
             process.wait()
-            fail('Runtime process timed out', 'HARNESS_RUNTIME_TIMEOUT')
-        if process.returncode: fail('Runtime process failed', failure_code)
+            chunks = []
+            if expired.stderr and expired.stderr.strip(): chunks.append(b'stderr:\n' + expired.stderr)
+            if expired.stdout and expired.stdout.strip(): chunks.append(b'stdout:\n' + expired.stdout)
+            detail = process_tail(b'\n'.join(chunks))
+            fail('Runtime process timed out' + (f': {detail}' if detail else ''), 'HARNESS_RUNTIME_TIMEOUT')
+        if process.returncode:
+            # venv writes ensurepip failures to stdout; pip uses stderr. Keep both.
+            chunks = []
+            if err and err.strip(): chunks.append(b'stderr:\n' + err)
+            if output and output.strip(): chunks.append(b'stdout:\n' + output)
+            detail = process_tail(b'\n'.join(chunks))
+            fail('Runtime process failed' + (f': {detail}' if detail else ''), failure_code)
         if len(output) > 65536: fail('Runtime process output exceeds the protocol limit')
         return output
     finally: job.close()
@@ -283,7 +298,11 @@ def prepare(request):
         python_links = preparation_links(root, interpreter, base['version'], bool(packages))
         atomic(marker, encode(descriptor))
         for path in python_links: path.unlink()  # Replace ordinary venv aliases with private copies.
-        run_process(interpreter, ['-I', '-B', '-m', 'venv', '--copies', str(root)], 120)
+        # Final path, never a staged directory. Stdlib-only groups skip ensurepip.
+        venv_args = ['-I', '-B', '-m', 'venv', '--copies']
+        if not packages: venv_args.append('--without-pip')
+        venv_args.append(str(root))
+        run_process(interpreter, venv_args, 120)
         if packages:
             lock_path = root / 'requirements.lock'
             atomic(lock_path, locked.encode())
