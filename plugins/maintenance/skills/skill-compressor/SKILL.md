@@ -1,6 +1,6 @@
 ---
 name: skill-compressor
-description: Compress existing agent skills and references while preserving trigger coverage, permissions, required behavior and validation. Route intentional behavior changes to prompt-strategy-loop, and general authoring to writing-for-agents.
+description: Compress existing agent skills, plugin guidance and references while preserving trigger coverage, permissions, required behavior and validation. Route intentional behavior changes to prompt-strategy-loop, and general authoring to writing-for-agents.
 ---
 
 # Skill Compressor
