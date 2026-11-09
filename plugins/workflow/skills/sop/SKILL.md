@@ -41,9 +41,7 @@ sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/check_s
 1. Re-read the SOP, available inputs, and current authorization.
 2. Before the first action, run `check_sop_ready.py <sop-file>` without `--allow-draft` and confirm the top-level status is `Ready`. If the SOP is `Draft` or the check fails, do not execute it; stop or route the request to Create Or Update.
 3. Follow the declared steps and permissions in order, using only available inputs. Keep report-only procedures non-mutating and treat a missing required input as a stop.
-4. Honor explicit stop conditions, including a user's stop, safety or permission boundaries, immediately. On other required-validation failures, pause dependent steps and preserve failure and diagnostic evidence. Within current authorization, follow the SOP's declared diagnosis, repair or bounded recovery; keep report-only work non-mutating. Keep the original acceptance criteria. Reuse passing evidence only where the original owner and its verifier accept that it still covers the current tested state under its exact-source, dependency, configuration, environment and acceptance bindings. Reassess affected coverage after relevant changes or later failures; earlier passes cannot override later failures. Revalidate failed checks and repair-affected coverage, and establish required state prerequisites before continuing unfinished steps whose dependencies are satisfied. Independent authorized work may continue.
-
-   Follow owner-required fresh/full execution, explicit termination and complete transaction/rollback rules. New attempts must meet the original owner's applicable requirements for fresh admission, reestablishing fixtures, identities, resources and leases, and completing operations, final readback and cleanup in order. Do not splice old mutable state into qualification or hot-edit running candidates. A session, namespace or phase change alone neither invalidates passing evidence nor resets retry budgets. Without a repair, relevant input change or new diagnosis, do not repeat the same failure blindly. If recovery is unavailable, exhausted or needs additional authorization, stop the affected operation and report the evidence and needed input.
+4. Honor user stops, explicit termination, safety, permission boundaries and missing required inputs immediately. For a recoverable validation failure, pause dependent steps and preserve evidence. If authorized diagnosis, repair, or continuation is needed, read [Recovery And Continuation](references/recovery.md) before proceeding. The owning SOP's recovery and retry limits govern; a Draft or report-only SOP gains no mutation authority from this reference. Independent authorized work may continue where dependencies allow.
 5. Report outputs, commands, changed files or artifacts, validation, blockers, and residual risk.
 
 ## Completion
@@ -52,11 +50,10 @@ A reusable SOP has eight core sections: Trigger, Inputs, Execution Harness, Allo
 
 ## Runtime
 
-Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
-on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
-group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
-skills root (or above its native plugin cache); read its group binding when
-resolving the harness root. The owner persists the interpreter there. An explicit
-absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
-override stops execution. If unprepared, ask the installation owner to prepare
-the group. Running a helper never creates an environment or installs packages.
+Invoke Python helpers using the owner-installed `<harness-root>/.omh-runtime/run.sh`
+(`sh ...` on POSIX) or `run.ps1` (`& ...` on Windows), then group `workflow`,
+script and arguments. Locate `.omh-runtime` beside the skills root or above its
+native plugin cache; read its persisted group binding. An absolute `OMH_PYTHON`
+overrides it only with a validated venv; an invalid override fails closed.
+Unprepared groups require the installation owner to prepare them. Helper
+execution never creates a venv or installs dependencies.

@@ -56,11 +56,10 @@ The result is standalone, source-grounded, and useful without remote fonts or sc
 
 ## Runtime
 
-Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
-on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
-group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
-skills root (or above its native plugin cache); read its group binding when
-resolving the harness root. The owner persists the interpreter there. An explicit
-absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
-override stops execution. If unprepared, ask the installation owner to prepare
-the group. Running a helper never creates an environment or installs packages.
+Invoke Python helpers using the owner-installed `<harness-root>/.omh-runtime/run.sh`
+(`sh ...` on POSIX) or `run.ps1` (`& ...` on Windows), then group `workflow`,
+script and arguments. Locate `.omh-runtime` beside the skills root or above its
+native plugin cache; read its persisted group binding. An absolute `OMH_PYTHON`
+overrides it only with a validated venv; an invalid override fails closed.
+Unprepared groups require the installation owner to prepare them. Helper
+execution never creates a venv or installs dependencies.

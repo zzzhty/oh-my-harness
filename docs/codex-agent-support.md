@@ -1,35 +1,21 @@
 # Codex Agent Support
 
-This document explains how `oh-my-harness` manages Codex agent support files. `agents/global-instructions.md` is the separate harness-global source; root `AGENTS.md` remains repository-local.
+OMH owns the source content for Codex support; owns its registry-selected projection and installed receipts. `agents/global-instructions.md` is the separate harness-global source; root `AGENTS.md` remains repository-local.
 
-The repository currently keeps only one managed support file under `agents/`.
-That file is copied into `$CODEX_HOME/agents/` so global instructions can refer
-to it from any Codex session.
-
-## Managed Source
+## Managed Source And Target
 
 ```text
-agents/operating-principles.md
+source: agents/operating-principles.md
+target: $CODEX_HOME/agents/operating-principles.md
 ```
 
-## Managed Target
+When selects this support file, it projects the source to the target so installed global instructions can refer to it. Edit the repository source, then use the previous owner's explicit plan/apply workflow for an authorized refresh. Inspect the owner's plan and receipt, preserve unrelated files and user changes, and validate the selected projection through that owner. Do not hand-edit managed targets or use retired OMH synchronization scripts.
 
-```text
-$CODEX_HOME/agents/operating-principles.md
-```
-
-Use `scripts/sync_codex_agents.py` to copy repo-managed support files from
-`agents/` into the target. The script currently syncs only the managed support
-file listed above. Do not hand-edit managed target files; edit the source file
-here and sync again.
+OMH standalone installs skills and their resources; it does not install global instructions or this support file. A standalone skill must not assume either is present. See [README](../README.md#standalone-installation) and [ADR 0030](adr/0030-independent-distribution-and-shared-runtime.md) for distribution and runtime ownership. Native client discovery and invocation require separate validation from filesystem projection.
 
 ## Current Policy
 
-The sync script ignores local `agents/*.toml` custom-agent presets today. The
-`workflow` plugin's `$orchestrate-subagents` skill uses unique `task_name`
-assignments whose prompts declare read-only permission or an exact disjoint
-write scope, so legacy local presets are neither synced nor installed by this
-support-file path.
+Custom-agent presets are not installed by this support-file path. The `workflow` plugin's `$orchestrate-subagents` skill uses unique `task_name` assignments whose prompts declare read-only permission or an exact disjoint write scope. Its invocation and delegation authority remain separate.
 
 ## Future Custom Agents
 

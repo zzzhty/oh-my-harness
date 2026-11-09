@@ -43,7 +43,7 @@ On execution/resume, read those sources and later changes before asking. Still-c
 
 Planned non-destructive local operations are non-stops: reviews, checkpoints, rebuilds, refreshes, dependency restores, edits, tests, formatting and link checks. Continue when gates pass. Apply `components/milestone-scope-gate.md` at its defined boundaries; it constrains unplanned expansion, never work frozen by the user, goal, repository, review gate or checkpoint.
 
-Diagnose ordinary technical failures with [adaptive recovery](references/execute-and-close.md#adaptive-recovery). The first and second runtime-reported native Goal failures are opportunities to change strategy within existing authority, not reasons to declare the goal blocked or repeat an unchanged failed approach. The third runtime-reported native Goal failure reaches the native Codex Goal hard stop; do not extend or reset that limit in this skill.
+Diagnose ordinary technical failures under the inline rules; when a recovery approach is needed, load [adaptive recovery](references/adaptive-recovery.md) on demand. The first and second runtime-reported native Goal failures are opportunities to change strategy within existing authority, not reasons to declare the goal blocked or repeat an unchanged failed approach. The third runtime-reported native Goal failure reaches the native Codex Goal hard stop; do not extend or reset that limit in this skill.
 
 Ask only at a runtime hard stop: an uncovered authorization boundary (including a sourced final-review gate, denied access, or a scope/product-semantic change requiring a decision), or the native Goal technical-failure stop. Stop the affected action immediately at an authorization boundary; never spend retry opportunities probing or routing around it.
 
@@ -76,11 +76,10 @@ Report goal path, lifecycle state, current/next milestone, triggered branches, a
 
 ## Runtime
 
-Python helpers use the owner-installed `<harness-root>/.omh-runtime/run.sh`
-on POSIX (`sh ...`) or `run.ps1` on Windows (`& ...`), followed by the declared
-group (`workflow`), script path and arguments. Locate `.omh-runtime` beside the harness
-skills root (or above its native plugin cache); read its group binding when
-resolving the harness root. The owner persists the interpreter there. An explicit
-absolute `OMH_PYTHON` selects a validated venv for this invocation; an invalid
-override stops execution. If unprepared, ask the installation owner to prepare
-the group. Running a helper never creates an environment or installs packages.
+Invoke Python helpers using the owner-installed `<harness-root>/.omh-runtime/run.sh`
+(`sh ...` on POSIX) or `run.ps1` (`& ...` on Windows), then group `workflow`,
+script and arguments. Locate `.omh-runtime` beside the skills root or above its
+native plugin cache; read its persisted group binding. An absolute `OMH_PYTHON`
+overrides it only with a validated venv; an invalid override fails closed.
+Unprepared groups require the installation owner to prepare them. Helper
+execution never creates a venv or installs dependencies.

@@ -6,7 +6,13 @@ Before creating or converting a long-running goal, or first implementing one wit
 
 Before `Ready` or implementation without a valid completed preflight:
 
-Choose the path first: reuse of a verified, still-valid completed preflight does not repeat the interview unless the user requests a fresh one. An explicit user skip omits the interview but still requires decision and authorization coverage. For either path, apply the evidence and authorization sections below directly; otherwise complete the full flow:
+Route before loading interview methods:
+
+- **Valid completed preflight:** inspect the cited marker, original evidence and newest request for affected scope, ownership, semantics, milestone order and authorization. Reuse valid decisions and apply the evidence and authorization sections below; do not reload grilling or repeat the interview solely on resume.
+- **Explicit user skip:** retain the sourced skip, decision and authorization requirements below; skipping an interview never supplies approval.
+- **Missing, invalid or incomplete preflight:** complete the affected missing flow using the steps below. Revalidate only decisions invalidated by new evidence, not unrelated confirmed answers.
+
+For the path needing a full or partial preflight:
 
 1. Read the active request, existing decisions, current evidence and recorded authority. A valid completed preflight can be reused after checking that it still covers the affected contract. A marker or a complete-looking plan alone is insufficient.
 2. Read and apply `mattpocock-skills:grilling` and `mattpocock-skills:domain-modeling`, using the active harness's identities. This required composition performs the `grill-with-docs` workflow without implicitly invoking its explicit-only entrypoint. If the user explicitly invokes `grill-with-docs`, use that entrypoint instead. If a required method cannot be loaded, report the missing skill and keep preflight incomplete; do not silently substitute self-review or claim completion.

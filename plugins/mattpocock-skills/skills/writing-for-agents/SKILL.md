@@ -1,11 +1,13 @@
 ---
 name: writing-for-agents
-description: Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.
+description: Author and structure agent guidance (skills, AGENTS.md, CLAUDE.md). Use skill-compressor for behavior-preserving reduction and prompt-strategy-loop for intentional behavioral redesign.
 ---
 
 # Writing for Agents
 
 Write guidance that changes a useful decision or action. Assume a capable agent: preserve non-obvious conventions, operational constraints and reasons; remove repetition and generic advice that the environment already supplies.
+
+This skill owns guidance authoring and information placement. `maintenance:skill-compressor` owns behavior-preserving reduction; `workflow:prompt-strategy-loop` owns intentional behavior changes. Reuse shared writing principles, but do not chain their complete workflows for one edit.
 
 ## Triggers and information placement
 
@@ -29,6 +31,6 @@ The environment is a source of truth: point to commands, configuration and exist
 
 Before a consequential rewrite, state the observed problem and representative success/regression scenarios. Compare the existing guidance with the smallest useful candidate. Check triggers, required actions and stop conditions as well as word count; shorter text alone does not prove better behavior.
 
-Use independent evaluation when routing, authorization or failure boundaries change and the active environment permits it. Give reviewers the scenario and raw evidence without a preferred conclusion. Distinguish static/semantic review from actually running an agent through the task, and report unresolved coverage.
+When routing, authorization, safety, failure, or validation behavior intentionally changes, apply `workflow:prompt-strategy-loop` and its Core Rule on independent review and proportional evaluation. If that method or required evaluation is unavailable, mark the behavior change unverified. Distinguish static/semantic review from actually running an agent through the task, and report unresolved coverage.
 
 Split or merge documents when it clarifies ownership or a real mode boundary. Do not build multiple candidates or new reference hierarchies without an actual trade-off to resolve.

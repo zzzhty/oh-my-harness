@@ -1,11 +1,11 @@
 ---
 name: prompt-strategy-loop
-description: Improve prompts, skill guidance, reviewer rubrics, or agent strategy from observed evidence through a frozen oracle, bounded candidates, and proportional review.
+description: Intentionally improve prompt or agent behavior using evidence, frozen success/regression criteria, bounded candidates and proportional review; not routine authoring or behavior-preserving compression.
 ---
 
 # Prompt Strategy Loop
 
-Use this skill to improve agent behavior from evidence rather than wording preference. The result may be a recommendation, proposal, or source edit when mutation is authorized.
+Use this skill to improve agent behavior from evidence rather than wording preference. The result may be a recommendation, proposal, or source edit when mutation is authorized. General writing belongs to `mattpocock-skills:writing-for-agents`; equivalence-preserving reduction belongs to `maintenance:skill-compressor`. Reuse their applicable writing principles without chaining complete workflows.
 
 ## Core Rule
 

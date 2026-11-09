@@ -1,11 +1,13 @@
 ---
 name: tdd
-description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
+description: Test-driven development for implementing features or fixing bugs test-first. Use for explicit test-first or red-green-refactor requests, not merely to add integration coverage to working behavior.
 ---
 
 # Test-Driven Development
 
 Use a red → green → refactor loop to implement one behavior at a time. Reuse the project's domain language and existing design/test decisions.
+
+Adding tests for already-correct behavior is not by itself TDD. Cover the behavior directly; never break working production code to manufacture a red failure. If a new test finds a real defect, use that observed failure to guide an authorized repair.
 
 ## Choose the behavior and interface
 

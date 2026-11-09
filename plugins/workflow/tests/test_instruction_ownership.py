@@ -37,11 +37,43 @@ class InstructionOwnershipTests(unittest.TestCase):
         self.assertIn("Completion requires every inventoried current consumer", identifier_policy)
         self.assertIn("Reusable workflow behavior", support)
         self.assertIn("does not invoke `$orchestrate-subagents` by itself", support)
-        self.assertIn("scripts/sync_codex_agents.py", support)
+ self.assertIn(" owns its registry-selected instruction/support projection", support)
         self.assertIn("preserve the user-visible local time", support)
         self.assertIn("verify the written automation state", support)
         self.assertIn("Do not write secrets, full private prompts, full tool responses", support)
         self.assertIn("Memory updates must remain reviewable", support)
+
+    def test_support_docs_follow_current_distribution_without_retired_entrypoints(self) -> None:
+        for path in (SUPPORT, REPO_ROOT / "docs" / "codex-agent-support.md"):
+            with self.subTest(path=path):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("OMH standalone installs skills", text)
+                self.assertIn("plan/apply", text)
+                self.assertIn("0030-independent-distribution-and-shared-runtime.md", text)
+                self.assertNotIn("scripts/sync_codex_agents.py", text)
+                self.assertNotIn("$CODEX_HOME/watcher/", text)
+
+    def test_skill_routes_and_failure_references_remain_explicit(self) -> None:
+        matt = REPO_ROOT / "plugins" / "mattpocock-skills" / "skills"
+        to_spec = (matt / "to-spec" / "SKILL.md").read_text(encoding="utf-8")
+        tdd = (matt / "tdd" / "SKILL.md").read_text(encoding="utf-8")
+        writer = (matt / "writing-for-agents" / "SKILL.md").read_text(encoding="utf-8")
+        goal = (WORKFLOW_ROOT / "skills" / "long-running-goal" / "SKILL.md").read_text(encoding="utf-8")
+        execute = (WORKFLOW_ROOT / "skills" / "long-running-goal" / "references" / "execute-and-close.md").read_text(encoding="utf-8")
+        recovery = (WORKFLOW_ROOT / "skills" / "long-running-goal" / "references" / "adaptive-recovery.md").read_text(encoding="utf-8")
+        sop = (WORKFLOW_ROOT / "skills" / "sop" / "SKILL.md").read_text(encoding="utf-8")
+        sop_recovery = (WORKFLOW_ROOT / "skills" / "sop" / "references" / "recovery.md").read_text(encoding="utf-8")
+        self.assertIn("only when separately authorized", to_spec)
+        self.assertNotIn('or wants integration tests', tdd)
+        self.assertIn("never break working production code", tdd)
+        self.assertIn("maintenance:skill-compressor", writer)
+        self.assertIn("workflow:prompt-strategy-loop", writer)
+        self.assertIn("references/adaptive-recovery.md", goal)
+        self.assertIn("adaptive-recovery.md", execute)
+        self.assertNotIn("## Adaptive Recovery", execute)
+        self.assertIn("third runtime-reported native Goal failure", recovery)
+        self.assertIn("references/recovery.md", sop)
+        self.assertIn("complete transaction/rollback", sop_recovery)
 
     def test_active_assignment_docs_do_not_claim_unavailable_roles_or_old_recipe(self) -> None:
         active_docs = (

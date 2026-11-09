@@ -1,6 +1,6 @@
 ---
 name: skill-compressor
-description: Reduce the instruction footprint of agent skills, plugin guidance, and their references while preserving trigger coverage, required behavior, and validation owned by the changed surface.
+description: Compress existing agent skills and references while preserving trigger coverage, permissions, required behavior and validation. Route intentional behavior changes to prompt-strategy-loop, and general authoring to writing-for-agents.
 ---
 
 # Skill Compressor

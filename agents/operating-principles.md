@@ -1,6 +1,6 @@
 # Agent Operating Principles — Repository Map
 
-This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md`. `agents/global-instructions.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. Root `AGENTS.md` owns only `oh-my-harness` repository routing and deltas. This file maps those owners to reusable workflow surfaces; it does not expand their authority.
+This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md` when selected by the installation owner. `agents/global-instructions.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. Root `AGENTS.md` owns only `oh-my-harness` repository routing and deltas. This file maps those owners to reusable workflow surfaces; it does not expand their authority.
 
 ## Managed Source And Target
 
@@ -9,7 +9,7 @@ source: agents/operating-principles.md
 target: $CODEX_HOME/agents/operating-principles.md
 ```
 
-Edit the repository source, not the installed target. `scripts/sync_codex_agents.py` writes a managed header and refuses to overwrite an unmanaged same-name target unless a reviewed `--force` operation is explicitly chosen.
+Edit the repository source, not the installed target. owns its registry-selected instruction/support projection and installed receipts. OMH standalone installs skills and resources, not global instructions or this support note. Use the installation owner's explicit plan/apply workflow; preserve unrelated files and user edits. See `README.md` and `docs/adr/0030-independent-distribution-and-shared-runtime.md` for the current ownership contract.
 
 ## Durable Owner Map
 
@@ -21,7 +21,6 @@ Edit the repository source, not the installed target. `scripts/sync_codex_agents
 | Reusable workflow behavior | `plugins/*/skills/*/SKILL.md` and the skill's direct references |
 | Plugin/runtime architecture and commands | the owning plugin `README.md`, scripts, and validators |
 | Active multi-turn work | `docs/todo/README.md` and the named active plan or goal |
-| Watcher evidence and proposals | `$CODEX_HOME/watcher/` runtime state |
 | Generated reports or automation memory | the owning tool's documented report or memory root |
 
 Choose the narrowest owner that future agents can inspect. Do not duplicate a global rule in a skill or support note merely to make it more visible; point to the owner and state only the local workflow delta.
@@ -59,19 +58,8 @@ Write back only durable, reusable knowledge: user preferences that affect future
 
 Memory updates must remain reviewable through file paths, diffs, or report artifacts.
 
-## Sync And Validation
+## Distribution And Validation
 
-Preview and apply the managed support-file projection:
+For an previously managed installation, inspect the owner's current plan and receipt before an authorized refresh, then validate the selected support projection through that owner. Do not invoke a retired OMH sync script or overwrite an unmanaged target. `$CODEX_HOME` defaults to `~/.codex` for the target shown above.
 
-```bash
-python3 scripts/sync_codex_agents.py --dry-run --prune
-python3 scripts/sync_codex_agents.py --prune
-```
-
-Validate an installed copy without changing it:
-
-```bash
-python3 scripts/sync_codex_agents.py --check --prune
-```
-
-When `$CODEX_HOME` is unset, the script targets `~/.codex/agents/`. Preserve unrelated files; prune removes only files carrying the script's managed header.
+Standalone skill execution must remain self-contained: do not make a skill depend on this note being installed. Native Codex discovery and invocation remain separate acceptance checks from filesystem projection.
