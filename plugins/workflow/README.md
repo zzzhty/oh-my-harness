@@ -30,7 +30,6 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 Invoke their helpers through the owner-installed `.omh-runtime/run.sh` (POSIX)
 or `run.ps1` (Windows), with the group followed by script path and argv. OMH owns
 `scripts/omh_runtime.py` for environment preparation, validation and startup;
- calls that implementation with explicit runtime paths. It does not call
-the standalone installer or create a second OMH installed-state database.
+the standalone distributor is its only caller and records the target bindings.
 Bindings persist across sessions. An explicit absolute `OMH_PYTHON` selects a
 validated venv and invalid overrides fail without fallback.

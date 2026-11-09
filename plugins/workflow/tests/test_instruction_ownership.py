@@ -37,7 +37,7 @@ class InstructionOwnershipTests(unittest.TestCase):
         self.assertIn("Completion requires every inventoried current consumer", identifier_policy)
         self.assertIn("Reusable workflow behavior", support)
         self.assertIn("does not invoke `$orchestrate-subagents` by itself", support)
- self.assertIn(" owns its registry-selected instruction/support projection", support)
+        self.assertIn("it does not install this support note", support)
         self.assertIn("preserve the user-visible local time", support)
         self.assertIn("verify the written automation state", support)
         self.assertIn("Do not write secrets, full private prompts, full tool responses", support)
@@ -48,8 +48,9 @@ class InstructionOwnershipTests(unittest.TestCase):
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
                 self.assertIn("OMH standalone installs skills", text)
-                self.assertIn("plan/apply", text)
-                self.assertIn("0030-independent-distribution-and-shared-runtime.md", text)
+                self.assertIn("sole distribution channel", text)
+                self.assertIn("global-instructions file", text)
+                self.assertIn("0032-standalone-instruction-projection.md", text)
                 self.assertNotIn("scripts/sync_codex_agents.py", text)
                 self.assertNotIn("$CODEX_HOME/watcher/", text)
 

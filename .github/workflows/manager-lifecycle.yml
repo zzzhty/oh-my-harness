@@ -38,6 +38,9 @@ jobs:
         run: python -m unittest discover -s plugins/workflow/tests -p "test_*.py"
       - name: Package identity
         run: python scripts/check_plugin_generations.py
+      - name: Standalone distribution
+        shell: bash
+        run: python scripts/check_standalone_distribution.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

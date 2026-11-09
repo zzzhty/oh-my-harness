@@ -6,8 +6,9 @@ This plugin preserves three distinct interactive workflows:
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
 
-The audit and validation helpers belong to their consuming skills. static skill
-installation needs no Python, and preparing a payload runtime never enables hooks.
+The audit and validation helpers belong to their consuming skills. Installing
+skills through the standalone distributor needs no Python on `PATH`, and
+preparing a runtime never enables hooks.
 
 `doc-alignment` owns `skills/doc-alignment/scripts/audit_docs.py`, its sibling
 `doc_alignment/` modules and `config/repos.example.json`. Resolve that skill's

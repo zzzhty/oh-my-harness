@@ -3,7 +3,7 @@
 ## Authority Map
 
 - `agents/global-instructions.md` owns the global behavior distributed to every selected harness. This root file owns only repository-local routing and deltas; keep global policy out of it.
-- `content-manifest.json` owns exported content, compositions and runtime requirements. OMH owns the standalone Python distributor and the shared runtime protocol. owns its Rust adapters and installed receipts; use the pinned Rust export/import core for archives. See ADR 0030 before changing ownership or runtime bindings.
+- `content-manifest.json` owns exported content, compositions and runtime requirements. OMH owns the standalone Python distributor and the shared runtime protocol as its sole distribution channel; the retired Rust export/import core is historical. See ADR 0031 (and ADR 0030 for runtime bindings) before changing ownership or runtime bindings.
 - `plugins/*/skills/*/SKILL.md` is the canonical repository skill catalog. Plugin manifests, marketplace state, generated metadata, caches, and harness directories are projections.
 - `README.md` owns content release and validation entry points. Architecture decisions and migration invariants belong in `docs/adr/`.
 

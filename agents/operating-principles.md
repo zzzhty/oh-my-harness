@@ -1,6 +1,6 @@
 # Agent Operating Principles — Repository Map
 
-This is the repository-managed support note installed at `$CODEX_HOME/agents/operating-principles.md` when selected by the installation owner. `agents/global-instructions.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. Root `AGENTS.md` owns only `oh-my-harness` repository routing and deltas. This file maps those owners to reusable workflow surfaces; it does not expand their authority.
+This is the repository-owned support note for Codex agent operation. The OMH standalone distributor installs skills, resources and the harness global-instructions file (`AGENTS.md`, ADR 0032); it does not install this support note, and An installed copy at `$CODEX_HOME/agents/operating-principles.md` is a historical artifact of that retired flow until its owner removes it. `agents/global-instructions.md` owns global authority, safety, failure handling, verification, delegation, and subagent-failure policy. Root `AGENTS.md` owns only `oh-my-harness` repository routing and deltas. This file maps those owners to reusable workflow surfaces; it does not expand their authority.
 
 ## Managed Source And Target
 
@@ -9,7 +9,7 @@ source: agents/operating-principles.md
 target: $CODEX_HOME/agents/operating-principles.md
 ```
 
-Edit the repository source, not the installed target. owns its registry-selected instruction/support projection and installed receipts. OMH standalone installs skills and resources, not global instructions or this support note. Use the installation owner's explicit plan/apply workflow; preserve unrelated files and user edits. See `README.md` and `docs/adr/0030-independent-distribution-and-shared-runtime.md` for the current ownership contract.
+Edit the repository source, not an installed target. OMH standalone installs skills, resources and the projected global instructions; it does not install this support note. A legacy installed target belongs to the retired projection flow; do not overwrite it, and let its owner's handoff remove it. See `README.md` and `docs/adr/0032-standalone-instruction-projection.md` for the current ownership contract.
 
 ## Durable Owner Map
 
@@ -60,6 +60,6 @@ Memory updates must remain reviewable through file paths, diffs, or report artif
 
 ## Distribution And Validation
 
-For an previously managed installation, inspect the owner's current plan and receipt before an authorized refresh, then validate the selected support projection through that owner. Do not invoke a retired OMH sync script or overwrite an unmanaged target. `$CODEX_HOME` defaults to `~/.codex` for the target shown above.
+The OMH standalone CLI is the sole distribution channel. Do not invoke a retired OMH sync script, and do not overwrite an unmanaged target. `$CODEX_HOME` defaults to `~/.codex` for the historical target shown above.
 
 Standalone skill execution must remain self-contained: do not make a skill depend on this note being installed. Native Codex discovery and invocation remain separate acceptance checks from filesystem projection.

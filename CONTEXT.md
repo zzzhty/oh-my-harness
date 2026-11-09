@@ -19,7 +19,7 @@ A client target resolved by its installation owner according to local policy; co
 _Avoid_: skills target plus instructions target, mode, product name without a registry entry
 
 **Harness Registry**:
-The previously managed local policy that declares supported target adapters and host paths. OMH content does not supply this policy.
+Historical registry-era local policy that declared supported target adapters and host paths. Retired with the standalone-only distribution; OMH content does not supply it.
 _Avoid_: shell path table, command template registry, duplicated wrapper defaults
 
 **Harness Plan**:
@@ -81,7 +81,7 @@ A locally selected immutable source revision, release artifact and verified cont
 _Avoid_: latest-version selector, install state
 
 **Install Receipt**:
-The installation owner's record of actual target roots, owned resources, runtime references and recovery state. OMH standalone and keep separate receipts for separate owned targets.
+The installation owner's record of actual target roots, owned resources, runtime references and recovery state. The OMH standalone distributor writes the current receipts; historical receipts remain persisted evidence until their homes are handed over.
 _Avoid_: upstream manifest, content cache
 
 **Composition**:
@@ -89,7 +89,10 @@ A named complete set of content packages in one release; native plugin identitie
 _Avoid_: partial native plugin, automatically enabled hooks
 
 **Standalone Distribution**:
-OMH directory skill projection with an OMH target receipt, shared owner lock and recoverable file journal. native adapters retain their own policy and receipts.
+OMH directory skill projection with an OMH target receipt, shared owner lock and recoverable file journal. It is the sole distribution channel (ADR 0031) and also projects the harness global-instructions file as an owned managed file (ADR 0032).
+
+**Launcher Shim**:
+The managed-marker `omh` pointer script in `~/.local/bin`, pinned to the installing checkout and interpreter. A static forwarding script, not a lifecycle manager (ADR 0033).
 
 **Runtime Deployment Root**:
 Storage for final-path Python venvs, distinct from a harness skill target. OMH owns the shared preparation/verification/startup implementation; the installation owner supplies defaults or explicit paths.

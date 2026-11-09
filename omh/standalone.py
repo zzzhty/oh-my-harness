@@ -20,6 +20,154 @@ _spec.loader.exec_module(rt)
 OWNER = '.omh-owner.json'
 LOCK = '.omh-owner.lock'
 
+# ADR 0032: the harness global-instructions file is projected beside the skills
+# root as an owned managed file. Shadowing files conflict with it.
+INSTRUCTIONS = {'codex': 'AGENTS.md', 'claude-code': 'CLAUDE.md'}
+SHADOWS = {'codex': ('AGENTS.override.md',)}
+INSTRUCTIONS_SOURCE = 'agents/global-instructions.md'
+
+# ADR 0033: a static POSIX launcher shim pointing at the installing source
+# checkout and interpreter. It is a pointer, not a manager: no state, no
+# self-update, no PATH search, no fallback when the checkout is gone.
+SHIM_MARKER = '# oh-my-harness standalone launcher v1'
+SHIM_NAME = 'omh'
+
+# ADR 0034: the home keeps an index of targets it installed. The index is a
+# hint for status; each target's receipt remains the truth and is verified live.
+TARGETS_FILE = 'targets.json'
+
+def load_targets(home):
+    raw = data(home / TARGETS_FILE)
+    return json.loads(raw) if raw else {}
+
+def save_targets(home, value):
+    if value: rt.atomic(home / TARGETS_FILE, rt.encode(value))
+    else: (home / TARGETS_FILE).unlink(missing_ok=True)
+
+def remember_target(home, root, harness, skills, installed):
+    targets = load_targets(home)
+    if installed: targets[str(root)] = dict(harness=harness, skillsRoot=str(skills))
+    else: targets.pop(str(root), None)
+    save_targets(home, targets)
+
+def target_state(home, root):
+    item = dict(target=str(root))
+    raw = data(root / OWNER)
+    if raw is None: return dict(item, state='missing')
+    try:
+        value = json.loads(raw)
+        owner, manager = value['owner'], value['manager']
+    except (ValueError, KeyError, TypeError):
+        return dict(item, state='invalid-receipt')
+    if owner != 'omh': return dict(item, state='foreign', owner=owner)
+    if manager != str(home): return dict(item, state='other-home', manager=manager)
+    try:
+        drift = file_drift(root, value)
+    except (KeyError, TypeError, ValueError):
+        return dict(item, state='invalid-receipt')
+    return dict(item, state='installed', owner=owner, harness=None,
+                files=len(value.get('files', {})), sourceIdentity=str(value.get('sourceIdentity', ''))[:12],
+                modified=drift, recoveryRequired=journal_path(home, root).exists())
+
+def default_roots():
+    yield Path.home() / '.codex', 'codex'
+    yield Path.home() / '.claude', 'claude-code'
+
+def overview(home):
+    targets = {}
+    for root, entry in load_targets(home).items():
+        targets[root] = entry.get('harness')
+    for root, harness in default_roots():
+        if (root / OWNER).exists(): targets.setdefault(str(root), harness)
+    return [dict(target_state(home, rt.safe_path(Path(root))), harness=harness or '?')
+            for root, harness in sorted(targets.items())]
+
+def clean(item):
+    return item['state'] == 'installed' and not item['modified'] and not item['recoveryRequired']
+
+def runtime_summary(home):
+    raw = data(home / 'runtime-state.json')
+    if raw is None: return ''
+    summary = []
+    for group, prepared in sorted(json.loads(raw).items()):
+        config = Path(prepared['root']) / 'pyvenv.cfg'
+        version = ''
+        line = data(config)
+        if line:
+            for part in line.decode('utf-8', 'replace').splitlines():
+                if part.startswith('version = '): version = part[10:].strip()
+        summary.append(f"{group}({version})" if version else group)
+    return ' '.join(summary)
+
+def print_overview(home, items, as_json):
+    if as_json:
+        shim = data(home / 'shim.json')
+        print(json.dumps(dict(home=str(home), launcher=json.loads(shim) if shim else None, targets=items)))
+        return
+    print(f"omh home: {home}")
+    shim = data(home / 'shim.json')
+    if shim:
+        record = json.loads(shim)
+        print(f"launcher: {record['path']} → {record['source']}")
+    runtimes = runtime_summary(home)
+    if runtimes: print(f"runtimes: {runtimes}")
+    print()
+    for item in items:
+        label = item['target'] + (f" ({item['harness']})" if item.get('harness') else '')
+        if item['state'] == 'installed':
+            print(f"{label} — installed")
+            modified = len(item['modified'])
+            detail = [f"{item['files']} managed files"]
+            if modified: detail.append(f"{modified} modified/missing: " + ', '.join(list(item['modified'])[:4]) + (' …' if modified > 4 else ''))
+            else: detail.append('no drift')
+            detail.append('recovery required' if item['recoveryRequired'] else 'recovery not required')
+            if item.get('sourceIdentity'): detail.append(f"source {item['sourceIdentity']}")
+            print('  ' + ' · '.join(detail))
+        elif item['state'] == 'missing':
+            print(f"{label} — receipt missing (uninstalled elsewhere or never installed)")
+        else:
+            extra = f" ({item.get('owner') or item.get('manager') or 'unreadable'})" if item['state'] != 'invalid-receipt' else ''
+            print(f"{label} — {item['state']}{extra}")
+    if not items: print('no installed targets recorded')
+    abnormal = [i for i in items if not clean(i)]
+    print(f"\nsummary: {len(items)} target{'s' if len(items) != 1 else ''}, "
+          + ('all clean' if not abnormal else f"{len(abnormal)} need attention"))
+
+def shim_target(bin_dir):
+    return (rt.safe_path(bin_dir if bin_dir is not None else Path.home() / '.local' / 'bin')) / SHIM_NAME
+
+def shim_owned(content):
+    return content is not None and content.split(b'\n', 2)[1:2] == [SHIM_MARKER.encode()]
+
+def shim_script(source, python):
+    return ('#!/bin/sh\n' + SHIM_MARKER + '\n'
+            + f'export PYTHONPATH={json.dumps(str(source))}\n'
+            + f'exec {json.dumps(str(python))} -B -m omh "$@"\n').encode()
+
+def shim_preflight(bin_dir):
+    if os.name == 'nt': return
+    current = data(shim_target(bin_dir))
+    if current is not None and not shim_owned(current):
+        rt.fail(f'Unowned {SHIM_NAME} launcher exists in the bin directory', 'HARNESS_CONFLICT')
+
+def write_shim(home, bin_dir, source, python):
+    if os.name == 'nt': return
+    path = shim_target(bin_dir)
+    script = shim_script(source, python)
+    if data(path) != script:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rt.atomic(path, script)
+        os.chmod(path, 0o755)
+    rt.atomic(home / 'shim.json', rt.encode(dict(binDir=str(path.parent), path=str(path),
+        source=str(source), python=str(python))))
+
+def remove_shim(home):
+    raw = data(home / 'shim.json')
+    if raw is None: return
+    path = rt.safe_path(Path(json.loads(raw)['path']))
+    if shim_owned(data(path)): path.unlink()
+    (home / 'shim.json').unlink(missing_ok=True)
+
 def data(path):
     rt.safe_path(path)
     if not path.exists(): return None
@@ -52,7 +200,8 @@ def receipt(root, home):
     for slot in item['slots']: relative(slot)
     for name, fingerprint in item['files'].items():
         relative(name)
-        if not re.fullmatch(r'[0-9a-f]{64}', fingerprint) or not any(name.startswith(slot + '/') for slot in item['slots']): rt.fail('Invalid ownership inventory')
+        if not re.fullmatch(r'[0-9a-f]{64}', fingerprint) or not any(
+                name.startswith(slot + '/') or name == slot for slot in item['slots']): rt.fail('Invalid ownership inventory')
     return item
 
 def relative(name):
@@ -163,10 +312,15 @@ def prepare_runtimes(source, home, python, deployment, external, offline):
     rt.atomic(home / 'runtime-state.json', rt.encode(result))
     return result
 
-def projected(source, skills, prepared):
+def projected(source, skills, prepared, harness):
     root = skills.parent
     value = manifest(source)
     output, slots, names = {}, set(), set()
+    instructions = INSTRUCTIONS[harness]
+    content = data(source / relative(INSTRUCTIONS_SOURCE))
+    if content is None: rt.fail(f'Missing instructions source: {INSTRUCTIONS_SOURCE}', 'OMH_INVALID')
+    output[instructions] = content
+    slots.add(instructions)
     for package in value['packages']:
         name = package['name']
         if not re.fullmatch(r'[A-Za-z0-9_-]+', name) or package['path'] != f'plugins/{name}': rt.fail('Invalid package path')
@@ -203,7 +357,7 @@ def file_drift(root, old):
         elif sha(current) != fingerprint: result[name] = 'modified'
     return result
 
-def plan(source, home, skills, operation, prepared):
+def plan(source, home, skills, operation, prepared, harness):
     root = skills.parent
     old = receipt(root, home)
     if old is None and operation != 'uninstall':
@@ -215,8 +369,12 @@ def plan(source, home, skills, operation, prepared):
             native = tomllib.loads(config.decode('utf-8'))
             if any(key.rsplit('@', 1)[-1] in coordinates for key in native.get('plugins', {})):
                 rt.fail('Existing native OMH configuration needs explicit owner handoff', 'HARNESS_OWNER_CONFLICT')
+    if operation != 'uninstall':
+        for shadow in SHADOWS.get(harness, ()):
+            if rt.safe_path(root / shadow).exists():
+                rt.fail(f'Shadowing file conflicts with managed instructions: {shadow}', 'HARNESS_CONFLICT')
     if journal_path(home, root).exists(): rt.fail('Recovery required', 'HARNESS_RECOVERY_REQUIRED')
-    desired, slots = ({}, []) if operation == 'uninstall' else projected(source, skills, prepared)
+    desired, slots = ({}, []) if operation == 'uninstall' else projected(source, skills, prepared, harness)
     old_files = old['files'] if old else {}
     changes = []
     for name in sorted(set(old_files) | set(desired)):
@@ -233,7 +391,7 @@ def plan(source, home, skills, operation, prepared):
     return changes
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='omh', description=__doc__)
     parser.add_argument('command', choices=['prepare', 'install', 'update', 'uninstall', 'status', 'plan', 'recover'])
     parser.add_argument('--source', type=Path, default=SOURCE)
     parser.add_argument('--home', type=Path, default=Path.home() / '.oh-my-harness')
@@ -243,42 +401,57 @@ def main(argv=None):
     parser.add_argument('--python', type=Path)
     parser.add_argument('--external-venv', type=Path)
     parser.add_argument('--offline', action='store_true')
+    parser.add_argument('--bin-dir', type=Path, help='POSIX launcher shim directory (default ~/.local/bin; absolute)')
     parser.add_argument('--operation', choices=['install', 'update', 'uninstall'], default='install')
+    parser.add_argument('--json', action='store_true', help='Machine-readable status output')
     args = parser.parse_args(argv)
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
+        if args.bin_dir is not None: args.bin_dir = rt.safe_path(args.bin_dir)
         skills = rt.safe_path(args.skills_root or Path.home() / ('.codex' if args.harness == 'codex' else '.claude') / 'skills')
         root = skills.parent
         if home == root or home.is_relative_to(root): rt.fail('Manager and skill target must be separate')
         if args.command == 'status':
-            old = receipt(root, home)
-            drift = file_drift(root,old)
-            print(json.dumps(dict(receipt=old, modified=drift, recoveryRequired=journal_path(home,root).exists())))
-            return 0 if not drift else 1
+            if args.skills_root is None:
+                items = overview(home)
+                print_overview(home, items, args.json)
+                return 0 if all(clean(item) for item in items) else 1
+            item = target_state(home, root)
+            item['harness'] = args.harness
+            if item['state'] == 'installed':
+                print_overview(home, [item], args.json)
+                return 0 if clean(item) else 1
+            print_overview(home, [item], args.json)
+            return 1
         if args.command == 'plan':
             raw = data(home / 'runtime-state.json')
             prepared = json.loads(raw) if raw else {}
-            print(json.dumps(dict(changes=[c['path'] for c in plan(source,home,skills,args.operation,prepared)])))
+            print(json.dumps(dict(changes=[c['path'] for c in plan(source,home,skills,args.operation,prepared,args.harness)])))
             return 0
         with rt.lock((home / '.prepare.lock') if args.command == 'prepare' else root / LOCK):
             if args.command == 'recover': result = dict(recovered=recover(home,root))
             elif args.command == 'uninstall':
-                changes = plan(source,home,skills,'uninstall',{})
+                changes = plan(source,home,skills,'uninstall',{},args.harness)
                 transact(home,root,changes)
+                remember_target(home,root,args.harness,skills,False)
+                remove_shim(home)
                 result = dict(changed=len(changes))
             else:
                 if args.command != 'prepare':
                     # Owner identity is enough here. Plan target files once,
                     # after preparing bindings; the journal rechecks before-images.
                     receipt(root,home)
+                    shim_preflight(args.bin_dir)
                 python = rt.absolute(args.python if args.python is not None else os.environ.get('OMH_PYTHON', sys.executable))
                 deployment = rt.safe_path(args.deployment_root or home / 'runtimes')
                 if deployment == root or deployment.is_relative_to(root) or root.is_relative_to(deployment): rt.fail('Runtime deployment and skill targets must be separate')
                 prepared = prepare_runtimes(source,home,python,deployment,args.external_venv,args.offline)
                 if args.command == 'prepare': result = dict(runtimes=prepared)
                 else:
-                    changes = plan(source,home,skills,args.command,prepared)
+                    changes = plan(source,home,skills,args.command,prepared,args.harness)
                     transact(home,root,changes)
+                    remember_target(home,root,args.harness,skills,True)
+                    write_shim(home,args.bin_dir,source,python)
                     result = dict(changed=len(changes), runtimes=prepared)
         print(json.dumps(result))
         return 0

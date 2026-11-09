@@ -41,6 +41,8 @@ class StandaloneTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="OMH TEST target ' $() 空间 ")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
+        home_environment = patch.dict(os.environ, {'HOME': str(self.root/'userhome')})
+        home_environment.start(); self.addCleanup(home_environment.stop)
         self.source, self.home, self.skills = self.root/'source', self.root/'manager', self.root/'client/skills'
         skill = self.source/'plugins/workflow/skills/example'
         (skill/'scripts').mkdir(parents=True)
@@ -49,11 +51,21 @@ class StandaloneTests(unittest.TestCase):
         (self.source/'content-manifest.json').write_text(json.dumps(dict(schemaVersion=1, product='omh-content',
             compositions={'default':['workflow']}, packages=[dict(name='workflow',path='plugins/workflow',kind='skills')],
             runtimeGroups=[SPEC], runtimeBindings={'workflow:example':'workflow'})))
+        agents = self.source/'agents'
+        agents.mkdir()
+        (agents/'global-instructions.md').write_text('# Global Instructions\nTest authority line.\n')
     def call(self, command, *extra):
         output = io.StringIO()
+        arguments = ['--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills),
+            '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',*extra]
+        if command == 'status': arguments.append('--json')
         with contextlib.redirect_stdout(output):
-            code = st.main([command, '--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills),
-                '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',*extra])
+            code = st.main([command, *arguments])
+        return code, json.loads(output.getvalue())
+    def call_overview(self, *extra):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = st.main(['status','--source',str(self.source),'--home',str(self.home),'--json',*extra])
         return code, json.loads(output.getvalue())
     def install(self):
         code,result=self.call('install')
@@ -72,9 +84,114 @@ class StandaloneTests(unittest.TestCase):
         return subprocess.run([*argv,'workflow',str(self.skills/'example/scripts/helper.py'),*args],
             cwd=self.root,env=env,capture_output=True,text=True,timeout=30)
     def test_read_only_plan_and_status_do_not_create_directories(self):
-        self.assertEqual(self.call('status')[0],0)
+        code,result = self.call('status')
+        self.assertEqual(code,1)  # Not installed yet: reported, still read-only.
+        self.assertEqual(result['targets'][0]['state'],'missing')
         self.assertGreater(len(self.call('plan')[1]['changes']),0)
         self.assertFalse(self.home.exists()); self.assertFalse(self.skills.parent.exists())
+    def test_global_instructions_are_projected_protected_and_uninstalled(self):
+        self.install()
+        instructions = self.skills.parent/'AGENTS.md'
+        source = self.source/'agents/global-instructions.md'
+        self.assertEqual(instructions.read_bytes(), source.read_bytes())
+        receipt = json.loads((self.skills.parent/st.OWNER).read_text())
+        self.assertIn('AGENTS.md', receipt['slots']); self.assertIn('AGENTS.md', receipt['files'])
+        self.assertEqual(self.call('plan')[1]['changes'], [])
+        instructions.write_text('# user override\n')
+        code,result = self.call('update')
+        self.assertNotEqual(code,0,result)
+        self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
+        self.assertIn('User-modified', result['error']['message'])
+        instructions.write_bytes(source.read_bytes())
+        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('uninstall')[0],0)
+        self.assertFalse(instructions.exists())
+        for name,text in (('AGENTS.md','unowned'), ('AGENTS.override.md','shadow')):
+            skills = self.root/f"conflict {name}/skills"; skills.mkdir(parents=True)
+            (skills.parent/name).write_text(text)
+            code,result = self.call('install','--skills-root',str(skills))
+            self.assertNotEqual(code,0,result)
+            self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
+    def test_claude_code_target_uses_its_native_instructions_name(self):
+        skills = self.root/'claude/skills'; skills.mkdir(parents=True)
+        code,result = self.call('install','--harness','claude-code','--skills-root',str(skills))
+        self.assertEqual(code,0,result)
+        self.assertTrue((skills.parent/'CLAUDE.md').is_file())
+        self.assertFalse((skills.parent/'AGENTS.md').exists())
+        self.assertEqual((skills.parent/'CLAUDE.md').read_bytes(),(self.source/'agents/global-instructions.md').read_bytes())
+    @unittest.skipIf(os.name=='nt','POSIX launcher shim')
+    def test_launcher_shim_lifecycle(self):
+        self.install()
+        shim = Path.home()/'.local/bin/omh'
+        self.assertTrue(shim.is_file()); self.assertTrue(os.access(shim,os.X_OK))
+        record = json.loads((self.home/'shim.json').read_text())
+        self.assertEqual(shim.read_bytes(), st.shim_script(Path(record['source']), Path(record['python'])))
+        result = subprocess.run([str(shim),'status','--home',str(self.home),'--skills-root',str(self.skills),'--json'],
+            env={'PATH':''},capture_output=True,text=True,timeout=60)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(json.loads(result.stdout)['targets'][0]['owner'],'omh')
+        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('uninstall')[0],0)
+        self.assertFalse(shim.exists()); self.assertFalse((self.home/'shim.json').exists())
+        shim.parent.mkdir(parents=True,exist_ok=True)
+        shim.write_text('#!/bin/sh\necho other tool\n')
+        code,result = self.call('install')
+        self.assertNotEqual(code,0,result)
+        self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
+        self.assertIn('Unowned',result['error']['message'])
+        self.assertFalse((self.skills.parent/st.OWNER).exists())
+    @unittest.skipIf(os.name=='nt','POSIX launcher shim')
+    def test_launcher_shim_honors_an_explicit_bin_directory(self):
+        bin_dir = self.root/'custom bin 空间'
+        code,result = self.call('install','--bin-dir',str(bin_dir))
+        self.assertEqual(code,0,result)
+        self.assertTrue((bin_dir/'omh').is_file())
+        self.assertFalse((Path.home()/'.local/bin').exists())
+        code,result = self.call('update','--bin-dir','relative/bin')
+        self.assertNotEqual(code,0,result)
+        self.assertIn('absolute',result['error']['message'])
+    def test_status_overview_lists_every_target_and_reports_anomalies(self):
+        second = self.root/'claude/skills'; second.mkdir(parents=True)
+        self.install()
+        self.assertEqual(self.call('install','--harness','claude-code','--skills-root',str(second))[0],0)
+        code,result = self.call_overview()
+        self.assertEqual(code,0,result)
+        listed = {item['target']: item for item in result['targets']}
+        self.assertEqual(set(listed), {str(self.skills.parent), str(second.parent)})
+        self.assertTrue(all(item['state']=='installed' for item in listed.values()))
+        self.assertEqual(listed[str(second.parent)]['harness'],'claude-code')
+        (self.skills/'example/SKILL.md').write_text('drifted\n')
+        code,result = self.call_overview()
+        self.assertNotEqual(code,0)
+        drifted = [item for item in result['targets'] if item['target']==str(self.skills.parent)][0]
+        self.assertEqual(drifted['modified'],{'skills/example/SKILL.md':'modified'})
+        (self.skills/'example/SKILL.md').unlink()
+        self.assertEqual(self.call('uninstall')[0],0)
+        code,result = self.call_overview()
+        self.assertEqual([item['target'] for item in result['targets']],[str(second.parent)])
+    def test_status_overview_classifies_foreign_and_deleted_targets(self):
+        foreign = self.root/'foreign/skills'; foreign.mkdir(parents=True)
+        self.home.mkdir(parents=True,exist_ok=True)
+        (foreign.parent/st.OWNER).write_text(json.dumps(dict(owner='someone-else',manager='elsewhere')))
+        (self.home/st.TARGETS_FILE).write_text(json.dumps({str(foreign.parent): dict(harness='codex',skillsRoot=str(foreign))}))
+        code,result = self.call_overview()
+        self.assertNotEqual(code,0)
+        self.assertEqual(result['targets'][0]['state'],'foreign')
+        (foreign.parent/st.OWNER).unlink()
+        code,result = self.call_overview()
+        self.assertNotEqual(code,0)
+        self.assertEqual(result['targets'][0]['state'],'missing')
+    def test_status_text_output_is_human_readable(self):
+        self.install()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = st.main(['status','--source',str(self.source),'--home',str(self.home)])
+        self.assertEqual(code,0)
+        text = output.getvalue()
+        self.assertIn(str(self.skills.parent),text)
+        self.assertIn('installed',text)
+        self.assertIn('managed files',text)
+        self.assertIn('summary: 1 target, all clean',text)
     def test_future_session_executes_without_source_or_environment_binding(self):
         self.install()
         shutil.rmtree(self.source)
@@ -131,7 +248,7 @@ class StandaloneTests(unittest.TestCase):
         path.unlink()
         user_file=self.skills/'example/user.txt'; user_file.write_text('user')
         user_dir=self.skills/'example/user empty'; user_dir.mkdir()
-        self.assertEqual(self.call('status')[1]['modified']['skills/example/SKILL.md'],'missing')
+        self.assertEqual(self.call('status')[1]['targets'][0]['modified']['skills/example/SKILL.md'],'missing')
         with patch.object(st,'plan',wraps=st.plan) as planned:
             self.assertEqual(self.call('update')[0],0)
             self.assertEqual(planned.call_count,1)

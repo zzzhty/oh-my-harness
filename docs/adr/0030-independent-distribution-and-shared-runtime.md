@@ -1,5 +1,10 @@
 # ADR 0030: Independent distribution and one shared Python runtime
 
+> The dual-distributor model is concluded by [ADR 0031](0031-sole-standalone-distribution.md):
+> The OMH standalone CLI is the sole
+> distributor. The runtime protocol, owner lock, receipts and retirement decisions
+> below remain in force.
+
 Status: accepted for implementation, 2026-11-03. Release publication and any real
 installation require separate actions. This supersedes the installer/runtime
 exclusivity in ADR 0028 and ADR 0029. Their retirement of Watcher, hooks, old report
