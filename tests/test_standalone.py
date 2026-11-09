@@ -212,7 +212,8 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn('HARNESS_RUNTIME_BUSY', result.stdout)
         st.remember_target(self.home, self.root/'one', 'codex', self.root/'one'/'skills', True)
         st.remember_target(self.home, self.root/'two', 'claude-code', self.root/'two'/'skills', True)
-        recorded = json.loads((self.home / st.TARGETS_FILE).read_text())
+        # The index is UTF-8. Windows locale text mode would decode 空间 as cp1252.
+        recorded = json.loads((self.home / st.TARGETS_FILE).read_bytes())
         self.assertEqual(set(recorded), {str(self.root/'one'), str(self.root/'two')})
     def test_stdout_reconfigure_failure_is_a_json_error(self):
         class Stream(io.TextIOBase):
