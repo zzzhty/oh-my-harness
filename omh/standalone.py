@@ -406,6 +406,12 @@ def main(argv=None):
     parser.add_argument('--json', action='store_true', help='Machine-readable status output')
     args = parser.parse_args(argv)
     try:
+        # Deterministic UTF-8 output on every platform, including Windows
+        # pipes that would otherwise encode text in the legacy ANSI codepage.
+        sys.stdout.reconfigure(encoding='utf-8')
+    except (AttributeError, ValueError, OSError):
+        pass
+    try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
         if args.bin_dir is not None: args.bin_dir = rt.safe_path(args.bin_dir)
         skills = rt.safe_path(args.skills_root or Path.home() / ('.codex' if args.harness == 'codex' else '.claude') / 'skills')

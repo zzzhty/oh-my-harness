@@ -19,7 +19,9 @@ status: accepted
 2. **Readable by default, machine on request.** The default output is a short
    human summary (home, launcher, runtimes with versions, per-target state,
    final verdict line). `--json` returns the same information as data; scripts
-   and tests consume `--json`.
+   and tests consume `--json`. The CLI reconfigures its stdout to UTF-8 on
+   every platform, so piped text output is deterministic instead of following
+   the Windows ANSI codepage.
 
 `plan` remains a per-target preview and is unchanged. A single explicit
 `--skills-root` keeps single-target status, with the same states and exit

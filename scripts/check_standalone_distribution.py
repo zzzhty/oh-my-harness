@@ -81,7 +81,8 @@ def main():
         assert status.returncode == 0 and target['state'] == 'installed' and target['owner'] == 'omh'
         assert target['modified'] == {} and target['recoveryRequired'] is False
         overview = subprocess.run([str(Path(sys.executable).absolute()), '-B', '-m', 'omh', 'status',
-            '--home', str(state)], cwd=ROOT, env=env, capture_output=True, text=True, encoding='utf-8', timeout=60)
+            '--home', str(state)], cwd=ROOT, env=env, capture_output=True, text=True,
+            encoding='utf-8', errors='replace', timeout=60)
         assert overview.returncode == 0, overview.stdout + overview.stderr
         assert str(skills.parent) in overview.stdout and 'installed' in overview.stdout
         receipt_files = json.loads((home / '.codex/.omh-owner.json').read_text())['files']
