@@ -338,7 +338,8 @@ def bind_shared_scripts(content, support):
     """
     if b'OMH_SHARED_SCRIPTS' not in content: return content
     assignment = ('OMH_SHARED_SCRIPTS = Path(' + json.dumps(str(support)) + ')').encode()
-    updated, count = SHARED_ASSIGNMENT.subn(assignment, content)
+    # A string replacement would treat \U in C:\Users as a unicode escape.
+    updated, count = SHARED_ASSIGNMENT.subn(lambda _match: assignment, content)
     if count != 1: rt.fail('Helper shared-script binding must be a single assignment', 'OMH_INVALID')
     return updated
 

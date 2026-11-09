@@ -232,6 +232,13 @@ class StandaloneTests(unittest.TestCase):
         payload = json.loads(''.join(stream.parts))
         self.assertEqual(payload['error']['code'], 'OMH_INVALID')
         self.assertIn('stdout encoding', payload['error']['message'])
+    def test_shared_script_binding_keeps_windows_backslashes(self):
+        source = b'OMH_SHARED_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"\n'
+        support = Path(r'C:\Users\runner\AppData\Local\Temp\omh\.omh-support\workflow')
+        bound = st.bind_shared_scripts(source, support)
+        namespace = {}
+        exec(b'from pathlib import Path\n' + bound, namespace)
+        self.assertEqual(namespace['OMH_SHARED_SCRIPTS'], support)
     def test_stdlib_group_does_not_install_pip(self):
         root = Path(self.prepared['root'])
         pip = root / ('Scripts/pip.exe' if os.name == 'nt' else 'bin/pip')
