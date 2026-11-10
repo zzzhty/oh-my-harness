@@ -17,12 +17,8 @@ retired lifecycle manager, the multi-harness registry, or the
 
 The last public implementation is `0b5f4dd` (v1.0.0 baseline;
 `sync_harness_instructions.py`, registry `instructions` entries, lifecycle
-integration and two test modules). The internal fork that kept this machinery
-alive did not modify any of it: its core script, installer, tests and
-`agents/global-instructions.md` content are byte-identical to that revision,
-and its remaining diffs (watcher-retirement compatibility, manager-venv
-bindings) are unrelated to instructions. The restoration therefore uses the
-0b5f4dd semantics as the reference, re-expressed through the standalone model.
+integration and two test modules). The restoration uses the 0b5f4dd semantics
+as the reference, re-expressed through the standalone model.
 
 ## Decision
 
