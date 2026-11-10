@@ -23,14 +23,17 @@ standard library; `requirements.txt` is for developer validation.
 ```
 
 `--harness codex` projects skill directories into `~/.codex/skills`;
-`--harness claude-code` uses `~/.claude/skills`. `--skills-root /absolute/path/skills`
+`--harness claude-code` uses `~/.claude/skills`; `--harness grok` (Grok Build)
+uses `~/.grok/skills`. `--skills-root /absolute/path/skills`
 selects another directory. The distributor installs skills, their resources and
 the harness global-instructions file ([ADR 0032](docs/adr/0032-standalone-instruction-projection.md)):
-`agents/global-instructions.md` is projected as `AGENTS.md` (codex) or
+`agents/global-instructions.md` is projected as `AGENTS.md` (codex, grok) or
 `CLAUDE.md` (claude-code) beside the skills root, as an ordinary owned managed
 file with drift detection and uninstall cleanup. It does not edit client
 configuration or install the Codex support note. Codex uses directory skill
-names here.
+names here. Grok also reads its global rules from `~/.grok/AGENTS.md` (capped
+at 10,000 characters by Grok; the OMH source is well under) and, like codex,
+shadowing rule files (`Claude.md`, `AGENT.md`) fail closed.
 
 Standalone state defaults to `~/.oh-my-harness` (`--home` overrides it). Python
 venvs live under its `runtimes/<group>/<identity>` directory. `--deployment-root`

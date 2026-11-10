@@ -143,6 +143,18 @@ def main():
         status, payload = standalone(env, 'status', '--home', state, '--json')
         assert status.returncode == 0 and payload['targets'] == []
 
+        # The grok target resolves its own default root and rule filename.
+        grok = home / '.grok'
+        checked(env, 'install', '--home', state, '--harness', 'grok', '--python', python, '--offline')
+        assert (grok / 'skills/sop/SKILL.md').is_file()
+        assert (grok / 'AGENTS.md').read_bytes() == (ROOT / 'agents/global-instructions.md').read_bytes()
+        (grok / 'Claude.md').write_text('# shadow rules\n')
+        blocked, _ = standalone(env, 'update', '--home', state, '--harness', 'grok', '--python', python, '--offline')
+        assert blocked.returncode != 0 and 'HARNESS_CONFLICT' in blocked.stdout + blocked.stderr
+        (grok / 'Claude.md').unlink()
+        checked(env, 'uninstall', '--home', state, '--harness', 'grok')
+        assert not (grok / 'AGENTS.md').exists() and not (grok / 'skills/sop').exists()
+
         print(json.dumps({'targets': ['standalone'], 'skills': len(expected_skills()),
                           'instructions': 'AGENTS.md', 'launcher': os.name != 'nt',
                           'preparedGroups': ['maintenance', 'workflow'], 'hooksEnabled': False,

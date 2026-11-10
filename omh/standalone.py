@@ -21,9 +21,12 @@ OWNER = '.omh-owner.json'
 LOCK = '.omh-owner.lock'
 
 # ADR 0032: the harness global-instructions file is projected beside the skills
-# root as an owned managed file. Shadowing files conflict with it.
-INSTRUCTIONS = {'codex': 'AGENTS.md', 'claude-code': 'CLAUDE.md'}
-SHADOWS = {'codex': ('AGENTS.override.md',)}
+# root as an owned managed file. Shadowing files conflict with it. Grok Build
+# scans several rule filenames in one directory; the non-case-variant siblings
+# shadow our AGENTS.md (case variants are skipped for case-insensitive systems).
+HARNESS_ROOTS = {'codex': '.codex', 'claude-code': '.claude', 'grok': '.grok'}
+INSTRUCTIONS = {'codex': 'AGENTS.md', 'claude-code': 'CLAUDE.md', 'grok': 'AGENTS.md'}
+SHADOWS = {'codex': ('AGENTS.override.md',), 'grok': ('Claude.md', 'AGENT.md')}
 INSTRUCTIONS_SOURCE = 'agents/global-instructions.md'
 
 # ADR 0033: a static POSIX launcher shim pointing at the installing source
@@ -72,6 +75,7 @@ def target_state(home, root):
 def default_roots():
     yield Path.home() / '.codex', 'codex'
     yield Path.home() / '.claude', 'claude-code'
+    yield Path.home() / '.grok', 'grok'
 
 def overview(home):
     targets = {}
@@ -395,7 +399,7 @@ def main(argv=None):
     parser.add_argument('command', choices=['prepare', 'install', 'update', 'uninstall', 'status', 'plan', 'recover'])
     parser.add_argument('--source', type=Path, default=SOURCE)
     parser.add_argument('--home', type=Path, default=Path.home() / '.oh-my-harness')
-    parser.add_argument('--harness', choices=['codex', 'claude-code'], default='codex')
+    parser.add_argument('--harness', choices=['codex', 'claude-code', 'grok'], default='codex')
     parser.add_argument('--skills-root', type=Path)
     parser.add_argument('--deployment-root', type=Path)
     parser.add_argument('--python', type=Path)
@@ -414,7 +418,7 @@ def main(argv=None):
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
         if args.bin_dir is not None: args.bin_dir = rt.safe_path(args.bin_dir)
-        skills = rt.safe_path(args.skills_root or Path.home() / ('.codex' if args.harness == 'codex' else '.claude') / 'skills')
+        skills = rt.safe_path(args.skills_root or Path.home() / HARNESS_ROOTS[args.harness] / 'skills')
         root = skills.parent
         if home == root or home.is_relative_to(root): rt.fail('Manager and skill target must be separate')
         if args.command == 'status':

@@ -119,6 +119,28 @@ class StandaloneTests(unittest.TestCase):
         self.assertTrue((skills.parent/'CLAUDE.md').is_file())
         self.assertFalse((skills.parent/'AGENTS.md').exists())
         self.assertEqual((skills.parent/'CLAUDE.md').read_bytes(),(self.source/'agents/global-instructions.md').read_bytes())
+    def test_grok_target_defaults_to_grok_root_and_shadows_conflict(self):
+        def grok_call(command, *extra):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = st.main([command,'--source',str(self.source),'--home',str(self.home),
+                    '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',
+                    '--harness','grok',*extra])
+            return code, json.loads(output.getvalue())
+        # No --skills-root: the default resolves under the patched HOME.
+        code,result = grok_call('install')
+        self.assertEqual(code,0,result)
+        grok = Path.home()/'.grok'
+        self.assertTrue((grok/'skills/example/SKILL.md').is_file())
+        self.assertEqual((grok/'AGENTS.md').read_bytes(),(self.source/'agents/global-instructions.md').read_bytes())
+        self.assertEqual(grok_call('uninstall')[0],0)
+        for shadow in ('Claude.md','AGENT.md'):
+            (grok/shadow).write_text('# other rules\n')
+            code,result = grok_call('install')
+            self.assertNotEqual(code,0,result)
+            self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
+            self.assertFalse((grok/'skills/sop').exists() and (grok/'skills/example').exists())
+            (grok/shadow).unlink()
     @unittest.skipIf(os.name=='nt','POSIX launcher shim')
     def test_launcher_shim_lifecycle(self):
         self.install()
