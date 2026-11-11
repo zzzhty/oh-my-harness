@@ -61,7 +61,7 @@ class StandaloneTests(unittest.TestCase):
         # flags; every command answers --json with the machine form.
         arguments = ['--source',str(self.source),'--home',str(self.home),'--json']
         if command != 'prepare': arguments += ['--skills-root',str(self.skills)]
-        if command in ('prepare','install','update'):
+        if command in ('prepare','install','refresh'):
             arguments += ['--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
         # Success JSON arrives on stdout, error envelopes on stderr.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -98,11 +98,74 @@ class StandaloneTests(unittest.TestCase):
         for arguments in (['status','--operation','install','--home',str(self.home)],
                           ['plan','--offline','--home',str(self.home)],
                           ['uninstall','--python',sys.executable,'--home',str(self.home)],
-                          ['recover','--bin-dir','/absolute/bin','--home',str(self.home)]):
+                          ['recover','--bin-dir','/absolute/bin','--home',str(self.home)],
+                          ['update','--harness','codex','--home',str(self.home)],
+                          ['refresh','--to','v9.9.9','--home',str(self.home)]):
             with self.assertRaises(SystemExit) as stopped:
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     st.main(arguments)
             self.assertEqual(stopped.exception.code, 2, arguments)
+    def test_update_delegates_only_from_the_managed_clone(self):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(['update','--source',str(self.source),'--home',str(self.home)])
+        self.assertEqual(code,1)
+        payload = json.loads(err.getvalue())
+        self.assertEqual(payload['error']['code'],'OMH_SOURCE_NOT_MANAGED')
+        self.assertIn('omh refresh',payload['error']['message'])
+        # From the managed clone the verb execs the tree's install.sh (ADR 0036).
+        home = self.root/'managed home'
+        repo = home/'repo'; (repo/'.git').mkdir(parents=True)
+        with patch.object(st.subprocess,'call',return_value=0) as delegate:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = st.main(['update','--source',str(repo),'--home',str(home),'--to','v9.9.9'])
+        self.assertEqual(code,0)
+        argv, keywords = delegate.call_args
+        self.assertEqual(argv[0],['/bin/sh',str(repo/'install.sh')])
+        self.assertEqual(keywords['env']['OMH_HOME'],str(home))
+        self.assertEqual(keywords['env']['OMH_VERSION'],'v9.9.9')
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_bootstrap_and_upgrade_flow_through_install_sh(self):
+        work = self.root/'upstream'
+        shutil.copytree(self.source, work)
+        shutil.copytree(ROOT/'omh', work/'omh', ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copytree(ROOT/'plugins/workflow/scripts', work/'plugins/workflow/scripts',
+            ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copy2(ROOT/'install.sh', work/'install.sh')
+        def git(*arguments):
+            return subprocess.run(['git','-C',str(work),'-c','user.email=omh@test.invalid',
+                '-c','user.name=omh test',*arguments],check=True,capture_output=True,text=True,timeout=60)
+        git('init','--quiet'); git('add','-A'); git('commit','-q','-m','one'); git('tag','v0.1.0')
+        bare = self.root/'upstream.git'
+        subprocess.run(['git','clone','--quiet','--bare',str(work),str(bare)],check=True,capture_output=True,timeout=60)
+        def pinned(tag):
+            value = subprocess.run(['git','-C',str(bare),'rev-parse',f'{tag}^{{}}'],
+                check=True,capture_output=True,text=True,timeout=30).stdout.strip()
+            ref = self.root/f'{tag}.ref'; ref.write_text(value+'\n'); return ref
+        home = self.root/'managed home'
+        env = {'PATH':os.environ['PATH'],'HOME':os.environ['HOME'],'OMH_VERSION':'v0.1.0',
+               'OMH_HOME':str(home),'OMH_REPO':str(bare),'OMH_REF_URL':str(pinned('v0.1.0')),
+               'OMH_PYTHON':sys.executable,'OMH_HARNESS':'codex'}
+        def installer(**extra):
+            return subprocess.run(['/bin/sh',str(ROOT/'install.sh')],
+                env={**env,**extra},capture_output=True,text=True,timeout=180)
+        result = installer()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertTrue((home/'repo/.git').is_dir())
+        self.assertTrue((Path.home()/'.codex/skills/example/SKILL.md').is_file())
+        self.assertTrue((Path.home()/'.local/bin/omh').is_file())
+        # A wrong pin fails closed before anything moves.
+        wrong = self.root/'wrong.ref'; wrong.write_text('0'*40+'\n')
+        self.assertNotEqual(installer(OMH_REF_URL=str(wrong)).returncode,0)
+        # v0.2.0 upgrades the clone in place and refreshes the target.
+        skill = work/'plugins/workflow/skills/example/SKILL.md'
+        skill.write_text(skill.read_text()+'Upgraded\n')
+        git('add','-A'); git('commit','-q','-m','two'); git('tag','v0.2.0')
+        subprocess.run(['git','-C',str(work),'push','--quiet',str(bare),'refs/tags/v0.2.0'],
+            check=True,capture_output=True,timeout=60)
+        result = installer(OMH_VERSION='v0.2.0',OMH_REF_URL=str(pinned('v0.2.0')))
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('Upgraded',(Path.home()/'.codex/skills/example/SKILL.md').read_text())
     def test_default_output_is_human_and_json_opts_in(self):
         self.install()
         out, err = io.StringIO(), io.StringIO()
@@ -115,7 +178,7 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn(str(self.skills.parent),text); self.assertIn('0 changes',text)
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = st.main(['update','--source',str(self.source),'--home',str(self.home),
+            code = st.main(['refresh','--source',str(self.source),'--home',str(self.home),
                 '--skills-root',str(self.skills),'--python',sys.executable,
                 '--external-venv',self.prepared['root'],'--offline'])
         self.assertEqual(code,0)
@@ -140,12 +203,12 @@ class StandaloneTests(unittest.TestCase):
         self.assertIn('AGENTS.md', receipt['slots']); self.assertIn('AGENTS.md', receipt['files'])
         self.assertEqual(self.call('plan')[1]['changes'], [])
         instructions.write_text('# user override\n')
-        code,result = self.call('update')
+        code,result = self.call('refresh')
         self.assertNotEqual(code,0,result)
         self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
         self.assertIn('User-modified', result['error']['message'])
         instructions.write_bytes(source.read_bytes())
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertEqual(self.call('uninstall')[0],0)
         self.assertFalse(instructions.exists())
         for name,text in (('AGENTS.md','unowned'), ('AGENTS.override.md','shadow')):
@@ -165,7 +228,7 @@ class StandaloneTests(unittest.TestCase):
         def grok_call(command, *extra):
             out, err = io.StringIO(), io.StringIO()
             arguments = ['--source',str(self.source),'--home',str(self.home),'--harness','grok','--json']
-            if command in ('prepare','install','update'):
+            if command in ('prepare','install','refresh'):
                 arguments += ['--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = st.main([command, *arguments, *extra])
@@ -195,7 +258,7 @@ class StandaloneTests(unittest.TestCase):
             env={'PATH':''},capture_output=True,text=True,timeout=60)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual(json.loads(result.stdout)['targets'][0]['owner'],'omh')
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertEqual(self.call('uninstall')[0],0)
         self.assertFalse(shim.exists()); self.assertFalse((self.home/'shim.json').exists())
         shim.parent.mkdir(parents=True,exist_ok=True)
@@ -296,7 +359,7 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(code,0,result)
         self.assertTrue((bin_dir/'omh').is_file())
         self.assertFalse((Path.home()/'.local/bin').exists())
-        code,result = self.call('update','--bin-dir','relative/bin')
+        code,result = self.call('refresh','--bin-dir','relative/bin')
         self.assertNotEqual(code,0,result)
         self.assertIn('absolute',result['error']['message'])
     def test_status_overview_lists_every_target_and_reports_anomalies(self):
@@ -360,34 +423,34 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual(json.loads(result.stdout)['env'],dict(PYTHONPATH=None,PYTHONHOME=None,VIRTUAL_ENV=None))
         self.assertEqual(self.launcher(override=self.prepared['python']).returncode,0)
-    def test_repeat_update_uninstall_and_external_environment_preservation(self):
+    def test_repeat_refresh_uninstall_and_external_environment_preservation(self):
         before=environment_snapshot(Path(self.prepared['root']))
         self.install()
         self.assertEqual(self.call('install')[1]['changed'],0)
         self.assertEqual(self.call('plan')[1]['changes'],[])
         authored=self.source/'plugins/workflow/skills/example/SKILL.md'
         authored.write_text(authored.read_text()+'Updated\n')
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertIn('Updated',(self.skills/'example/SKILL.md').read_text())
         self.assertEqual(self.call('uninstall')[0],0)
         self.assertEqual(self.call('uninstall')[1]['changed'],0)
         self.assertFalse((self.skills.parent/st.OWNER).exists())
         self.assertFalse((self.skills/'example').exists())
         self.assertEqual(environment_snapshot(Path(self.prepared['root'])),before)
-    def test_update_removes_obsolete_directories_and_remains_idempotent(self):
+    def test_refresh_removes_obsolete_directories_and_remains_idempotent(self):
         nested=self.source/'plugins/workflow/skills/example/old/nested'
         nested.mkdir(parents=True); (nested/'resource.txt').write_text('old')
         self.install()
         shutil.rmtree(self.source/'plugins/workflow/skills/example/old')
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertFalse((self.skills/'example/old').exists())
         self.assertEqual(self.call('plan')[1]['changes'],[])
-        self.assertEqual(self.call('update')[1]['changed'],0)
+        self.assertEqual(self.call('refresh')[1]['changed'],0)
     def test_user_modified_managed_file_is_protected(self):
         self.install()
         path=self.skills/'example/SKILL.md'
         path.write_text('user edit')
-        for operation in ('update','uninstall'):
+        for operation in ('refresh','uninstall'):
             code,result=self.call(operation)
             self.assertEqual(code,1,result)
             self.assertEqual(result['error']['code'],'HARNESS_CONFLICT')
@@ -400,16 +463,16 @@ class StandaloneTests(unittest.TestCase):
         user_dir=self.skills/'example/user empty'; user_dir.mkdir()
         self.assertEqual(self.call('status')[1]['targets'][0]['modified']['skills/example/SKILL.md'],'missing')
         with patch.object(st,'plan',wraps=st.plan) as planned:
-            self.assertEqual(self.call('update')[0],0)
+            self.assertEqual(self.call('refresh')[0],0)
             self.assertEqual(planned.call_count,1)
         self.assertEqual(path.read_bytes(),original)
         self.assertEqual(self.call('uninstall')[0],0)
         self.assertEqual(user_file.read_text(),'user'); self.assertTrue(user_dir.is_dir())
         self.assertFalse(path.exists())
-    def test_update_can_install_an_absent_target_within_manager_home(self):
+    def test_refresh_can_install_an_absent_target_within_manager_home(self):
         self.home=self.root/'manager'
         self.skills=self.home/'clients/codex/skills'
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertTrue((self.skills/'example/SKILL.md').is_file())
     def test_existing_mixed_directory_accepts_nonconflicting_managed_files(self):
         user_file=self.skills/'example/my notes.txt'
@@ -424,7 +487,7 @@ class StandaloneTests(unittest.TestCase):
         os.link(path,user_copy)
         authored=self.source/'plugins/workflow/skills/example/SKILL.md'
         authored.write_bytes(original+b'Updated\n')
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
         self.assertEqual(user_copy.read_bytes(),original)
         self.assertEqual(path.read_bytes(),original+b'Updated\n')
     def test_other_manager_owner_cannot_be_taken_over(self):
@@ -499,7 +562,7 @@ class StandaloneTests(unittest.TestCase):
         old=st.tree(self.skills)
         (self.source/'plugins/workflow/skills/example/scripts/helper.py').write_text(HELPER+'# new revision\n')
         program='''import os,sys\nfrom pathlib import Path\nfrom omh import standalone as st\noriginal=st.rt.atomic\ndef interrupt(path,content):\n    if path.name==st.OWNER: os._exit(71)\n    return original(path,content)\nst.rt.atomic=interrupt\nst.main(sys.argv[1:])\n'''
-        args=['update','--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills), '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
+        args=['refresh','--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills), '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
         result=subprocess.run([sys.executable,'-B','-c',program,*args],cwd=ROOT,capture_output=True,text=True,timeout=30)
         self.assertEqual(result.returncode,71,result.stdout+result.stderr)
         helper=self.skills/'example/scripts/helper.py'
@@ -509,7 +572,7 @@ class StandaloneTests(unittest.TestCase):
         helper.write_bytes(new)
         self.assertEqual(self.call('recover')[0],0)
         self.assertEqual(st.tree(self.skills),old)
-        self.assertEqual(self.call('update')[0],0)
+        self.assertEqual(self.call('refresh')[0],0)
     def test_committed_recovery_does_not_reject_later_user_edits(self):
         self.install()
         authored=self.source/'plugins/workflow/skills/example/SKILL.md'
@@ -520,7 +583,7 @@ class StandaloneTests(unittest.TestCase):
             if path==journal: raise OSError('injected after commit')
             return original(path,*args,**kwargs)
         with patch.object(Path,'unlink',interrupted_cleanup):
-            self.assertEqual(self.call('update')[0],1)
+            self.assertEqual(self.call('refresh')[0],1)
         self.assertTrue(json.loads(journal.read_bytes())['committed'])
         installed=self.skills/'example/SKILL.md'; installed.write_text('later user edit')
         self.assertEqual(self.call('recover')[0],0)

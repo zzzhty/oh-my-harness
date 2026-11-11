@@ -11,20 +11,38 @@ readers remain retired. Preparing Python does not invoke skills or enable hooks.
 
 ## Standalone installation
 
-From this checkout, use Python 3.11 or newer. The distributor uses only the
-standard library; `requirements.txt` is for developer validation.
+On a host, bootstrap with one command (POSIX; needs `git`, `curl` and
+Python ≥ 3.11; [ADR 0036](docs/adr/0036-bootstrap-installer-script.md)):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh | \
+  OMH_HARNESS=codex,claude-code sh
+```
+
+The installer probes the interpreter, verifies the release's `omh-<tag>.ref`
+asset against the tag, clones into `~/.oh-my-harness/repo`, and installs one
+target per listed harness. Afterwards the host needs one command:
+`omh update [--to <tag>]` upgrades in place (ref verification, fetch,
+checkout, refresh of every indexed target); from a developer checkout it
+refuses with `OMH_SOURCE_NOT_MANAGED` and points at `omh refresh`, which
+re-projects targets from the current checkout. Re-running `install.sh`
+locally does the same upgrade without curl.
+
+From a developer checkout, use Python 3.11 or newer directly (the distributor
+uses only the standard library; `requirements.txt` is for developer
+validation):
 
 ```sh
 cd /absolute/path/to/oh-my-harness   # this checkout; Python 3.11 or newer
 python3 -B -m omh plan --harness codex
 python3 -B -m omh install --harness codex --offline
 python3 -B -m omh status
-python3 -B -m omh update --harness codex --offline
+python3 -B -m omh refresh --harness codex
 python3 -B -m omh uninstall --harness codex
 ```
 
-After the first `install`/`update`, daily use is the short `omh <command>`
-form through the launcher shim (POSIX; see below).
+After the first install, daily use is the short `omh <command>` form through
+the launcher shim (POSIX; see below).
 
 `--harness codex` projects skill directories into `~/.codex/skills`;
 `--harness claude-code` uses `~/.claude/skills`; `--harness grok` (Grok Build)
@@ -45,12 +63,12 @@ changes venv storage, independently of the skill target. `--python` selects the
 absolute bootstrap interpreter; otherwise an explicit `OMH_PYTHON` is used, then
 the interpreter running the standalone command. There is no project-venv or PATH
 search. `prepare` prepares runtimes without installing skills. `install` and
-`update` may also prepare them. `plan` and `status` never create environments or
+`refresh` may also prepare them. `plan` and `status` never create environments or
 run pip. Each command takes only its own flags — `omh <command> --help` lists
 them; `--source`/`--home` may come before or after the command
 ([ADR 0035](docs/adr/0035-standalone-cli-grammar-and-readable-output.md)).
 Every command prints a human summary by default; `--json` returns the machine
-form (for `plan`, the JSON `changes` list). `--operation install|update|uninstall`
+form (for `plan`, the JSON `changes` list). `--operation install|refresh|uninstall`
 selects which operation `plan` previews (default `install`), e.g.
 `python3 -B -m omh plan --operation uninstall --harness codex`. `--source
 /absolute/path` distributes content from a different checkout. Commands
@@ -68,7 +86,7 @@ incompatible directories are preserved. Helpers never repair environments.
 Managed creation uses private executable copies; complete venvs are never moved. A group with no requirements is created with `venv --without-pip`. An offline group with dependencies needs hash-matching wheels under
 `<home>/cache/wheels`; the current groups use only the standard library.
 
-On POSIX, `install` and `update` also write an `omh` launcher shim into
+On POSIX, `install` and `refresh` also write an `omh` launcher shim into
 `~/.local/bin` (absolute `--bin-dir` overrides it), so daily use is just
 `omh status` / `omh update`. The short command needs that directory on `PATH`;
 if `~/.local/bin` is not on `PATH`, add it or pass `--bin-dir /absolute/dir`
@@ -87,7 +105,7 @@ default output is a human-readable summary — each target is prefixed with `✓
 (clean), `!` (drift, or a foreign/other-home/missing receipt) or `✗`
 (recovery pending, with the `omh recover` command to run) — and `--json`
 returns the machine form. The home's `targets.json` index is maintained by
-install/update and pruned by uninstall, and default harness roots (`~/.codex`,
+install/refresh and pruned by uninstall, and default harness roots (`~/.codex`,
 `~/.claude`, `~/.grok`) are probed alongside it — the index is a hint,
 receipts stay the source of truth
 ([ADR 0034](docs/adr/0034-status-surface-and-target-index.md)).
@@ -110,13 +128,15 @@ lock held, `HARNESS_RUNTIME_SPEC` non-absolute or linked path,
 packages, skills), `OMH_FILE_INVALID` (an owned file is not an ordinary file
 or exceeds distribution limits), `OMH_RECEIPT_INVALID` (target receipt or
 recovery journal fails validation), `OMH_PATH_INVALID` (path shape or
-manager/target separation violation), `OMH_STATE_CHANGED` (the target changed
+manager/target separation violation), `OMH_SOURCE_NOT_MANAGED` (`update`
+run from a checkout that is not the managed clone under the home),
+`OMH_STATE_CHANGED` (the target changed
 between planning and writing; re-run), `OMH_ENVIRONMENT_INVALID` (the
 environment cannot support the run, e.g. stream reconfiguration), and
 `OMH_INVALID` (malformed input or state without a more specific code).
 
 The target's `.omh-owner.json` records its sole owner, file digests and managed
-paths. Updates restore missing files and can install an absent target. Unrelated
+paths. Refreshes restore missing files and can install an absent target. Unrelated
 files and empty directories in a projected skill are preserved; only a conflicting
 write or removal of a user-modified managed file blocks the transaction. A shared
 `.omh-owner.lock` serializes competing processes. Failed writes roll back through
@@ -212,13 +232,18 @@ source; caches and client projections are not.
 
 `scripts/check_standalone_distribution.py` exercises the distributor end to end
 in an isolated home: read-only `plan`, `install`, `status`, installed helper
-execution through the persisted `.omh-runtime` launchers, idempotent `update`
+execution through the persisted `.omh-runtime` launchers, idempotent `refresh`
 and `uninstall`. CI runs it alongside the unit suites on Python 3.11/3.12 across
 Linux/macOS/Windows:
 
 ```sh
 python scripts/check_standalone_distribution.py
 ```
+
+Each release publishes one bootstrap asset: `omh-<tag>.ref`, a one-line file
+holding the tag's commit SHA (`git rev-parse <tag>^{}`). `install.sh` and
+`omh update` verify the tag against it before touching anything
+([ADR 0036](docs/adr/0036-bootstrap-installer-script.md)).
 
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
 provider remains statically distributable; explicit runtime preparation of

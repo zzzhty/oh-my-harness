@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import sys
 import tomllib
 
@@ -473,7 +474,7 @@ def shim_flag(sub):
     sub.add_argument('--bin-dir', type=Path, help='POSIX launcher shim directory (default ~/.local/bin; absolute)')
 
 def operation_flag(sub):
-    sub.add_argument('--operation', choices=['install', 'update', 'uninstall'], default='install',
+    sub.add_argument('--operation', choices=['install', 'refresh', 'uninstall'], default='install',
         help='operation to preview (default install)')
 
 def build_parser():
@@ -494,8 +495,11 @@ def build_parser():
         shared_flags, runtime_flags, json_flag)
     command('install', 'project skills and instructions into the harness target',
         shared_flags, harness_flag, skills_flag, runtime_flags, shim_flag, json_flag)
-    command('update', 'refresh an installed target; restores missing files',
+    command('refresh', 're-project an installed target from this checkout; restores missing files',
         shared_flags, harness_flag, skills_flag, runtime_flags, shim_flag, json_flag)
+    command('update', 'upgrade the managed clone to a new release and refresh targets (ADR 0036)',
+        shared_flags, lambda sub: sub.add_argument('--to',
+            help='tag to upgrade to (default: the latest release)'))
     command('uninstall', 'remove a managed target and the shared launcher shim',
         shared_flags, harness_flag, skills_flag, json_flag)
     command('status', 'show every installed target and its health',
@@ -547,8 +551,20 @@ def main(argv=None):
         skills = rt.safe_path(skills_root or Path.home() / HARNESS_ROOTS[harness] / 'skills')
         root = skills.parent
         if home == root or home.is_relative_to(root): rt.fail('Manager and skill target must be separate', 'OMH_PATH_INVALID')
-        if args.command not in ('status', 'prepare'):
+        if args.command not in ('status', 'prepare', 'update'):
             default_target_hint(home, harness, skills_root, args.json)
+        if args.command == 'update':
+            # ADR 0036: a thin delegate. The CLI carries no git or network logic;
+            # the versioned install.sh performs verification, fetch and checkout.
+            if os.name == 'nt' or not (source / '.git').exists() \
+                    or os.path.realpath(source) != os.path.realpath(home / 'repo'):
+                rt.fail(f"omh update delegates to the managed checkout at {home / 'repo'} "
+                        f"(current source: {source}); from a developer checkout use omh refresh, "
+                        'or bootstrap with install.sh', 'OMH_SOURCE_NOT_MANAGED')
+            environment = dict(os.environ, OMH_HOME=str(home))
+            target = getattr(args, 'to', None)
+            if target: environment['OMH_VERSION'] = target
+            return subprocess.call(['/bin/sh', str(source / 'install.sh')], env=environment)
         if args.command == 'status':
             if skills_root is None:
                 items = overview(home)

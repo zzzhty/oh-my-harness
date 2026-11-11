@@ -164,7 +164,7 @@ def main():
                                '--python', python, '--offline')
         assert result.returncode != 0 and 'HARNESS_CONFLICT' in result.stdout + result.stderr
 
-        assert checked(env, 'update', '--home', state, '--skills-root', skills, '--python', python, '--offline', '--json')['changed'] == 0
+        assert checked(env, 'refresh', '--home', state, '--skills-root', skills, '--python', python, '--offline', '--json')['changed'] == 0
         shim = home / '.local/bin/omh'
         if os.name != 'nt':
             assert shim.is_file() and os.access(shim, os.X_OK)
@@ -188,7 +188,7 @@ def main():
         assert (grok / 'skills/sop/SKILL.md').is_file()
         assert (grok / 'AGENTS.md').read_bytes() == (ROOT / 'agents/global-instructions.md').read_bytes()
         (grok / 'Claude.md').write_text('# shadow rules\n')
-        blocked, _ = standalone(env, 'update', '--home', state, '--harness', 'grok', '--python', python, '--offline')
+        blocked, _ = standalone(env, 'refresh', '--home', state, '--harness', 'grok', '--python', python, '--offline')
         assert blocked.returncode != 0 and 'HARNESS_CONFLICT' in blocked.stdout + blocked.stderr
         (grok / 'Claude.md').unlink()
         checked(env, 'uninstall', '--home', state, '--harness', 'grok', '--json')
