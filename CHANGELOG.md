@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Document the whole `omh` CLI surface in `--help`: user-facing description, a per-command list and exit-code semantics; every flag now states its default, absolute-path requirement and which command it applies to.
+- Make the README quick start copy-runnable (`cd` into the checkout, real `python3`), document `plan --operation` and `--source`, add concrete `recover` guidance, state the `~/.local/bin` `PATH` prerequisite and multi-target shim removal, list `~/.grok` among probed status roots, and replace the nonexistent `HARNESS_RUNTIME_PROVIDER_REQUIRED` reference with the codes actually reported. Rename the leftover planning section so the file has one `Unreleased` heading.
 - Add the `grok` target (Grok Build): skills project into `~/.grok/skills`, global instructions project as `~/.grok/AGENTS.md`, and sibling rule files Grok also scans (`Claude.md`, `AGENT.md`) fail closed as shadows. Status probing covers `~/.grok`.
 - Quote the POSIX `omh` shim with `shlex.quote`, so a checkout path that contains quotes, `$()`, or non-ASCII characters is passed to Python literally.
 - Create standard-library runtime groups with `venv --without-pip`. Groups with a hashed lock still install with pip. A failed runtime process keeps the stderr and stdout tails instead of discarding them.
@@ -26,7 +28,7 @@
 - Preserve 30 skills, four independent maintenance workflows, catalog-only runtime access, and ADR 0027 historical evidence semantics.
 - Separate content declarations, immutable locks and installation receipts; imported content does not enable hooks.
 
-## Unreleased
+## Historical planning notes (pre-rebuild)
 
 > **Not current work.** These notes are leftover planning, kept verbatim. Oh My Pi and OpenClaw are not standalone harness targets. Current distribution is `python -m omh` for `codex` and `claude-code` (ADR 0031).
 

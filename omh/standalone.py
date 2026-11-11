@@ -420,20 +420,45 @@ def plan(source, home, skills, operation, prepared, harness):
     if data(root / OWNER) != new_receipt: changes.append(dict(path=OWNER, before=b64(data(root / OWNER)), after=b64(new_receipt)))
     return changes
 
+COMMAND_HELP = '''commands:
+  prepare    prepare Python runtimes without installing skills
+  install    project skills and instructions into the harness target
+  update     refresh an installed target; restores missing files
+  uninstall  remove a managed target and the shared launcher shim
+  status     show every installed target and its health
+  plan       preview file changes without writing (see --operation)
+  recover    roll back or finish an interrupted transaction
+
+exit codes: 0 success (status: every target clean), 1 runtime error or a
+target needing attention, 2 command-line usage error'''
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='omh', description=__doc__)
-    parser.add_argument('command', choices=['prepare', 'install', 'update', 'uninstall', 'status', 'plan', 'recover'])
-    parser.add_argument('--source', type=Path, default=SOURCE)
-    parser.add_argument('--home', type=Path, default=Path.home() / '.oh-my-harness')
-    parser.add_argument('--harness', choices=['codex', 'claude-code', 'grok'], default='codex')
-    parser.add_argument('--skills-root', type=Path)
-    parser.add_argument('--deployment-root', type=Path)
-    parser.add_argument('--python', type=Path)
-    parser.add_argument('--external-venv', type=Path)
-    parser.add_argument('--offline', action='store_true')
+    parser = argparse.ArgumentParser(prog='omh',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='Install and manage OMH skills for codex, claude-code and grok.',
+        epilog=COMMAND_HELP)
+    parser.add_argument('command', choices=['prepare', 'install', 'update', 'uninstall', 'status', 'plan', 'recover'],
+        help='operation to run (see the command list at the end of this help)')
+    parser.add_argument('--source', type=Path, default=SOURCE,
+        help='content source checkout (default: the installing checkout; absolute)')
+    parser.add_argument('--home', type=Path, default=Path.home() / '.oh-my-harness',
+        help='manager state directory (default ~/.oh-my-harness; absolute)')
+    parser.add_argument('--harness', choices=['codex', 'claude-code', 'grok'], default='codex',
+        help='harness target to manage (default codex)')
+    parser.add_argument('--skills-root', type=Path,
+        help='skills directory to manage (default <harness root>/skills; absolute; with status: single-target view)')
+    parser.add_argument('--deployment-root', type=Path,
+        help='runtime deployment directory (default ~/.oh-my-harness/runtimes; absolute)')
+    parser.add_argument('--python', type=Path,
+        help='absolute bootstrap interpreter (default $OMH_PYTHON, else the current interpreter)')
+    parser.add_argument('--external-venv', type=Path,
+        help='absolute venv root reused for runtimes (verified, never modified)')
+    parser.add_argument('--offline', action='store_true',
+        help='prepare runtimes from cached wheels only; no network')
     parser.add_argument('--bin-dir', type=Path, help='POSIX launcher shim directory (default ~/.local/bin; absolute)')
-    parser.add_argument('--operation', choices=['install', 'update', 'uninstall'], default='install')
-    parser.add_argument('--json', action='store_true', help='Machine-readable status output')
+    parser.add_argument('--operation', choices=['install', 'update', 'uninstall'], default='install',
+        help='operation to preview; plan only (default install)')
+    parser.add_argument('--json', action='store_true', help='machine-readable JSON output (status only today)')
     args = parser.parse_args(argv)
     # Deterministic UTF-8 on real text streams, including Windows pipes.
     # In-process captures such as io.StringIO have no reconfigure method.

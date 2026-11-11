@@ -15,12 +15,16 @@ From this checkout, use Python 3.11 or newer. The distributor uses only the
 standard library; `requirements.txt` is for developer validation.
 
 ```sh
-/absolute/python3 -B -m omh plan --harness codex
-/absolute/python3 -B -m omh install --harness codex --offline
-/absolute/python3 -B -m omh status --harness codex
-/absolute/python3 -B -m omh update --harness codex --offline
-/absolute/python3 -B -m omh uninstall --harness codex
+cd /absolute/path/to/oh-my-harness   # this checkout; Python 3.11 or newer
+python3 -B -m omh plan --harness codex
+python3 -B -m omh install --harness codex --offline
+python3 -B -m omh status
+python3 -B -m omh update --harness codex --offline
+python3 -B -m omh uninstall --harness codex
 ```
+
+After the first `install`/`update`, daily use is the short `omh <command>`
+form through the launcher shim (POSIX; see below).
 
 `--harness codex` projects skill directories into `~/.codex/skills`;
 `--harness claude-code` uses `~/.claude/skills`; `--harness grok` (Grok Build)
@@ -42,7 +46,12 @@ absolute bootstrap interpreter; otherwise an explicit `OMH_PYTHON` is used, then
 the interpreter running the standalone command. There is no project-venv or PATH
 search. `prepare` prepares runtimes without installing skills. `install` and
 `update` may also prepare them. `plan` and `status` never create environments or
-run pip. Commands require absolute paths for overrides.
+run pip. `plan` previews the file changes an operation would make and prints
+them as a JSON `changes` list; `--operation install|update|uninstall` selects
+which operation to preview (default `install`), e.g.
+`python3 -B -m omh plan --operation uninstall --harness codex`. `--source
+/absolute/path` distributes content from a different checkout. Commands
+require absolute paths for overrides.
 
 Use `--external-venv /absolute/venv` to reuse a verified environment without
 modifying it. Its Python version, imports and locked dependency versions must
@@ -56,9 +65,12 @@ Managed creation uses private executable copies; complete venvs are never moved.
 
 On POSIX, `install` and `update` also write an `omh` launcher shim into
 `~/.local/bin` (absolute `--bin-dir` overrides it), so daily use is just
-`omh status` / `omh update`. The shim is a static pointer to the installing
+`omh status` / `omh update`. The short command needs that directory on `PATH`;
+if `~/.local/bin` is not on `PATH`, add it or pass `--bin-dir /absolute/dir`
+pointing at a directory that is. The shim is a static pointer to the installing
 checkout and interpreter — no state, no self-update, no PATH search; an unowned
-existing `omh` there fails closed, and `uninstall` removes an owned one
+existing `omh` there fails closed, and `uninstall` removes an owned one even
+when other targets remain installed — rerun `install` to recreate it
 ([ADR 0033](docs/adr/0033-standalone-launcher-shim.md)). Windows uses the full
 `python -B -m omh` command.
 
@@ -68,8 +80,8 @@ home knows: each target's receipt is verified live and reported as
 `missing`; the exit code is 0 only when every listed target is clean. The
 default output is a human-readable summary; `--json` returns the machine form.
 The home's `targets.json` index is maintained by install/update and pruned by
-uninstall, and default harness roots (`~/.codex`, `~/.claude`) are probed
-alongside it — the index is a hint, receipts stay the source of truth
+uninstall, and default harness roots (`~/.codex`, `~/.claude`, `~/.grok`) are
+probed alongside it — the index is a hint, receipts stay the source of truth
 ([ADR 0034](docs/adr/0034-status-surface-and-target-index.md)).
 
 The target's `.omh-owner.json` records its sole owner, file digests and managed
@@ -78,7 +90,9 @@ files and empty directories in a projected skill are preserved; only a conflicti
 write or removal of a user-modified managed file blocks the transaction. A shared
 `.omh-owner.lock` serializes competing processes. Failed writes roll back through
 a durable journal; after a hard interruption use `python -B -m omh recover` with
-the same `--home` and target. Uncommitted rollback preserves post-failure user
+the same `--home` and target — pass the same `--harness` (or `--skills-root`) as
+the interrupted command, since `recover` defaults to the codex target; it prints
+`{"recovered": true}` on success. Uncommitted rollback preserves post-failure user
 edits; committed recovery finishes cleanup without rejecting later user changes.
 The planner never takes over an existing installation automatically: a target
 with another owner's receipt, or a native plugin configuration still referencing
@@ -166,8 +180,10 @@ python scripts/check_standalone_distribution.py
 ```
 
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
-provider remains statically distributable; explicit runtime preparation reports
-`HARNESS_RUNTIME_PROVIDER_REQUIRED` until supporting content is selected. Deep
+provider remains statically distributable; explicit runtime preparation of
+unsupported content fails closed — an unsupported manifest or composition
+reports `HARNESS_RUNTIME_INVALID`, and a manifest without `runtimeGroups`
+reports `OMH_INVALID`. Deep
 standalone behavior (external venvs, shared locks, interruption recovery,
 partial preparation) is covered by `tests/test_standalone.py`. Native client
 skill discovery, model calls and interactive Home GUI use are outside the
