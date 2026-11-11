@@ -56,18 +56,19 @@ class StandaloneTests(unittest.TestCase):
         agents.mkdir()
         (agents/'global-instructions.md').write_text('# Global Instructions\nTest authority line.\n')
     def call(self, command, *extra):
-        output = io.StringIO()
+        out, err = io.StringIO(), io.StringIO()
         arguments = ['--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills),
             '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',*extra]
         if command == 'status': arguments.append('--json')
-        with contextlib.redirect_stdout(output):
+        # Success JSON arrives on stdout, error envelopes on stderr.
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = st.main([command, *arguments])
-        return code, json.loads(output.getvalue())
+        return code, json.loads(out.getvalue() or err.getvalue())
     def call_overview(self, *extra):
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = st.main(['status','--source',str(self.source),'--home',str(self.home),'--json',*extra])
-        return code, json.loads(output.getvalue())
+        return code, json.loads(out.getvalue() or err.getvalue())
     def install(self):
         code,result=self.call('install')
         self.assertEqual(code,0,result)
@@ -122,12 +123,12 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual((skills.parent/'CLAUDE.md').read_bytes(),(self.source/'agents/global-instructions.md').read_bytes())
     def test_grok_target_defaults_to_grok_root_and_shadows_conflict(self):
         def grok_call(command, *extra):
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output):
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = st.main([command,'--source',str(self.source),'--home',str(self.home),
                     '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',
                     '--harness','grok',*extra])
-            return code, json.loads(output.getvalue())
+            return code, json.loads(out.getvalue() or err.getvalue())
         # No --skills-root: the default resolves under the patched HOME.
         code,result = grok_call('install')
         self.assertEqual(code,0,result)
@@ -193,7 +194,8 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(text_code, 0)
         text = output.getvalue()
         self.assertIn(f"workflow({result['runtimes'][0]['version']})", text)
-        self.assertIn('—', text)
+        self.assertIn('✓', text)
+        self.assertIn('clean', text)
         if os.name != 'nt': self.assertIn('→', text)
     def test_home_lock_refuses_competing_index_update(self):
         self.home.mkdir(parents=True)
@@ -215,7 +217,7 @@ class StandaloneTests(unittest.TestCase):
         # The index is UTF-8. Windows locale text mode would decode 空间 as cp1252.
         recorded = json.loads((self.home / st.TARGETS_FILE).read_bytes())
         self.assertEqual(set(recorded), {str(self.root/'one'), str(self.root/'two')})
-    def test_stdout_reconfigure_failure_is_a_json_error(self):
+    def test_stream_reconfigure_failure_is_a_stderr_json_error(self):
         class Stream(io.TextIOBase):
             def __init__(self):
                 super().__init__()
@@ -226,10 +228,12 @@ class StandaloneTests(unittest.TestCase):
             def reconfigure(self, **kwargs):
                 raise OSError('refused')
         stream = Stream()
-        with contextlib.redirect_stdout(stream):
+        errors = io.StringIO()
+        with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(errors):
             code = st.main(['status', '--home', str(self.home)])
         self.assertEqual(code, 1)
-        payload = json.loads(''.join(stream.parts))
+        self.assertEqual(''.join(stream.parts), '')  # stdout stays a result stream.
+        payload = json.loads(errors.getvalue())
         self.assertEqual(payload['error']['code'], 'OMH_INVALID')
         self.assertIn('stdout encoding', payload['error']['message'])
     def test_shared_script_binding_keeps_windows_backslashes(self):
@@ -293,8 +297,9 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(code,0)
         text = output.getvalue()
         self.assertIn(str(self.skills.parent),text)
-        self.assertIn('installed',text)
-        self.assertIn('managed files',text)
+        self.assertIn('✓',text)
+        self.assertIn('files',text)
+        self.assertIn('clean',text)
         self.assertIn('summary: 1 target, all clean',text)
     def test_future_session_executes_without_source_or_environment_binding(self):
         self.install()
@@ -417,7 +422,8 @@ class StandaloneTests(unittest.TestCase):
         with rt.lock(self.skills.parent/st.LOCK):
             result=subprocess.run([sys.executable,'-B','-m','omh','install','--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills), '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline'],cwd=ROOT,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,1)
-            self.assertEqual(json.loads(result.stdout)['error']['code'],'HARNESS_RUNTIME_BUSY')
+            self.assertEqual(json.loads(result.stderr)['error']['code'],'HARNESS_RUNTIME_BUSY')
+            self.assertEqual(result.stdout, '')
             self.assertFalse(self.home.exists())
     def test_failed_first_install_recovers_and_can_retry(self):
         original=rt.atomic

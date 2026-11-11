@@ -120,8 +120,8 @@ def main():
             '--home', str(state)], cwd=ROOT, env=env, capture_output=True, timeout=60)
         assert overview.returncode == 0, overview.stdout + overview.stderr
         overview_text = overview.stdout.decode('utf-8')
-        assert '—'.encode('utf-8') in overview.stdout
-        assert str(skills.parent) in overview_text and 'installed' in overview_text
+        assert '✓'.encode('utf-8') in overview.stdout
+        assert str(skills.parent) in overview_text and 'clean' in overview_text
         assert {'maintenance', 'workflow'} <= {item['id'] for item in payload['runtimes']}
         assert all(item['version'] for item in payload['runtimes'])
         receipt_files = json.loads((home / '.codex/.omh-owner.json').read_text())['files']

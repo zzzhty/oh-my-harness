@@ -78,11 +78,22 @@ when other targets remain installed — rerun `install` to recreate it
 home knows: each target's receipt is verified live and reported as
 `installed` (with drift counts and recovery needs), `foreign`, `other-home` or
 `missing`; the exit code is 0 only when every listed target is clean. The
-default output is a human-readable summary; `--json` returns the machine form.
-The home's `targets.json` index is maintained by install/update and pruned by
-uninstall, and default harness roots (`~/.codex`, `~/.claude`, `~/.grok`) are
-probed alongside it — the index is a hint, receipts stay the source of truth
+default output is a human-readable summary — each target is prefixed with `✓`
+(clean), `!` (drift, or a foreign/other-home/missing receipt) or `✗`
+(recovery pending, with the `omh recover` command to run) — and `--json`
+returns the machine form. The home's `targets.json` index is maintained by
+install/update and pruned by uninstall, and default harness roots (`~/.codex`,
+`~/.claude`, `~/.grok`) are probed alongside it — the index is a hint,
+receipts stay the source of truth
 ([ADR 0034](docs/adr/0034-status-surface-and-target-index.md)).
+
+Runtime errors print one JSON object to **stderr** as
+`{"error": {"code", "message"}}` and exit 1 (`HARNESS_OWNER_CONFLICT`,
+`HARNESS_CONFLICT`, `HARNESS_RECOVERY_REQUIRED`, `HARNESS_RUNTIME_BUSY` and
+the other `HARNESS_RUNTIME_*`/`OMH_*` codes); stdout stays a parseable result
+stream. Command-line usage errors print argparse text to stderr and exit 2.
+`status` exits 0 only when every listed target is clean, 1 otherwise or on
+error. Runtime preparation prints TTY-gated progress lines to stderr.
 
 The target's `.omh-owner.json` records its sole owner, file digests and managed
 paths. Updates restore missing files and can install an absent target. Unrelated

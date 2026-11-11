@@ -113,6 +113,15 @@ def runtime_entries(home):
 def runtime_summary(entries):
     return ' '.join(f"{item['id']}({item['version']})" if item['version'] else item['id'] for item in entries)
 
+def error_line(code, message):
+    # Errors belong on stderr so piped stdout stays a parseable result stream.
+    print(json.dumps(dict(error=dict(code=code, message=message))), file=sys.stderr)
+
+def progress(message):
+    # TTY-gated: interactive terminals see life, logs and captures stay clean.
+    if getattr(sys.stderr, 'isatty', lambda: False)():
+        print(message, file=sys.stderr, flush=True)
+
 def print_overview(home, items, as_json):
     entries = runtime_entries(home)
     shim = data(home / 'shim.json')
@@ -130,19 +139,21 @@ def print_overview(home, items, as_json):
     for item in items:
         label = item['target'] + (f" ({item['harness']})" if item.get('harness') else '')
         if item['state'] == 'installed':
-            print(f"{label} — installed")
-            modified = len(item['modified'])
-            detail = [f"{item['files']} managed files"]
-            if modified: detail.append(f"{modified} modified/missing: " + ', '.join(list(item['modified'])[:4]) + (' …' if modified > 4 else ''))
-            else: detail.append('no drift')
-            detail.append('recovery required' if item['recoveryRequired'] else 'recovery not required')
-            if item.get('sourceIdentity'): detail.append(f"source {item['sourceIdentity']}")
-            print('  ' + ' · '.join(detail))
+            detail = f"{item['files']} files"
+            if item.get('sourceIdentity'): detail += f" · source {item['sourceIdentity']}"
+            if item['recoveryRequired']:
+                hint = f"omh recover --harness {item['harness']}" if item.get('harness') and item['harness'] != '?' else 'omh recover'
+                print(f"  ✗ {label} · {detail} · recovery pending → {hint}")
+            elif item['modified']:
+                names = ', '.join(list(item['modified'])[:4]) + (' …' if len(item['modified']) > 4 else '')
+                print(f"  ! {label} · {detail} · {len(item['modified'])} modified/missing: {names} (full list: omh status --json)")
+            else:
+                print(f"  ✓ {label} · {detail} · clean")
         elif item['state'] == 'missing':
-            print(f"{label} — receipt missing (uninstalled elsewhere or never installed)")
+            print(f"  ! {label} · receipt missing (uninstalled elsewhere or never installed)")
         else:
-            extra = f" ({item.get('owner') or item.get('manager') or 'unreadable'})" if item['state'] != 'invalid-receipt' else ''
-            print(f"{label} — {item['state']}{extra}")
+            extra = f" · {item.get('owner') or item.get('manager') or 'unreadable'}" if item['state'] != 'invalid-receipt' else ''
+            print(f"  ! {label} · {item['state']}{extra}")
     if not items: print('no installed targets recorded')
     abnormal = [i for i in items if not clean(i)]
     print(f"\nsummary: {len(items)} target{'s' if len(items) != 1 else ''}, "
@@ -320,10 +331,13 @@ def manifest(source):
 
 def prepare_runtimes(source, home, python, deployment, external, offline):
     result = {}
-    for spec in manifest(source)['runtimeGroups']:
+    groups = manifest(source)['runtimeGroups']
+    for index, spec in enumerate(groups, 1):
+        progress(f"[{index}/{len(groups)}] preparing runtime '{spec['id']}' ...")
         result[spec['id']] = rt.prepare(dict(protocol=1, spec=spec, bundleRoot=str(source),
             python=str(python), deploymentRoot=str(deployment), externalVenv=str(external) if external else None,
             wheelCache=str(home / 'cache/wheels'), offline=offline))
+        progress(f"[{index}/{len(groups)}] runtime '{spec['id']}' ready")
     # This is standalone configuration, never emitted by the runtime provider itself.
     # The lock covers the publish only; venv creation stays outside it.
     with rt.lock(home / HOME_LOCK):
@@ -462,12 +476,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     # Deterministic UTF-8 on real text streams, including Windows pipes.
     # In-process captures such as io.StringIO have no reconfigure method.
-    reconfigure = getattr(sys.stdout, 'reconfigure', None)
-    if reconfigure is not None:
+    for stream, name in ((sys.stdout, 'stdout'), (sys.stderr, 'stderr')):
+        reconfigure = getattr(stream, 'reconfigure', None)
+        if reconfigure is None: continue
         try:
             reconfigure(encoding='utf-8')
         except (ValueError, OSError) as error:
-            print(json.dumps(dict(error=dict(code='OMH_INVALID', message=f'stdout encoding: {error}'))))
+            error_line('OMH_INVALID', f'{name} encoding: {error}')
             return 1
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
@@ -520,5 +535,5 @@ def main(argv=None):
         print(json.dumps(result))
         return 0
     except (rt.RuntimeFailure, OSError, ValueError, KeyError, TypeError) as error:
-        print(json.dumps(dict(error=dict(code=getattr(error,'code','OMH_INVALID'),message=str(error)))))
+        error_line(getattr(error, 'code', 'OMH_INVALID'), str(error))
         return 1

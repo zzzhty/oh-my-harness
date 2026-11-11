@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Report runtime errors as JSON on **stderr** (exit 1) instead of stdout, keeping stdout a parseable result stream for pipes and scripts; usage errors stay argparse text on stderr with exit 2. stdout and stderr are both reconfigured to UTF-8.
+- Rework the human `omh status` layout: per-target marks `✓` clean, `!` drift or foreign/missing receipts, `✗` recovery pending with the `omh recover` command to run; healthy targets collapse to one `clean` line instead of repeating "recovery not required", and truncated drift lists point at `omh status --json`.
+- Print TTY-gated runtime preparation progress (`[1/2] preparing runtime 'workflow' ...`) to stderr during `prepare`/`install`/`update`.
 - Document the whole `omh` CLI surface in `--help`: user-facing description, a per-command list and exit-code semantics; every flag now states its default, absolute-path requirement and which command it applies to.
 - Make the README quick start copy-runnable (`cd` into the checkout, real `python3`), document `plan --operation` and `--source`, add concrete `recover` guidance, state the `~/.local/bin` `PATH` prerequisite and multi-target shim removal, list `~/.grok` among probed status roots, and replace the nonexistent `HARNESS_RUNTIME_PROVIDER_REQUIRED` reference with the codes actually reported. Rename the leftover planning section so the file has one `Unreleased` heading.
 - Add the `grok` target (Grok Build): skills project into `~/.grok/skills`, global instructions project as `~/.grok/AGENTS.md`, and sibling rule files Grok also scans (`Claude.md`, `AGENT.md`) fail closed as shadows. Status probing covers `~/.grok`.
