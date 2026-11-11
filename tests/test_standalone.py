@@ -558,6 +558,30 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(list(actual.iterdir()),[])
 
 class RuntimeTests(unittest.TestCase):
+    PROGRAM = ROOT / 'plugins/workflow/scripts/omh_runtime.py'
+
+    def protocol(self, *arguments):
+        return subprocess.run([sys.executable, '-I', '-B', str(self.PROGRAM), *arguments],
+            capture_output=True, text=True, timeout=30)
+
+    def test_protocol_cli_rejects_unknown_or_missing_arguments(self):
+        for arguments in (['prepare', '--requst', 'x'], ['verify'], ['prepare', '--extra-typo'], ['run']):
+            result = self.protocol(*arguments)
+            self.assertEqual(result.returncode, 2, (arguments, result.stdout, result.stderr))
+            self.assertEqual(result.stdout, '')
+            self.assertIn('usage:', result.stderr)
+
+    def test_protocol_cli_envelopes_and_exit_codes(self):
+        # ADR 0030: prepare/verify answer on stdout with exit zero.
+        result = self.protocol('verify', '--request', '{}')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['error']['code'], 'HARNESS_RUNTIME_INVALID')
+        # run keeps the helper's stdout channel as the caller's result.
+        result = self.protocol('run', '--binding', str(ROOT / 'no-such-binding.json'), '--', 'helper.py')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(result.stdout, '')
+        self.assertIn('error', json.loads(result.stderr))
+
     def test_failed_process_keeps_stderr_and_stdout_tails(self):
         with self.assertRaises(rt.RuntimeFailure) as caught:
             rt.run_process(sys.executable, ['-c', 'import sys; sys.stderr.write("pip exploded\\n"); raise SystemExit(3)'])

@@ -337,11 +337,20 @@ def launch(binding, argv):
     return subprocess.call([str(python), '-E', '-s', '-B', *argv], env=process_environment())
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['prepare', 'verify', 'run'])
-    parser.add_argument('--request')
-    parser.add_argument('--binding', type=Path)
+    parser = argparse.ArgumentParser(prog='omh_runtime',
+        description='OMH shared runtime provider: JSON request/response protocol over argv, never a shell.')
+    parser.add_argument('operation', choices=['prepare', 'verify', 'run'],
+        help='prepare: build or reuse a runtime from a JSON --request; verify: validate one; run: launch a bound helper')
+    parser.add_argument('--request', help='JSON request object (required for prepare/verify)')
+    parser.add_argument('--binding', type=Path, help='binding file from .omh-runtime (required for run)')
     args, argv = parser.parse_known_args()
+    # Only run forwards helper argv (after --); prepare/verify are closed protocols,
+    # so leftover arguments mean a typo that must not masquerade as a protocol error.
+    if args.operation == 'run':
+        if args.binding is None: parser.error('--binding is required for run')
+    else:
+        if argv: parser.error(f'unrecognized arguments: {" ".join(argv)}')
+        if args.request is None: parser.error(f'--request is required for {args.operation}')
     try:
         if args.operation == 'run':
             return launch(args.binding, argv[1:] if argv[:1] == ['--'] else argv)
@@ -351,7 +360,12 @@ def main():
         print(json.dumps({'ok': result}))
         return 0
     except (RuntimeFailure, OSError, ValueError, KeyError, TypeError) as error:
-        print(json.dumps({'error': {'code': getattr(error, 'code', 'HARNESS_RUNTIME_INVALID'), 'message': str(error)}}))
+        envelope = json.dumps({'error': {'code': getattr(error, 'code', 'HARNESS_RUNTIME_INVALID'), 'message': str(error)}})
+        # ADR 0030: prepare/verify answer on stdout and exit zero so an
+        # integration reads the error code. run preserves the helper's stdout
+        # as the caller's result, so its startup failures go to stderr.
+        if args.operation == 'run': print(envelope, file=sys.stderr)
+        else: print(envelope)
         return 1 if args.operation == 'run' else 0
 
 if __name__ == '__main__':

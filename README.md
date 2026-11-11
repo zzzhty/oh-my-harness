@@ -156,6 +156,16 @@ for that invocation. Invalid overrides fail; validation never falls back or
 installs dependencies. The runtime isolates Python-specific environment settings.
 Each consuming skill documents its group and its own output/permission boundary.
 
+The protocol CLI behind the launchers (`omh_runtime.py prepare|verify|run`)
+answers `prepare`/`verify` on **stdout** as `{"ok": ...}` or
+`{"error": {"code", "message"}}` with **exit 0** — integrations read the
+envelope, not the exit code ([ADR 0030](docs/adr/0030-independent-distribution-and-shared-runtime.md)).
+`run` preserves the helper's own exit status and stdout as the caller's
+result; its startup failures print the `{"error": ...}` envelope to **stderr**
+with exit 1. Unknown or missing protocol arguments are usage errors (exit 2).
+The standalone `omh` CLI keeps its separate contract: `--json` results on
+stdout, error envelopes on stderr with exit 1.
+
 ## Migrating a previously managed installation
 
 A previously managed home is migrated by owner handoff: uninstall with that
