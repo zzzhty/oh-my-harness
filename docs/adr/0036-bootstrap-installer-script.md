@@ -59,6 +59,16 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    exit-code contract (ADR 0035) makes the wrapper script-friendly. Hosts
    upgrade without curl through the native git flow. Windows and non-GitHub
    hosts keep the documented manual path.
+5. **Upgrade entry: `omh upgrade`, a thin delegate.** `omh upgrade [--to
+   <tag>]` (default: the latest release) is the single-command host entry.
+   The verb verifies that the running source checkout is the managed clone
+   under the home, then execs that tree's `install.sh` with the version
+   passthrough; the script performs the ref verification and the
+   fetch/checkout/update flow. The CLI gains no git or network logic and
+   never mutates its own source directly — this is the deliberately thin,
+   explicitly invoked replacement for the retired git self-updater. `omh
+   update` keeps its meaning (refresh targets from this tree); nothing
+   upgrades automatically.
 
 The installer never mutates targets itself; every mutation still goes through
 the standalone CLI as the sole distribution channel.
