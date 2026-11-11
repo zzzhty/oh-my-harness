@@ -275,7 +275,7 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(''.join(stream.parts), '')  # stdout stays a result stream.
         payload = json.loads(errors.getvalue())
-        self.assertEqual(payload['error']['code'], 'OMH_INVALID')
+        self.assertEqual(payload['error']['code'], 'OMH_ENVIRONMENT_INVALID')
         self.assertIn('stdout encoding', payload['error']['message'])
     def test_shared_script_binding_keeps_windows_backslashes(self):
         source = b'OMH_SHARED_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"\n'
@@ -433,6 +433,20 @@ class StandaloneTests(unittest.TestCase):
             (self.skills.parent/st.OWNER).write_text(json.dumps(dict(schemaVersion=1,owner=owner,manager=str(self.root/'other'),target=str(self.skills.parent))))
             self.assertEqual(self.call('install')[1]['error']['code'],'HARNESS_OWNER_CONFLICT')
             self.assertFalse(self.home.exists())
+    def test_receipt_and_path_validation_report_specific_codes(self):
+        self.skills.parent.mkdir(parents=True)
+        (self.skills.parent/st.OWNER).write_text(json.dumps(dict(schemaVersion=2,owner='omh',manager=str(self.home),target=str(self.skills.parent))))
+        code,result = self.call('install')
+        self.assertEqual(code,1)
+        self.assertEqual(result['error']['code'],'OMH_RECEIPT_INVALID')
+        self.assertEqual(result['error']['message'],'Unsupported receipt')
+        nested = self.skills.parent/'nested home'
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(['install','--source',str(self.source),'--home',str(nested),
+                '--skills-root',str(self.skills),'--json'])
+        self.assertEqual(code,1)
+        self.assertEqual(json.loads(err.getvalue())['error']['code'],'OMH_PATH_INVALID')
     def test_inert_native_cache_is_not_an_owner_but_native_installation_is(self):
         native=self.skills.parent/'plugins/cache/oh-my-harness/workflow'
         native.mkdir(parents=True); (native/'cached.txt').write_text('inert cache')
@@ -540,6 +554,7 @@ class StandaloneTests(unittest.TestCase):
         actual=self.root/'elsewhere'; actual.mkdir()
         self.skills.parent.symlink_to(actual,target_is_directory=True)
         self.assertEqual(self.call('install')[0],1)
+        self.assertEqual(self.call('install')[1]['error']['code'],'HARNESS_RUNTIME_SPEC')
         self.assertEqual(list(actual.iterdir()),[])
 
 class RuntimeTests(unittest.TestCase):

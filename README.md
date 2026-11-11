@@ -93,12 +93,27 @@ receipts stay the source of truth
 ([ADR 0034](docs/adr/0034-status-surface-and-target-index.md)).
 
 Runtime errors print one JSON object to **stderr** as
-`{"error": {"code", "message"}}` and exit 1 (`HARNESS_OWNER_CONFLICT`,
-`HARNESS_CONFLICT`, `HARNESS_RECOVERY_REQUIRED`, `HARNESS_RUNTIME_BUSY` and
-the other `HARNESS_RUNTIME_*`/`OMH_*` codes); stdout stays a parseable result
+`{"error": {"code", "message"}}` and exit 1; stdout stays a parseable result
 stream. Command-line usage errors print argparse text to stderr and exit 2.
 `status` exits 0 only when every listed target is clean, 1 otherwise or on
 error. Runtime preparation prints TTY-gated progress lines to stderr.
+
+Error codes: `HARNESS_OWNER_CONFLICT` (another owner's receipt or native
+configuration; explicit handoff required), `HARNESS_CONFLICT` (unowned or
+user-modified managed file, shadowing rules, unowned launcher),
+`HARNESS_RECOVERY_REQUIRED` (an interrupted transaction's journal exists;
+run `recover` first), `HARNESS_RECOVERY_CONFLICT` (post-failure user edits
+block rollback), `HARNESS_RUNTIME_*` (runtime provider: `HARNESS_RUNTIME_BUSY`
+lock held, `HARNESS_RUNTIME_SPEC` non-absolute or linked path,
+`HARNESS_RUNTIME_OFFLINE_MISSING` cached wheel absent, …),
+`OMH_CONTENT_INVALID` (malformed source content: manifest, composition,
+packages, skills), `OMH_FILE_INVALID` (an owned file is not an ordinary file
+or exceeds distribution limits), `OMH_RECEIPT_INVALID` (target receipt or
+recovery journal fails validation), `OMH_PATH_INVALID` (path shape or
+manager/target separation violation), `OMH_STATE_CHANGED` (the target changed
+between planning and writing; re-run), `OMH_ENVIRONMENT_INVALID` (the
+environment cannot support the run, e.g. stream reconfiguration), and
+`OMH_INVALID` (malformed input or state without a more specific code).
 
 The target's `.omh-owner.json` records its sole owner, file digests and managed
 paths. Updates restore missing files and can install an absent target. Unrelated
@@ -197,9 +212,8 @@ python scripts/check_standalone_distribution.py
 
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
 provider remains statically distributable; explicit runtime preparation of
-unsupported content fails closed — an unsupported manifest or composition
-reports `HARNESS_RUNTIME_INVALID`, and a manifest without `runtimeGroups`
-reports `OMH_INVALID`. Deep
+unsupported content fails closed with `OMH_CONTENT_INVALID` (an unsupported
+manifest, composition or a manifest without `runtimeGroups`). Deep
 standalone behavior (external venvs, shared locks, interruption recovery,
 partial preparation) is covered by `tests/test_standalone.py`. Native client
 skill discovery, model calls and interactive Home GUI use are outside the

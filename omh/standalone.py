@@ -198,20 +198,20 @@ def remove_shim(home):
 def data(path):
     rt.safe_path(path)
     if not path.exists(): return None
-    if not path.is_file(): rt.fail(f'Not an ordinary owned file: {path}')
-    if path.stat().st_size > 128 * 1024 * 1024: rt.fail(f'File exceeds distribution limit: {path}')
+    if not path.is_file(): rt.fail(f'Not an ordinary owned file: {path}', 'OMH_FILE_INVALID')
+    if path.stat().st_size > 128 * 1024 * 1024: rt.fail(f'File exceeds distribution limit: {path}', 'OMH_FILE_INVALID')
     return path.read_bytes()
 
 def tree(root):
     rt.safe_path(root)
     if not root.exists(): return {}
-    if not root.is_dir(): rt.fail(f'Not a directory: {root}')
+    if not root.is_dir(): rt.fail(f'Not a directory: {root}', 'OMH_CONTENT_INVALID')
     result = {}
     for path in sorted(root.rglob('*')):
         rt.safe_path(path)
         if path.is_file(): result[path.relative_to(root).as_posix()] = data(path)
-        elif not path.is_dir(): rt.fail(f'Unsupported filesystem object: {path}')
-        if len(result) > 5000: rt.fail('Too many distribution files')
+        elif not path.is_dir(): rt.fail(f'Unsupported filesystem object: {path}', 'OMH_CONTENT_INVALID')
+        if len(result) > 5000: rt.fail('Too many distribution files', 'OMH_FILE_INVALID')
     return result
 
 def sha(value): return hashlib.sha256(value).hexdigest()
@@ -222,22 +222,22 @@ def receipt(root, home):
     item = json.loads(value)
     if item.get('owner') != 'omh' or item.get('manager') != str(home) or item.get('target') != str(root):
         rt.fail('Target belongs to a different owner; uninstall with that owner before handoff', 'HARNESS_OWNER_CONFLICT')
-    if item.get('schemaVersion') != 1: rt.fail('Unsupported receipt')
-    if not isinstance(item['slots'], list) or not isinstance(item['files'], dict): rt.fail('Invalid receipt')
+    if item.get('schemaVersion') != 1: rt.fail('Unsupported receipt', 'OMH_RECEIPT_INVALID')
+    if not isinstance(item['slots'], list) or not isinstance(item['files'], dict): rt.fail('Invalid receipt', 'OMH_RECEIPT_INVALID')
     for slot in item['slots']: relative(slot)
     for name, fingerprint in item['files'].items():
         relative(name)
         if not re.fullmatch(r'[0-9a-f]{64}', fingerprint) or not any(
-                name.startswith(slot + '/') or name == slot for slot in item['slots']): rt.fail('Invalid ownership inventory')
+                name.startswith(slot + '/') or name == slot for slot in item['slots']): rt.fail('Invalid ownership inventory', 'OMH_RECEIPT_INVALID')
     return item
 
 def relative(name):
     if (not name or '\\' in name or ':' in name or any(p in ('', '.', '..') for p in name.split('/'))
             or any(ord(c) < 32 for c in name) or Path(name).is_absolute()):
-        rt.fail('Invalid relative content path')
+        rt.fail('Invalid relative content path', 'OMH_PATH_INVALID')
     for part in name.split('/'):
         if part.endswith(('.', ' ')) or any(c in '<>"|?*' for c in part) or re.fullmatch(r'(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?', part, re.I):
-            rt.fail('Content path is not portable')
+            rt.fail('Content path is not portable', 'OMH_PATH_INVALID')
     return Path(name)
 
 def journal_path(home, root):
@@ -267,7 +267,7 @@ def recover(home, root):
     raw = data(path)
     if raw is None: return False
     journal = json.loads(raw)
-    if journal['target'] != str(root) or journal['manager'] != str(home): rt.fail('Recovery identity mismatch')
+    if journal['target'] != str(root) or journal['manager'] != str(home): rt.fail('Recovery identity mismatch', 'OMH_RECEIPT_INVALID')
     if not journal['committed']:
         # Only rollback needs before/after matching. Committed recovery merely
         # finishes empty-directory cleanup and preserves subsequent user edits.
@@ -288,7 +288,7 @@ def transact(home, root, changes):
     if path.exists(): rt.fail('Run recover before modifying this target', 'HARNESS_RECOVERY_REQUIRED')
     if not changes: return
     if len(changes) > 5000 or sum(len(c['before'] or '') + len(c['after'] or '') for c in changes) > 128 * 1024 * 1024:
-        rt.fail('Distribution transaction exceeds limits')
+        rt.fail('Distribution transaction exceeds limits', 'OMH_FILE_INVALID')
     directories = set()
     for change in changes:
         parent = (root / relative(change['path'])).parent
@@ -312,7 +312,7 @@ def transact(home, root, changes):
     try:
         for change in changes:
             destination = root / relative(change['path'])
-            if data(destination) != unb64(change['before']): rt.fail('Target changed after planning')
+            if data(destination) != unb64(change['before']): rt.fail('Target changed after planning', 'OMH_STATE_CHANGED')
             write_value(destination, unb64(change['after']))
         clean_empty_directories(root, journal['cleanupDirectories'])
         journal['committed'] = True
@@ -325,8 +325,9 @@ def transact(home, root, changes):
 
 def manifest(source):
     value = json.loads(data(source / 'content-manifest.json'))
-    if value['schemaVersion'] != 1 or value['product'] != 'omh-content': rt.fail('Unsupported content manifest')
-    if set(value['compositions']['default']) != {p['name'] for p in value['packages']}: rt.fail('Unsupported composition')
+    if value['schemaVersion'] != 1 or value['product'] != 'omh-content': rt.fail('Unsupported content manifest', 'OMH_CONTENT_INVALID')
+    if not isinstance(value.get('runtimeGroups'), list): rt.fail('Unsupported content manifest', 'OMH_CONTENT_INVALID')
+    if set(value['compositions']['default']) != {p['name'] for p in value['packages']}: rt.fail('Unsupported composition', 'OMH_CONTENT_INVALID')
     return value
 
 def prepare_runtimes(source, home, python, deployment, external, offline):
@@ -354,7 +355,7 @@ def bind_shared_scripts(content, support):
     assignment = ('OMH_SHARED_SCRIPTS = Path(' + json.dumps(str(support)) + ')').encode()
     # A string replacement would treat \U in C:\Users as a unicode escape.
     updated, count = SHARED_ASSIGNMENT.subn(lambda _match: assignment, content)
-    if count != 1: rt.fail('Helper shared-script binding must be a single assignment', 'OMH_INVALID')
+    if count != 1: rt.fail('Helper shared-script binding must be a single assignment', 'OMH_CONTENT_INVALID')
     return updated
 
 def projected(source, skills, prepared, harness):
@@ -363,19 +364,19 @@ def projected(source, skills, prepared, harness):
     output, slots, names = {}, set(), set()
     instructions = INSTRUCTIONS[harness]
     content = data(source / relative(INSTRUCTIONS_SOURCE))
-    if content is None: rt.fail(f'Missing instructions source: {INSTRUCTIONS_SOURCE}', 'OMH_INVALID')
+    if content is None: rt.fail(f'Missing instructions source: {INSTRUCTIONS_SOURCE}', 'OMH_CONTENT_INVALID')
     output[instructions] = content
     slots.add(instructions)
     for package in value['packages']:
         name = package['name']
-        if not re.fullmatch(r'[A-Za-z0-9_-]+', name) or package['path'] != f'plugins/{name}': rt.fail('Invalid package path')
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', name) or package['path'] != f'plugins/{name}': rt.fail('Invalid package path', 'OMH_CONTENT_INVALID')
         package_root = source / relative(package['path'])
         for skill in sorted((package_root / 'skills').iterdir()):
             rt.safe_path(skill)
             if not skill.is_dir(): continue
-            if not re.fullmatch(r'[A-Za-z0-9_-]+', skill.name) or skill.name.lower() in names: rt.fail('Duplicate or invalid skill name')
+            if not re.fullmatch(r'[A-Za-z0-9_-]+', skill.name) or skill.name.lower() in names: rt.fail('Duplicate or invalid skill name', 'OMH_CONTENT_INVALID')
             names.add(skill.name.lower())
-            if not (skill / 'SKILL.md').is_file(): rt.fail('Incomplete skill')
+            if not (skill / 'SKILL.md').is_file(): rt.fail('Incomplete skill', 'OMH_CONTENT_INVALID')
             slot = (skills / skill.name).relative_to(root).as_posix()
             slots.add(slot)
             support = root / '.omh-support' / name
@@ -535,7 +536,7 @@ def main(argv=None):
         try:
             reconfigure(encoding='utf-8')
         except (ValueError, OSError) as error:
-            error_line('OMH_INVALID', f'{name} encoding: {error}')
+            error_line('OMH_ENVIRONMENT_INVALID', f'{name} encoding: {error}')
             return 1
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
@@ -545,7 +546,7 @@ def main(argv=None):
         skills_root = getattr(args, 'skills_root', None)
         skills = rt.safe_path(skills_root or Path.home() / HARNESS_ROOTS[harness] / 'skills')
         root = skills.parent
-        if home == root or home.is_relative_to(root): rt.fail('Manager and skill target must be separate')
+        if home == root or home.is_relative_to(root): rt.fail('Manager and skill target must be separate', 'OMH_PATH_INVALID')
         if args.command not in ('status', 'prepare'):
             default_target_hint(home, harness, skills_root, args.json)
         if args.command == 'status':
@@ -588,7 +589,7 @@ def main(argv=None):
                     shim_preflight(bin_dir)
                 python = rt.absolute(args.python if args.python is not None else os.environ.get('OMH_PYTHON', sys.executable))
                 deployment = rt.safe_path(args.deployment_root or home / 'runtimes')
-                if deployment == root or deployment.is_relative_to(root) or root.is_relative_to(deployment): rt.fail('Runtime deployment and skill targets must be separate')
+                if deployment == root or deployment.is_relative_to(root) or root.is_relative_to(deployment): rt.fail('Runtime deployment and skill targets must be separate', 'OMH_PATH_INVALID')
                 prepared = prepare_runtimes(source,home,python,deployment,args.external_venv,args.offline)
                 if args.command == 'prepare': result = dict(runtimes=prepared)
                 else:

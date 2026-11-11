@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Give every standalone validation failure a specific error code instead of the runtime default: `OMH_CONTENT_INVALID` (malformed manifest, composition, packages, skills, or a manifest without `runtimeGroups` — previously `OMH_INVALID` via `KeyError`), `OMH_FILE_INVALID` (unusable or oversized owned files and transaction caps), `OMH_RECEIPT_INVALID` (receipt or recovery-journal validation), `OMH_PATH_INVALID` (path shape and manager/target separation), `OMH_STATE_CHANGED` (target changed between planning and writing) and `OMH_ENVIRONMENT_INVALID` (stream reconfiguration failures, previously `OMH_INVALID`). The documented `HARNESS_*` codes are unchanged; README now lists the full code table.
 - Rework the CLI grammar into subcommands (ADR 0035): each command owns its flags (`omh <command> --help` lists exactly what it takes), `--source`/`--home` parse before or after the command, and flag combinations that never applied to a command (`--operation` on `status`, `--offline` on `plan`) are usage errors with exit 2 instead of being silently ignored.
 - Make every command readable by default with `--json` for the machine form (ADR 0035): `plan`, `prepare`, `install`, `update`, `uninstall` and `recover` print a one-line human summary; their `--json` shapes are unchanged.
 - Note the installed harnesses on stderr when a target command defaults to codex, the home indexes other harnesses, and no codex receipt exists; suppressed under `--json`.
