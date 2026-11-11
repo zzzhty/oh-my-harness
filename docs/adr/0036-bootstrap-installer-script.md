@@ -7,11 +7,14 @@ status: accepted
 Multiple hosts each need an OMH installation, and cloning a checkout by hand
 on every machine no longer scales. The historical lifecycle manager (self-
 update, state database, refresh --repair) stays retired: what is missing is
-not manager capability but source acquisition. Decision: a stateless POSIX
-`install.sh` at the repository root, reachable at
-`https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh`,
-that fetches a verified release checkout and delegates to the existing
-standalone CLI. It runs once and exits — no state, no daemon, no self-update.
+not manager capability but source acquisition. Decision: a stateless
+installer at the repository root — POSIX `install.sh` and Windows
+`install.ps1` — reachable at
+`https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh`
+and `install.ps1`, that fetches a verified release checkout and delegates
+to the existing standalone CLI. It runs once and exits — no state, no
+daemon, no self-update. The two scripts make the same decisions; the host
+shell is the only difference.
 
 1. **Acquisition with verification.** The script resolves a version from
    `OMH_VERSION` or one unauthenticated `releases/latest` API call, then
@@ -23,7 +26,8 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    after checkout. Tags can be reissued (the 1.1.1 reissue replaced its
    tag), so upgrades fetch with `--tags --force`. The release process
    gains one step: upload the ref asset. The script itself is trusted via
-   TLS and can be pinned to `refs/tags/<tag>/install.sh`. ADR 0031's
+   TLS and can be pinned to `refs/tags/<tag>/install.sh` or `install.ps1`.
+   ADR 0031's
    "release = tagged source checkout, installed from a verified source
    tree" is unchanged: the installer only acquires and verifies.
 2. **Placement and upgrade form.** One clone lives at `~/.oh-my-harness/repo`
@@ -43,8 +47,9 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    explicit — the stateless replacement for the retired git self-updater.
 3. **Interpreter policy.** The script probes `python3` for ≥ 3.11 and
    validates that it can seed a `venv --copies` standard-library environment,
-   failing closed with the process tail. Reason: relocated builds (e.g.
-   uv-managed CPython with a private compile prefix) can satisfy the version
+   failing closed with the process tail. On Windows the same probe starts at
+   `python3`, then `python`, then the `py` launcher. Reason: relocated builds
+   (e.g. uv-managed CPython with a private compile prefix) can satisfy the version
    check while their copied venv interpreters cannot locate the standard
    library — observed on the reference machine, where existing runtimes work
    but fresh preparation must pass `--python /usr/bin/python3`. `OMH_PYTHON`
@@ -57,13 +62,15 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    no central fleet state, by design; fleet consistency comes from pinning
    `OMH_VERSION` in configuration management, and the CLI's `--json`/stderr/
    exit-code contract (ADR 0035) makes the wrapper script-friendly. Hosts
-   upgrade without curl through the native git flow. Windows and non-GitHub
-   hosts keep the documented manual path.
+   upgrade without curl through the native git flow. A non-GitHub
+   `OMH_REPO` still requires `OMH_VERSION` and `OMH_REF_URL`.
 5. **One command, precise vocabulary: `omh update` upgrades, `omh refresh`
    re-projects.** `omh update [--to <tag>]` (default: the latest release) is
    the host's single command: the verb verifies that the running source
    checkout is the managed clone under the home, then execs that tree's
-   `install.sh` with the version passthrough; the script performs the ref
+   installer with the version passthrough (`/bin/sh install.sh` on POSIX,
+   `powershell -File install.ps1` on Windows, `pwsh` when `powershell` is
+   absent); the script performs the ref
    verification and the fetch/checkout, then refreshes every target the
    home index knows. From an unmanaged checkout (a developer clone)
    `omh update` fails with guidance instead of delegating. The

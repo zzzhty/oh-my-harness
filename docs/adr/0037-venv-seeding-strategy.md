@@ -19,8 +19,8 @@ seeding is created and probed the same way. Either strategy passing
 verification is accepted — the winning strategy is recorded as `seed` in the
 `.omh-runtime.json` marker — and only failure of both is a hard failure with
 the process tail. Nothing falls back silently: verification gates both
-strategies. `install.sh` mirrors the same two-strategy probe for the
-bootstrap interpreter.
+strategies. `install.sh` and `install.ps1` mirror the same two-strategy probe
+for the bootstrap interpreter.
 
 **Trade-off, accepted and visible.** A symlinked runtime depends on the base
 interpreter's continued existence; uv may prune its interpreter directories on

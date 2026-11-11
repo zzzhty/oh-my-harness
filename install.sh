@@ -117,7 +117,7 @@ import json, sys
 from pathlib import Path
 index = Path(sys.argv[1])
 targets = json.loads(index.read_bytes()) if index.exists() else {}
-print(' '.join(sorted({entry.get('harness') for entry in targets.values()} - {None})))
+print(','.join(sorted({entry.get('harness') for entry in targets.values()} - {None})))
 PYEOF
 ) || harnesses=''
     [ -n "$harnesses" ] || harnesses="${OMH_HARNESS:-codex}"
