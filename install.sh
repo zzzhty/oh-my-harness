@@ -83,7 +83,8 @@ else
     staging="$HOME_DIR/.repo.clone.$$"
     rm -rf "$staging"
     mkdir -p "$HOME_DIR"
-    git clone --quiet --branch "$tag" "$REPO" "$staging" || { rm -rf "$staging"; die 'git clone failed'; }
+    git -c advice.detachedHead=false clone --quiet --branch "$tag" "$REPO" "$staging" \
+        || { rm -rf "$staging"; die 'git clone failed'; }
     got=$(git -C "$staging" rev-parse HEAD)
     if [ "$got" != "$pinned" ]; then
         rm -rf "$staging"
