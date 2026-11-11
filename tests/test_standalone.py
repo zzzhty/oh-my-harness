@@ -57,12 +57,15 @@ class StandaloneTests(unittest.TestCase):
         (agents/'global-instructions.md').write_text('# Global Instructions\nTest authority line.\n')
     def call(self, command, *extra):
         out, err = io.StringIO(), io.StringIO()
-        arguments = ['--source',str(self.source),'--home',str(self.home),'--skills-root',str(self.skills),
-            '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',*extra]
-        if command == 'status': arguments.append('--json')
+        # Command-scoped grammar (ADR 0035): each command carries only its own
+        # flags; every command answers --json with the machine form.
+        arguments = ['--source',str(self.source),'--home',str(self.home),'--json']
+        if command != 'prepare': arguments += ['--skills-root',str(self.skills)]
+        if command in ('prepare','install','update'):
+            arguments += ['--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
         # Success JSON arrives on stdout, error envelopes on stderr.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = st.main([command, *arguments])
+            code = st.main([command, *arguments, *extra])
         return code, json.loads(out.getvalue() or err.getvalue())
     def call_overview(self, *extra):
         out, err = io.StringIO(), io.StringIO()
@@ -91,6 +94,43 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(result['targets'][0]['state'],'missing')
         self.assertGreater(len(self.call('plan')[1]['changes']),0)
         self.assertFalse(self.home.exists()); self.assertFalse(self.skills.parent.exists())
+    def test_command_flags_are_scoped(self):
+        for arguments in (['status','--operation','install','--home',str(self.home)],
+                          ['plan','--offline','--home',str(self.home)],
+                          ['uninstall','--python',sys.executable,'--home',str(self.home)],
+                          ['recover','--bin-dir','/absolute/bin','--home',str(self.home)]):
+            with self.assertRaises(SystemExit) as stopped:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    st.main(arguments)
+            self.assertEqual(stopped.exception.code, 2, arguments)
+    def test_default_output_is_human_and_json_opts_in(self):
+        self.install()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(['plan','--source',str(self.source),'--home',str(self.home),
+                '--skills-root',str(self.skills)])
+        self.assertEqual(code,0)
+        text = out.getvalue()
+        self.assertFalse(text.startswith('{'))
+        self.assertIn(str(self.skills.parent),text); self.assertIn('0 changes',text)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(['update','--source',str(self.source),'--home',str(self.home),
+                '--skills-root',str(self.skills),'--python',sys.executable,
+                '--external-venv',self.prepared['root'],'--offline'])
+        self.assertEqual(code,0)
+        self.assertIn('up to date',out.getvalue()); self.assertIn(str(self.skills.parent),out.getvalue())
+    def test_default_harness_hint_lists_other_installed_targets(self):
+        second = self.root/'claude/skills'; second.mkdir(parents=True)
+        self.install()
+        self.assertEqual(self.call('install','--harness','claude-code','--skills-root',str(second))[0],0)
+        self.assertEqual(self.call('uninstall')[0],0)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(['plan','--source',str(self.source),'--home',str(self.home)])
+        self.assertEqual(code,0)
+        self.assertIn('defaults to codex',err.getvalue())
+        self.assertIn('claude-code',err.getvalue())
     def test_global_instructions_are_projected_protected_and_uninstalled(self):
         self.install()
         instructions = self.skills.parent/'AGENTS.md'
@@ -124,10 +164,11 @@ class StandaloneTests(unittest.TestCase):
     def test_grok_target_defaults_to_grok_root_and_shadows_conflict(self):
         def grok_call(command, *extra):
             out, err = io.StringIO(), io.StringIO()
+            arguments = ['--source',str(self.source),'--home',str(self.home),'--harness','grok','--json']
+            if command in ('prepare','install','update'):
+                arguments += ['--python',sys.executable,'--external-venv',self.prepared['root'],'--offline']
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = st.main([command,'--source',str(self.source),'--home',str(self.home),
-                    '--python',sys.executable,'--external-venv',self.prepared['root'],'--offline',
-                    '--harness','grok',*extra])
+                code = st.main([command, *arguments, *extra])
             return code, json.loads(out.getvalue() or err.getvalue())
         # No --skills-root: the default resolves under the patched HOME.
         code,result = grok_call('install')

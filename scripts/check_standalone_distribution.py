@@ -107,10 +107,10 @@ def main():
         python = str(Path(sys.executable).absolute())
 
         # Read-only planning creates neither a target nor manager state.
-        plan = checked(env, 'plan', '--home', state, '--skills-root', skills, '--offline')
+        plan = checked(env, 'plan', '--home', state, '--skills-root', skills, '--json')
         assert plan['changes'] and not state.exists() and not skills.parent.exists()
 
-        install = checked(env, 'install', '--home', state, '--skills-root', skills, '--python', python, '--offline')
+        install = checked(env, 'install', '--home', state, '--skills-root', skills, '--python', python, '--offline', '--json')
         assert set(install['runtimes']) == {'maintenance', 'workflow'}
         status, payload = standalone(env, 'status', '--home', state, '--skills-root', skills, '--json')
         target = payload['targets'][0]
@@ -164,7 +164,7 @@ def main():
                                '--python', python, '--offline')
         assert result.returncode != 0 and 'HARNESS_CONFLICT' in result.stdout + result.stderr
 
-        assert checked(env, 'update', '--home', state, '--skills-root', skills, '--python', python, '--offline')['changed'] == 0
+        assert checked(env, 'update', '--home', state, '--skills-root', skills, '--python', python, '--offline', '--json')['changed'] == 0
         shim = home / '.local/bin/omh'
         if os.name != 'nt':
             assert shim.is_file() and os.access(shim, os.X_OK)
@@ -173,7 +173,7 @@ def main():
                 capture_output=True, text=True, encoding='utf-8', timeout=60)
             assert result.returncode == 0, (result.stdout, result.stderr)
             assert json.loads(result.stdout)['targets'][0]['owner'] == 'omh'
-        uninstall = checked(env, 'uninstall', '--home', state, '--skills-root', skills)
+        uninstall = checked(env, 'uninstall', '--home', state, '--skills-root', skills, '--json')
         assert uninstall['changed'] > 0 and not (home / '.codex/.omh-owner.json').exists()
         assert not instructions.exists()
         if os.name != 'nt': assert not shim.exists()
@@ -184,14 +184,14 @@ def main():
 
         # The grok target resolves its own default root and rule filename.
         grok = home / '.grok'
-        checked(env, 'install', '--home', state, '--harness', 'grok', '--python', python, '--offline')
+        checked(env, 'install', '--home', state, '--harness', 'grok', '--python', python, '--offline', '--json')
         assert (grok / 'skills/sop/SKILL.md').is_file()
         assert (grok / 'AGENTS.md').read_bytes() == (ROOT / 'agents/global-instructions.md').read_bytes()
         (grok / 'Claude.md').write_text('# shadow rules\n')
         blocked, _ = standalone(env, 'update', '--home', state, '--harness', 'grok', '--python', python, '--offline')
         assert blocked.returncode != 0 and 'HARNESS_CONFLICT' in blocked.stdout + blocked.stderr
         (grok / 'Claude.md').unlink()
-        checked(env, 'uninstall', '--home', state, '--harness', 'grok')
+        checked(env, 'uninstall', '--home', state, '--harness', 'grok', '--json')
         assert not (grok / 'AGENTS.md').exists() and not (grok / 'skills/sop').exists()
 
         print(json.dumps({'targets': ['standalone'], 'skills': len(expected_skills()),

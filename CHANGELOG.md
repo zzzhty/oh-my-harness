@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rework the CLI grammar into subcommands (ADR 0035): each command owns its flags (`omh <command> --help` lists exactly what it takes), `--source`/`--home` parse before or after the command, and flag combinations that never applied to a command (`--operation` on `status`, `--offline` on `plan`) are usage errors with exit 2 instead of being silently ignored.
+- Make every command readable by default with `--json` for the machine form (ADR 0035): `plan`, `prepare`, `install`, `update`, `uninstall` and `recover` print a one-line human summary; their `--json` shapes are unchanged.
+- Note the installed harnesses on stderr when a target command defaults to codex, the home indexes other harnesses, and no codex receipt exists; suppressed under `--json`.
 - Report runtime errors as JSON on **stderr** (exit 1) instead of stdout, keeping stdout a parseable result stream for pipes and scripts; usage errors stay argparse text on stderr with exit 2. stdout and stderr are both reconfigured to UTF-8.
 - Rework the human `omh status` layout: per-target marks `✓` clean, `!` drift or foreign/missing receipts, `✗` recovery pending with the `omh recover` command to run; healthy targets collapse to one `clean` line instead of repeating "recovery not required", and truncated drift lists point at `omh status --json`.
 - Print TTY-gated runtime preparation progress (`[1/2] preparing runtime 'workflow' ...`) to stderr during `prepare`/`install`/`update`.

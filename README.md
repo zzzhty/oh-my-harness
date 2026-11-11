@@ -46,12 +46,17 @@ absolute bootstrap interpreter; otherwise an explicit `OMH_PYTHON` is used, then
 the interpreter running the standalone command. There is no project-venv or PATH
 search. `prepare` prepares runtimes without installing skills. `install` and
 `update` may also prepare them. `plan` and `status` never create environments or
-run pip. `plan` previews the file changes an operation would make and prints
-them as a JSON `changes` list; `--operation install|update|uninstall` selects
-which operation to preview (default `install`), e.g.
+run pip. Each command takes only its own flags — `omh <command> --help` lists
+them; `--source`/`--home` may come before or after the command
+([ADR 0035](docs/adr/0035-standalone-cli-grammar-and-readable-output.md)).
+Every command prints a human summary by default; `--json` returns the machine
+form (for `plan`, the JSON `changes` list). `--operation install|update|uninstall`
+selects which operation `plan` previews (default `install`), e.g.
 `python3 -B -m omh plan --operation uninstall --harness codex`. `--source
 /absolute/path` distributes content from a different checkout. Commands
-require absolute paths for overrides.
+require absolute paths for overrides. When the home knows other harnesses and
+the default codex target is absent, target commands note the installed
+harnesses on stderr.
 
 Use `--external-venv /absolute/venv` to reuse a verified environment without
 modifying it. Its Python version, imports and locked dependency versions must
