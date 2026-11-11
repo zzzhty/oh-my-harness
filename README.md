@@ -11,22 +11,34 @@ readers remain retired. Preparing Python does not invoke skills or enable hooks.
 
 ## Standalone installation
 
-On a host, bootstrap with one command (POSIX; needs `git`, `curl` and
-Python ≥ 3.11; [ADR 0036](docs/adr/0036-bootstrap-installer-script.md)):
+On a host, bootstrap with one command (needs `git`, `curl` and
+Python ≥ 3.11; [ADR 0036](docs/adr/0036-bootstrap-installer-script.md)).
+
+POSIX:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.sh | \
   OMH_HARNESS=codex,claude-code sh
 ```
 
+Windows (PowerShell 5.1 or PowerShell 7):
+
+```powershell
+$env:OMH_HARNESS = 'codex,claude-code'
+irm https://raw.githubusercontent.com/zzzhty/oh-my-harness/main/install.ps1 -OutFile $env:TEMP\omh-install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\omh-install.ps1
+```
+
 The installer probes the interpreter, verifies the release's `omh-<tag>.ref`
-asset against the tag, clones into `~/.oh-my-harness/repo`, and installs one
-target per listed harness. Afterwards the host needs one command:
+asset against the tag, clones into `~/.oh-my-harness/repo` (on Windows, the
+profile directory Python uses as the home), and installs one target per
+listed harness. Afterwards the host needs one command:
 `omh update [--to <tag>]` upgrades in place (ref verification, fetch,
-checkout, refresh of every indexed target); from a developer checkout it
-refuses with `OMH_SOURCE_NOT_MANAGED` and points at `omh refresh`, which
-re-projects targets from the current checkout. Re-running `install.sh`
-locally does the same upgrade without curl.
+checkout, refresh of every indexed target). On Windows, run that as
+`python -B -m omh update` from the managed clone. From a developer checkout
+it refuses with `OMH_SOURCE_NOT_MANAGED` and points at `omh refresh`, which
+re-projects targets from the current checkout. Re-running `install.sh` or
+`install.ps1` locally does the same upgrade without curl.
 
 From a developer checkout, use Python 3.11 or newer directly (the distributor
 uses only the standard library; `requirements.txt` is for developer
@@ -98,7 +110,8 @@ checkout and interpreter — no state, no self-update, no PATH search; an unowne
 existing `omh` there fails closed, and `uninstall` removes an owned one even
 when other targets remain installed — rerun `install` to recreate it
 ([ADR 0033](docs/adr/0033-standalone-launcher-shim.md)). Windows uses the full
-`python -B -m omh` command.
+`python -B -m omh` command, including `python -B -m omh update` from the
+managed clone.
 
 `omh status` without `--skills-root` summarizes **every installed target** the
 home knows: each target's receipt is verified live and reported as
@@ -244,8 +257,9 @@ python scripts/check_standalone_distribution.py
 ```
 
 Each release publishes one bootstrap asset: `omh-<tag>.ref`, a one-line file
-holding the tag's commit SHA (`git rev-parse <tag>^{}`). `install.sh` and
-`omh update` verify the tag against it before touching anything
+holding the tag's commit SHA (`git rev-parse <tag>^{}`). `install.sh`,
+`install.ps1`, and `omh update` verify the tag against it before touching
+anything
 ([ADR 0036](docs/adr/0036-bootstrap-installer-script.md)).
 
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its

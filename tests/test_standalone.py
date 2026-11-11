@@ -113,7 +113,7 @@ class StandaloneTests(unittest.TestCase):
         payload = json.loads(err.getvalue())
         self.assertEqual(payload['error']['code'],'OMH_SOURCE_NOT_MANAGED')
         self.assertIn('omh refresh',payload['error']['message'])
-        # From the managed clone the verb execs the tree's install.sh (ADR 0036).
+        # From the managed clone the verb execs the tree's installer (ADR 0036).
         home = self.root/'managed home'
         repo = home/'repo'; (repo/'.git').mkdir(parents=True)
         with patch.object(st.subprocess,'call',return_value=0) as delegate:
@@ -121,17 +121,38 @@ class StandaloneTests(unittest.TestCase):
                 code = st.main(['update','--source',str(repo),'--home',str(home),'--to','v9.9.9'])
         self.assertEqual(code,0)
         argv, keywords = delegate.call_args
-        self.assertEqual(argv[0],['/bin/sh',str(repo/'install.sh')])
+        if os.name == 'nt':
+            program = shutil.which('powershell') or shutil.which('pwsh')
+            self.assertIsNotNone(program)
+            expected = [program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(repo/'install.ps1')]
+        else:
+            expected = ['/bin/sh',str(repo/'install.sh')]
+        self.assertEqual(argv[0],expected)
         self.assertEqual(keywords['env']['OMH_HOME'],str(home))
         self.assertEqual(keywords['env']['OMH_VERSION'],'v9.9.9')
-    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
-    def test_bootstrap_and_upgrade_flow_through_install_sh(self):
+    def test_update_on_windows_delegates_to_install_ps1(self):
+        # The command shape is asserted here, including on POSIX hosts, so the
+        # Windows argv does not depend on a Windows runner to be reviewed.
+        repo = self.root/'repo'
+        program = r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+        def which(name):
+            return program if name == 'powershell' else None
+        with patch('os.name','nt'), patch('omh.standalone.shutil.which', side_effect=which):
+            argv = st.update_installer(repo)
+        self.assertEqual(argv,[program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(repo/'install.ps1')])
+        with patch('os.name','nt'), patch('omh.standalone.shutil.which', return_value=None):
+            with self.assertRaises(rt.RuntimeFailure) as caught:
+                st.update_installer(repo)
+        self.assertEqual(caught.exception.code,'OMH_ENVIRONMENT_INVALID')
+        self.assertIn('install.ps1',str(caught.exception))
+    def exercise_bootstrap_installer(self, argv):
         work = self.root/'upstream'
         shutil.copytree(self.source, work)
         shutil.copytree(ROOT/'omh', work/'omh', ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT/'plugins/workflow/scripts', work/'plugins/workflow/scripts',
             ignore=shutil.ignore_patterns('__pycache__'))
-        shutil.copy2(ROOT/'install.sh', work/'install.sh')
+        for name in ('install.sh','install.ps1'):
+            shutil.copy2(ROOT/name, work/name)
         def git(*arguments):
             return subprocess.run(['git','-C',str(work),'-c','user.email=omh@test.invalid',
                 '-c','user.name=omh test',*arguments],check=True,capture_output=True,text=True,timeout=60)
@@ -143,20 +164,37 @@ class StandaloneTests(unittest.TestCase):
                 check=True,capture_output=True,text=True,timeout=30).stdout.strip()
             ref = self.root/f'{tag}.ref'; ref.write_text(value+'\n'); return ref
         home = self.root/'managed home'
-        env = {'PATH':os.environ['PATH'],'HOME':os.environ['HOME'],'OMH_VERSION':'v0.1.0',
+        # The installer child resolves ~ the way the CLI does. POSIX uses HOME;
+        # Windows Python uses USERPROFILE, so the fixture points both at the
+        # patched home and does not touch the real profile.
+        user_home = Path(os.environ['HOME'])
+        env = {'PATH':os.environ['PATH'],'HOME':str(user_home),'OMH_VERSION':'v0.1.0',
                'OMH_HOME':str(home),'OMH_REPO':str(bare),'OMH_REF_URL':str(pinned('v0.1.0')),
                'OMH_PYTHON':sys.executable,'OMH_HARNESS':'codex'}
+        if os.name == 'nt':
+            for key in ('SYSTEMROOT','WINDIR','COMSPEC','PATHEXT','SYSTEMDRIVE','TEMP','TMP',
+                        'PROGRAMFILES','PROGRAMFILES(X86)','PROGRAMDATA','USERNAME','USERDOMAIN',
+                        'OS','PROCESSOR_ARCHITECTURE','NUMBER_OF_PROCESSORS'):
+                if key in os.environ: env[key] = os.environ[key]
+            env['USERPROFILE'] = str(user_home)
+            env['APPDATA'] = str(user_home/'AppData'/'Roaming')
+            env['LOCALAPPDATA'] = str(user_home/'AppData'/'Local')
         def installer(**extra):
-            return subprocess.run(['/bin/sh',str(ROOT/'install.sh')],
-                env={**env,**extra},capture_output=True,text=True,timeout=180)
+            return subprocess.run(argv, env={**env,**extra}, capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=300)
         result = installer()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertTrue((home/'repo/.git').is_dir())
-        self.assertTrue((Path.home()/'.codex/skills/example/SKILL.md').is_file())
-        self.assertTrue((Path.home()/'.local/bin/omh').is_file())
+        skill_file = user_home/'.codex/skills/example/SKILL.md'
+        self.assertTrue(skill_file.is_file())
+        shim = user_home/'.local/bin/omh'
+        if os.name == 'nt': self.assertFalse(shim.exists())
+        else: self.assertTrue(shim.is_file())
         # A wrong pin fails closed before anything moves.
         wrong = self.root/'wrong.ref'; wrong.write_text('0'*40+'\n')
-        self.assertNotEqual(installer(OMH_REF_URL=str(wrong)).returncode,0)
+        rejected = installer(OMH_REF_URL=str(wrong))
+        self.assertNotEqual(rejected.returncode,0,rejected.stdout+rejected.stderr)
+        self.assertTrue((home/'repo/.git').is_dir())
         # v0.2.0 upgrades the clone in place and refreshes the target.
         skill = work/'plugins/workflow/skills/example/SKILL.md'
         skill.write_text(skill.read_text()+'Upgraded\n')
@@ -165,7 +203,15 @@ class StandaloneTests(unittest.TestCase):
             check=True,capture_output=True,timeout=60)
         result = installer(OMH_VERSION='v0.2.0',OMH_REF_URL=str(pinned('v0.2.0')))
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertIn('Upgraded',(Path.home()/'.codex/skills/example/SKILL.md').read_text())
+        self.assertIn('Upgraded',skill_file.read_text())
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_bootstrap_and_upgrade_flow_through_install_sh(self):
+        self.exercise_bootstrap_installer(['/bin/sh',str(ROOT/'install.sh')])
+    def test_bootstrap_and_upgrade_flow_through_install_ps1(self):
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None:
+            self.skipTest('Windows bootstrap requires powershell or pwsh')
+        self.exercise_bootstrap_installer([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
     def test_default_output_is_human_and_json_opts_in(self):
         self.install()
         out, err = io.StringIO(), io.StringIO()

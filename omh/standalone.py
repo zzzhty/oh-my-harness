@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -530,6 +531,16 @@ def default_target_hint(home, harness, skills_flag, as_json):
     if others:
         print(f"note: --harness defaults to codex; installed targets: {', '.join(others)}", file=sys.stderr)
 
+def update_installer(source):
+    """Argv of the versioned installer in a managed checkout (ADR 0036)."""
+    if os.name == 'nt':
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None:
+            rt.fail('Windows omh update requires powershell or pwsh to run install.ps1',
+                    'OMH_ENVIRONMENT_INVALID')
+        return [program, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(source / 'install.ps1')]
+    return ['/bin/sh', str(source / 'install.sh')]
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     # Deterministic UTF-8 on real text streams, including Windows pipes.
@@ -555,16 +566,19 @@ def main(argv=None):
             default_target_hint(home, harness, skills_root, args.json)
         if args.command == 'update':
             # ADR 0036: a thin delegate. The CLI carries no git or network logic;
-            # the versioned install.sh performs verification, fetch and checkout.
-            if os.name == 'nt' or not (source / '.git').exists() \
-                    or os.path.realpath(source) != os.path.realpath(home / 'repo'):
+            # the versioned installer performs verification, fetch and checkout.
+            left, right = os.path.realpath(source), os.path.realpath(home / 'repo')
+            if os.name == 'nt':
+                left, right = os.path.normcase(left), os.path.normcase(right)
+            if not (source / '.git').exists() or left != right:
                 rt.fail(f"omh update delegates to the managed checkout at {home / 'repo'} "
                         f"(current source: {source}); from a developer checkout use omh refresh, "
-                        'or bootstrap with install.sh', 'OMH_SOURCE_NOT_MANAGED')
+                        'or bootstrap with install.sh on POSIX or install.ps1 on Windows',
+                        'OMH_SOURCE_NOT_MANAGED')
             environment = dict(os.environ, OMH_HOME=str(home))
             target = getattr(args, 'to', None)
             if target: environment['OMH_VERSION'] = target
-            return subprocess.call(['/bin/sh', str(source / 'install.sh')], env=environment)
+            return subprocess.call(update_installer(source), env=environment)
         if args.command == 'status':
             if skills_root is None:
                 items = overview(home)
