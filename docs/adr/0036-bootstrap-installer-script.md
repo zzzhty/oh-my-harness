@@ -32,12 +32,12 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    (the existing home/target separation checks apply unchanged); migrating
    an existing host is moving its clone there and re-running `install` to
    re-point the shim. Upgrading is the native git flow — `git fetch --tags
-   --force && git checkout <tag> && omh update` — either re-run by the
+   --force && git checkout <tag> && omh refresh` — either re-run by the
    installer (it detects the existing clone and performs the same steps,
    after the same ref verification) or typed directly on the host without
    curl. Rollback is checking out an older tag. Versions no longer
    coexist as sibling directories; the launcher shim keeps pointing at
-   the same path across upgrades, and `omh update` refreshes installed
+   the same path across upgrades, and `omh refresh` re-projects installed
    targets from the re-checked-out source. Deleting the checkout still
    breaks `omh` by design (ADR 0033 pointer semantics). Upgrades stay
    explicit — the stateless replacement for the retired git self-updater.
@@ -59,16 +59,24 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    exit-code contract (ADR 0035) makes the wrapper script-friendly. Hosts
    upgrade without curl through the native git flow. Windows and non-GitHub
    hosts keep the documented manual path.
-5. **Upgrade entry: `omh upgrade`, a thin delegate.** `omh upgrade [--to
-   <tag>]` (default: the latest release) is the single-command host entry.
-   The verb verifies that the running source checkout is the managed clone
-   under the home, then execs that tree's `install.sh` with the version
-   passthrough; the script performs the ref verification and the
-   fetch/checkout/update flow. The CLI gains no git or network logic and
-   never mutates its own source directly — this is the deliberately thin,
-   explicitly invoked replacement for the retired git self-updater. `omh
-   update` keeps its meaning (refresh targets from this tree); nothing
-   upgrades automatically.
+5. **One command, precise vocabulary: `omh update` upgrades, `omh refresh`
+   re-projects.** `omh update [--to <tag>]` (default: the latest release) is
+   the host's single command: the verb verifies that the running source
+   checkout is the managed clone under the home, then execs that tree's
+   `install.sh` with the version passthrough; the script performs the ref
+   verification and the fetch/checkout, then refreshes every target the
+   home index knows. From an unmanaged checkout (a developer clone)
+   `omh update` fails with guidance instead of delegating. The
+   target-only operation that `update` performed until now becomes
+   `omh refresh` — identical semantics, usable from any source checkout —
+   and `plan --operation` follows (`install|refresh|uninstall`).
+   Renaming a shipped verb is a compatibility change that evolves ADR
+   0035's command list; historical records keep their original wording,
+   and tests, the checker and README move with the implementation. The
+   CLI still gains no git or network logic and never mutates its own
+   source directly — the deliberately thin, explicitly invoked
+   replacement for the retired git self-updater. Nothing upgrades
+   automatically.
 
 The installer never mutates targets itself; every mutation still goes through
 the standalone CLI as the sole distribution channel.
