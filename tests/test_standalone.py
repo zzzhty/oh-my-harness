@@ -751,7 +751,13 @@ class RuntimeTests(unittest.TestCase):
             (partial/'my note').symlink_to(user_file)
             executable=Path(sys.executable).resolve(); before=hashlib.sha256(executable.read_bytes()).hexdigest()
             prepared=rt.prepare(request)
-            self.assertFalse(Path(prepared['python']).is_symlink())
+            # ADR 0037: the seeding strategy decides the executable's shape.
+            marker=json.loads((Path(prepared['root'])/'.omh-runtime.json').read_bytes())
+            if marker['seed']=='--copies':
+                self.assertFalse(Path(prepared['python']).is_symlink())
+            else:
+                self.assertTrue(Path(prepared['python']).is_symlink())
+                self.assertEqual(Path(prepared['python']).resolve(),executable)
             self.assertEqual(hashlib.sha256(executable.read_bytes()).hexdigest(),before)
             self.assertEqual(user_file.read_text(),'keep'); self.assertTrue((partial/'my note').is_symlink())
     def test_valid_runtime_does_not_depend_on_marker_format_or_identity(self):
