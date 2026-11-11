@@ -15,14 +15,18 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
 
 1. **Acquisition with verification.** The script resolves a version from
    `OMH_VERSION` or one unauthenticated `releases/latest` API call, downloads
-   the tag tarball from codeload, and verifies its sha256 against a release
-   digest asset with the predictable name `omh-<tag>.source.sha256` served
-   from `releases/download/<tag>/` — no API call for the digest, and the
-   digest is immutable with its release. Each release therefore gains one
-   publication step: upload the source-tree digest asset. The script itself
-   is trusted via TLS and can be pinned to `refs/tags/<tag>/install.sh`.
-   ADR 0031's "release = tagged source checkout, installed from a verified
-   source tree" is unchanged: the installer only acquires and verifies.
+   the release's own source archive asset (`omh-<tag>.src.tar.gz`), and
+   verifies its sha256 against the sibling digest asset
+   (`omh-<tag>.src.tar.gz.sha256`), both served from predictable
+   `releases/download/<tag>/` URLs — no API call for either, and both are
+   immutable with their release. The archive is packed by the release
+   process on purpose: GitHub's auto-generated codeload archives are not
+   byte-stable by contract, so a digest over them could silently break on
+   regeneration. Each release therefore gains two publication steps: upload
+   the archive and its digest. The script itself is trusted via TLS and can
+   be pinned to `refs/tags/<tag>/install.sh`. ADR 0031's "release = tagged
+   source checkout, installed from a verified source tree" is unchanged:
+   the installer only acquires and verifies.
 2. **Placement and versioning.** The checkout lands in
    `~/.oh-my-harness/src/<tag>/` — inside the manager home, outside every
    target (the existing home/target separation checks apply unchanged).
