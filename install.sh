@@ -26,17 +26,28 @@ log() { echo "install.sh: $1" >&2; }
 command -v git >/dev/null 2>&1 || die 'git is required'
 command -v curl >/dev/null 2>&1 || die 'curl is required'
 
-# --- interpreter: >= 3.11 and able to seed a venv --copies environment ------
+# --- interpreter: >= 3.11 and able to seed a usable venv --------------------
+# Same strategy selection as the runtime (ADR 0037): private copies first,
+# symlinked seeding as the verified fallback for relocated builds (uv-managed
+# CPython). Never a silently broken environment.
 python="${OMH_PYTHON:-python3}"
 "$python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
     || die "$python is older than Python 3.11"
 probe=$(mktemp -d) || die 'mktemp failed'
 trap 'rm -rf "$probe"' EXIT INT TERM
-if ! "$python" -I -B -m venv --copies --without-pip "$probe/venv" 2>"$probe/err" \
-        || ! "$probe/venv/bin/python" -c 'import json' >/dev/null 2>&1; then
+seed=0
+for strategy in --copies --symlinks; do
+    rm -rf "$probe/venv"
+    if "$python" -I -B -m venv "$strategy" --without-pip "$probe/venv" 2>"$probe/err" \
+            && "$probe/venv/bin/python" -c 'import json' >/dev/null 2>&1; then
+        seed=1
+        break
+    fi
+done
+[ "$seed" = 1 ] || {
     tail -n 5 "$probe/err" >&2 2>/dev/null || true
-    die "$python cannot seed a venv --copies environment (relocated builds fail this); set OMH_PYTHON to a standard interpreter"
-fi
+    die "$python cannot seed a usable venv (private copies and symlinks both failed); set OMH_PYTHON to a standard interpreter"
+}
 python=$(command -v "$python") || die "cannot resolve an absolute path for $python"
 
 # --- release ----------------------------------------------------------------

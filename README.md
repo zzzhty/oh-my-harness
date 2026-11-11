@@ -83,7 +83,10 @@ versions and failed partial attempts remain available for inspection/recovery.
 Explicit prepare can resume an interrupted OMH-owned environment at the same
 final path. A valid environment is reused based on its actual interpreter; unknown
 incompatible directories are preserved. Helpers never repair environments.
-Managed creation uses private executable copies; complete venvs are never moved. A group with no requirements is created with `venv --without-pip`. An offline group with dependencies needs hash-matching wheels under
+Managed creation prefers private executable copies; relocated builds
+(uv-managed CPython) fall back to a symlinked seeding verified in place
+([ADR 0037](docs/adr/0037-venv-seeding-strategy.md)), and complete venvs are
+never moved. A group with no requirements is created with `venv --without-pip`. An offline group with dependencies needs hash-matching wheels under
 `<home>/cache/wheels`; the current groups use only the standard library.
 
 On POSIX, `install` and `refresh` also write an `omh` launcher shim into

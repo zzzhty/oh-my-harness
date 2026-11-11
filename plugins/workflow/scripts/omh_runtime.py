@@ -299,10 +299,28 @@ def prepare(request):
         atomic(marker, encode(descriptor))
         for path in python_links: path.unlink()  # Replace ordinary venv aliases with private copies.
         # Final path, never a staged directory. Stdlib-only groups skip ensurepip.
-        venv_args = ['-I', '-B', '-m', 'venv', '--copies']
-        if not packages: venv_args.append('--without-pip')
-        venv_args.append(str(root))
-        run_process(interpreter, venv_args, 120)
+        # ADR 0037: private executable copies stay the default; relocated builds
+        # (uv-managed CPython) seed copies that cannot locate the standard
+        # library, so the executables are removed and a symlinked seeding is
+        # verified in its place — never a silently broken environment.
+        seed = '--copies'
+        for strategy in ('--copies', '--symlinks'):
+            if strategy == '--symlinks':
+                # venv silently falls back to copying when an executable already
+                # exists; remove them so the symlinked seeding can take hold.
+                binaries = root / ('Scripts' if os.name == 'nt' else 'bin')
+                if binaries.is_dir():
+                    for executable in binaries.glob('python*'): executable.unlink()
+            venv_args = ['-I', '-B', '-m', 'venv', strategy]
+            if not packages: venv_args.append('--without-pip')
+            run_process(interpreter, [*venv_args, str(root)], 120)
+            try:
+                probe(prepared['python'], {**spec, 'imports': []}, {}, root)
+                seed = strategy
+                break
+            except RuntimeFailure:
+                if strategy == '--symlinks': raise
+        atomic(marker, encode({**descriptor, 'seed': seed}))
         if packages:
             lock_path = root / 'requirements.lock'
             atomic(lock_path, locked.encode())

@@ -645,6 +645,24 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result.stdout, '')
         self.assertIn('error', json.loads(result.stderr))
 
+    @unittest.skipUnless(os.name=='posix','POSIX venv layout fixture')
+    def test_relocated_build_falls_back_to_symlinked_seeding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder).resolve()
+            request=dict(protocol=1,spec=SPEC,bundleRoot=str(ROOT),python=sys.executable,deploymentRoot=str(root/'runtimes'),externalVenv=None,offline=True,wheelCache=str(root/'wheels'))
+            original=rt.run_process
+            def broken_copies(python,args,*positional,**keywords):
+                output=original(python,args,*positional,**keywords)
+                if 'venv' in args and '--copies' in args:
+                    # Simulate a relocated build: the copied interpreter cannot run.
+                    rt.venv_python(args[-1]).write_text('broken copied interpreter')
+                return output
+            with patch.object(rt,'run_process',side_effect=broken_copies):
+                prepared=rt.prepare(request)
+            self.assertEqual(rt.verify(SPEC,prepared,''),prepared)
+            marker=json.loads((Path(prepared['root'])/'.omh-runtime.json').read_bytes())
+            self.assertEqual(marker['seed'],'--symlinks')
+            self.assertTrue(Path(prepared['python']).is_symlink())
     def test_failed_process_keeps_stderr_and_stdout_tails(self):
         with self.assertRaises(rt.RuntimeFailure) as caught:
             rt.run_process(sys.executable, ['-c', 'import sys; sys.stderr.write("pip exploded\\n"); raise SystemExit(3)'])
