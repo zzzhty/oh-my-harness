@@ -26,10 +26,12 @@ standalone CLI. It runs once and exits — no state, no daemon, no self-update.
    TLS and can be pinned to `refs/tags/<tag>/install.sh`. ADR 0031's
    "release = tagged source checkout, installed from a verified source
    tree" is unchanged: the installer only acquires and verifies.
-2. **Placement and upgrade form.** One clone lives at a fixed path
-   (`~/.oh-my-harness/src/oh-my-harness`), inside the manager home and
-   outside every target (the existing home/target separation checks apply
-   unchanged). Upgrading is the native git flow — `git fetch --tags
+2. **Placement and upgrade form.** One clone lives at `~/.oh-my-harness/repo`
+   — directly inside the manager home, beside its siblings (`runtimes/`,
+   `cache/`, `transactions/`, the state files), and outside every target
+   (the existing home/target separation checks apply unchanged); migrating
+   an existing host is moving its clone there and re-running `install` to
+   re-point the shim. Upgrading is the native git flow — `git fetch --tags
    --force && git checkout <tag> && omh update` — either re-run by the
    installer (it detects the existing clone and performs the same steps,
    after the same ref verification) or typed directly on the host without
