@@ -116,11 +116,6 @@ function Require-Tool([string[]]$Names, [string]$Label) {
     die "$Label is required"
 }
 
-function Split-Comma([string]$Value) {
-    if (-not $Value) { return @() }
-    return @($Value -split ',' | Where-Object { $_ -ne '' })
-}
-
 $repoDefault = 'https://github.com/zzzhty/oh-my-harness'
 $repo = if ($env:OMH_REPO) { $env:OMH_REPO } else { $repoDefault }
 if ($env:OMH_HOME) {
@@ -137,6 +132,20 @@ $clone = Join-Path $homeDir 'repo'
 
 $git = Require-Tool @('git.exe', 'git') 'git'
 $curl = Require-Tool @('curl.exe', 'curl') 'curl'
+
+function Require-CleanTree {
+    # checkout can retain edits, including at the same tag. Ignored files can
+    # also enter the distributor's file walk, so they are not exempt.
+    $state = Invoke-Native -File $git -ArgumentList @(
+        '-C', $clone, 'status', '--porcelain', '--untracked-files=all', '--ignored')
+    if ($state.Err) { [Console]::Error.Write($state.Err) }
+    if ($state.Code -ne 0) { die "cannot inspect $clone; leaving the checkout unchanged" }
+    if ($state.Out.Trim()) {
+        die "$clone has local changes or untracked files (including ignored files); preserve or move them outside the clone before retrying"
+    }
+}
+# Refuse before fetching or running any code from an existing managed clone.
+if (Test-Path -LiteralPath (Join-Path $clone '.git') -PathType Container) { Require-CleanTree }
 
 # --- interpreter: >= 3.11 and able to seed a usable venv --------------------
 # Same strategy selection as the runtime (ADR 0037): private copies first,
@@ -292,34 +301,51 @@ if ($checked.Err) { [Console]::Error.Write($checked.Err) }
 if ($checked.Code -ne 0) { die "checkout $tag failed (a dirty clone fails closed)" }
 $got = Head-Of $clone
 if ($got -ne $pinned) { die "checkout HEAD $got does not match the pinned $pinned" }
+Require-CleanTree
 
 # --- delegate to the standalone CLI -----------------------------------------
-if ($mode -eq 'bootstrap') {
-    $harnessList = if ($env:OMH_HARNESS) { $env:OMH_HARNESS } else { 'codex' }
-    $harnesses = @(Split-Comma $harnessList)
-    $verb = 'install'
-} else {
-    $indexCode = 'import json, sys; from pathlib import Path; index = Path(sys.argv[1]); targets = json.loads(index.read_bytes()) if index.exists() else {}; names = sorted({entry.get("harness") for entry in targets.values()} - {None}); print(" ".join(names))'
-    $listed = Invoke-Native -File $python -ArgumentList @('-B', '-c', $indexCode, (Join-Path $homeDir 'targets.json'))
-    $harnesses = @()
-    if ($listed.Code -eq 0 -and $listed.Out.Trim()) {
-        $harnesses = @($listed.Out.Trim() -split '\s+' | Where-Object { $_ -ne '' })
-    }
-    if ($harnesses.Count -eq 0) {
-        $harnessList = if ($env:OMH_HARNESS) { $env:OMH_HARNESS } else { 'codex' }
-        $harnesses = @(Split-Comma $harnessList)
-    }
-    $verb = 'refresh'
-}
-foreach ($harness in @($harnesses)) {
-    if (-not $harness) { continue }
-    log "$verb target: $harness"
-    $ran = Invoke-Native -File $python -WorkingDirectory $clone -ArgumentList @(
-        '-B', '-m', 'omh', $verb, '--home', $homeDir, '--harness', $harness, '--python', $python)
-    if ($ran.Out) { [Console]::Out.Write($ran.Out) }
-    if ($ran.Err) { [Console]::Error.Write($ran.Err) }
-    if ($ran.Code -ne 0) { die "omh $verb --harness $harness failed" }
-}
+# Match install.sh: preserve every indexed target, and pass each path as one
+# native argument rather than flattening the index into harness names.
+$targetCode = @'
+import json, subprocess, sys
+from pathlib import Path
+
+sys.stderr.reconfigure(encoding='utf-8')
+clone, home, mode, harness_list = sys.argv[1:]
+index = Path(home) / 'targets.json'
+try:
+    targets = json.loads(index.read_bytes()) if mode == 'upgrade' and index.exists() else {}
+    if not isinstance(targets, dict):
+        raise ValueError('expected an object')
+    selected = []
+    for entry in targets.values():
+        if (not isinstance(entry, dict)
+                or not isinstance(entry.get('harness'), str) or not entry['harness']
+                or not isinstance(entry.get('skillsRoot'), str) or not entry['skillsRoot']
+                or not Path(entry['skillsRoot']).is_absolute()):
+            raise ValueError('expected harness and absolute skillsRoot for every target')
+        selected.append((entry['harness'], entry['skillsRoot']))
+except (OSError, ValueError) as error:
+    sys.exit(f'cannot read target index {index}: {error}')
+if not selected:
+    selected = [(harness, None) for harness in harness_list.split(',') if harness]
+verb = 'install' if mode == 'bootstrap' else 'refresh'
+for harness, skills_root in selected:
+    print(f'{verb} target: {harness}' + (f' at {skills_root}' if skills_root else ''), file=sys.stderr)
+    command = [sys.executable, '-B', '-m', 'omh', verb, '--home', home,
+               '--harness', harness, '--python', sys.executable]
+    if skills_root is not None:
+        command += ['--skills-root', skills_root]
+    result = subprocess.run(command, cwd=clone)
+    if result.returncode:
+        sys.exit(result.returncode)
+'@
+$harnessList = if ($env:OMH_HARNESS) { $env:OMH_HARNESS } else { 'codex' }
+$ran = Invoke-Native -File $python -ArgumentList @(
+    '-B', '-c', $targetCode, $clone, $homeDir, $mode, $harnessList)
+if ($ran.Out) { [Console]::Out.Write($ran.Out) }
+if ($ran.Err) { [Console]::Error.Write($ran.Err) }
+if ($ran.Code -ne 0) { die 'target installation failed' }
 
 log "done: $tag at $clone"
 $status = Invoke-Native -File $python -WorkingDirectory $clone -ArgumentList @('-B', '-m', 'omh', 'status', '--home', $homeDir)

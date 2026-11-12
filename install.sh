@@ -26,6 +26,16 @@ log() { echo "install.sh: $1" >&2; }
 command -v git >/dev/null 2>&1 || die 'git is required'
 command -v curl >/dev/null 2>&1 || die 'curl is required'
 
+require_clean_tree() {
+    # checkout can retain edits at the same tag (or non-conflicting edits at a
+    # different tag). Ignored files can also enter the distributor's file walk.
+    dirty=$(git -C "$CLONE" status --porcelain --untracked-files=all --ignored) \
+        || die "cannot inspect $CLONE; leaving the checkout unchanged"
+    [ -z "$dirty" ] || die "$CLONE has local changes or untracked files (including ignored files); preserve or move them outside the clone before retrying"
+}
+# Refuse before fetching or running any code from an existing managed clone.
+if [ -d "$CLONE/.git" ]; then require_clean_tree; fi
+
 # --- interpreter: >= 3.11 and able to seed a usable venv --------------------
 # Same strategy selection as the runtime (ADR 0037): private copies first,
 # symlinked seeding as the verified fallback for relocated builds (uv-managed
@@ -107,31 +117,45 @@ git -C "$CLONE" -c advice.detachedHead=false checkout --quiet "refs/tags/$tag" \
     || die "checkout $tag failed (a dirty clone fails closed)"
 got=$(git -C "$CLONE" rev-parse HEAD)
 [ "$got" = "$pinned" ] || die "checkout HEAD $got does not match the pinned $pinned"
+require_clean_tree
 
 # --- delegate to the standalone CLI -----------------------------------------
-if [ "$mode" = bootstrap ]; then
-    harnesses="${OMH_HARNESS:-codex}"
-else
-    harnesses=$("$python" - "$HOME_DIR/targets.json" <<'PYEOF'
-import json, sys
+# Keep each persisted target's full identity. Python passes argument arrays so
+# custom roots containing spaces, quotes or non-ASCII text are never split.
+"$python" -B - "$CLONE" "$HOME_DIR" "$mode" "${OMH_HARNESS:-codex}" <<'PYEOF' || die 'target installation failed'
+import json, subprocess, sys
 from pathlib import Path
-index = Path(sys.argv[1])
-targets = json.loads(index.read_bytes()) if index.exists() else {}
-print(','.join(sorted({entry.get('harness') for entry in targets.values()} - {None})))
+
+sys.stderr.reconfigure(encoding='utf-8')
+clone, home, mode, harness_list = sys.argv[1:]
+index = Path(home) / 'targets.json'
+try:
+    targets = json.loads(index.read_bytes()) if mode == 'upgrade' and index.exists() else {}
+    if not isinstance(targets, dict):
+        raise ValueError('expected an object')
+    selected = []
+    for entry in targets.values():
+        if (not isinstance(entry, dict)
+                or not isinstance(entry.get('harness'), str) or not entry['harness']
+                or not isinstance(entry.get('skillsRoot'), str) or not entry['skillsRoot']
+                or not Path(entry['skillsRoot']).is_absolute()):
+            raise ValueError('expected harness and absolute skillsRoot for every target')
+        selected.append((entry['harness'], entry['skillsRoot']))
+except (OSError, ValueError) as error:
+    sys.exit(f'cannot read target index {index}: {error}')
+if not selected:
+    selected = [(harness, None) for harness in harness_list.split(',') if harness]
+verb = 'install' if mode == 'bootstrap' else 'refresh'
+for harness, skills_root in selected:
+    print(f'{verb} target: {harness}' + (f' at {skills_root}' if skills_root else ''), file=sys.stderr)
+    command = [sys.executable, '-B', '-m', 'omh', verb, '--home', home,
+               '--harness', harness, '--python', sys.executable]
+    if skills_root is not None:
+        command += ['--skills-root', skills_root]
+    result = subprocess.run(command, cwd=clone)
+    if result.returncode:
+        sys.exit(result.returncode)
 PYEOF
-) || harnesses=''
-    [ -n "$harnesses" ] || harnesses="${OMH_HARNESS:-codex}"
-fi
-old_ifs=$IFS
-IFS=,
-for harness in $harnesses; do
-    [ -n "$harness" ] || continue
-    if [ "$mode" = bootstrap ]; then verb=install; else verb=refresh; fi
-    log "$verb target: $harness"
-    (cd "$CLONE" && "$python" -B -m omh "$verb" --home "$HOME_DIR" --harness "$harness" --python "$python") \
-        || die "omh $verb --harness $harness failed"
-done
-IFS=$old_ifs
 
 log "done: $tag at $CLONE"
 (cd "$CLONE" && "$python" -B -m omh status --home "$HOME_DIR") || true
