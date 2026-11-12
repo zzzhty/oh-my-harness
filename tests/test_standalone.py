@@ -29,6 +29,12 @@ def environment_snapshot(root):
     return {p.relative_to(root).as_posix(): ('link',os.readlink(p)) if p.is_symlink() else ('file',p.read_bytes())
             for p in root.rglob('*') if p.is_file() or p.is_symlink()}
 
+def installed_targets_snapshot(user_home):
+    # PowerShell maintains caches under HOME independently of OMH. Include all
+    # harness defaults and launcher shims, rather than unrelated shell state.
+    return {name: environment_snapshot(user_home/name)
+            for name in ('.codex', '.claude', '.grok', '.local/bin')}
+
 class StandaloneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -145,7 +151,7 @@ class StandaloneTests(unittest.TestCase):
                 st.update_installer(repo)
         self.assertEqual(caught.exception.code,'OMH_ENVIRONMENT_INVALID')
         self.assertIn('install.ps1',str(caught.exception))
-    def exercise_bootstrap_installer(self, argv):
+    def bootstrap_installer_fixture(self, argv):
         work = self.root/'upstream'
         shutil.copytree(self.source, work)
         shutil.copytree(ROOT/'omh', work/'omh', ignore=shutil.ignore_patterns('__pycache__'))
@@ -156,6 +162,7 @@ class StandaloneTests(unittest.TestCase):
         def git(*arguments):
             return subprocess.run(['git','-C',str(work),'-c','user.email=omh@test.invalid',
                 '-c','user.name=omh test',*arguments],check=True,capture_output=True,text=True,timeout=60)
+        (work/'.gitignore').write_text('.local-note\n')
         git('init','--quiet'); git('add','-A'); git('commit','-q','-m','one'); git('tag','v0.1.0')
         bare = self.root/'upstream.git'
         subprocess.run(['git','clone','--quiet','--bare',str(work),str(bare)],check=True,capture_output=True,timeout=60)
@@ -182,6 +189,10 @@ class StandaloneTests(unittest.TestCase):
         def installer(**extra):
             return subprocess.run(argv, env={**env,**extra}, capture_output=True, text=True,
                 encoding='utf-8', errors='replace', timeout=300)
+        return work, home, user_home, git, pinned, installer, env
+    def exercise_bootstrap_installer(self, argv):
+        work, home, user_home, git, pinned, installer, env = self.bootstrap_installer_fixture(argv)
+        bare = Path(env['OMH_REPO'])
         result = installer()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertTrue((home/'repo/.git').is_dir())
@@ -212,6 +223,159 @@ class StandaloneTests(unittest.TestCase):
         if program is None:
             self.skipTest('Windows bootstrap requires powershell or pwsh')
         self.exercise_bootstrap_installer([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
+    def exercise_installer_indexed_targets(self, argv):
+        work, home, user_home, git, pinned, installer, env = self.bootstrap_installer_fixture(argv)
+        # Seed a managed clone without bootstrapping an unwanted default target.
+        repo = home/'repo'
+        subprocess.run(['git','clone','--quiet','--branch','v0.1.0',env['OMH_REPO'],str(repo)],
+            check=True,capture_output=True,timeout=60)
+        targets = [('codex',self.root/'custom codex 一/skills'),
+                   ('codex',self.root/'custom codex 二/skills'),
+                   ('claude-code',self.root/'custom claude 三/skills')]
+        for harness, skills in targets:
+            result = subprocess.run([sys.executable,'-B','-m','omh','install','--home',str(home),
+                '--harness',harness,'--skills-root',str(skills),'--python',sys.executable,
+                '--external-venv',self.prepared['root'],'--offline'],cwd=repo,env=env,
+                capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        index_before = json.loads((home/'targets.json').read_bytes())
+        skill = work/'plugins/workflow/skills/example/SKILL.md'
+        skill.write_text(skill.read_text()+'Upgraded all custom targets\n')
+        git('add','-A'); git('commit','-q','-m','two'); git('tag','v0.2.0')
+        git('push','--quiet',env['OMH_REPO'],'refs/tags/v0.2.0')
+        # OMH_HARNESS is bootstrap-only and must not add targets on upgrade.
+        result = installer(OMH_VERSION='v0.2.0',OMH_REF_URL=str(pinned('v0.2.0')),OMH_HARNESS='grok')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        for harness, skills in targets:
+            with self.subTest(harness=harness, skills=str(skills)):
+                self.assertIn('Upgraded all custom targets',(skills/'example/SKILL.md').read_text())
+        self.assertEqual(json.loads((home/'targets.json').read_bytes()),index_before)
+        for default in ('.codex','.claude','.grok'):
+            self.assertFalse((user_home/default/'skills').exists(),default)
+    def exercise_installer_dirty_checkout(self, argv):
+        work, home, user_home, git, pinned, installer, env = self.bootstrap_installer_fixture(argv)
+        result = installer()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        repo = home/'repo'
+        tracked = repo/'plugins/workflow/skills/example/SKILL.md'
+        original = tracked.read_bytes()
+        def repo_git(*args):
+            return subprocess.run(['git','-C',str(repo),*args],check=True,capture_output=True,timeout=60).stdout
+        for kind in ('tracked','staged','untracked','ignored'):
+            with self.subTest(kind=kind):
+                changed = (tracked if kind in ('tracked','staged') else
+                           tracked.parent/('.local-note' if kind == 'ignored' else 'local notes 空间.txt'))
+                changed.write_bytes(original+f'Local {kind} content must not be distributed\n'.encode())
+                if kind == 'staged': repo_git('add','--',str(changed))
+                if kind == 'ignored': repo_git('check-ignore','--',str(changed))
+                # Git may refresh index stat metadata while checking status. Compare
+                # source bytes and staged diff, not incidental Git metadata bytes.
+                before = {k:v for k,v in environment_snapshot(repo).items() if not k.startswith('.git/')}
+                targets_before = installed_targets_snapshot(user_home)
+                state_before = (repo_git('status','--porcelain=v1','--untracked-files=all','--ignored'),
+                                repo_git('diff','--cached','--binary'),repo_git('rev-parse','HEAD'))
+                trace = self.root/f'{kind}.trace'
+                try:
+                    result = installer(GIT_TRACE=str(trace))
+                    self.assertEqual(installed_targets_snapshot(user_home),targets_before,'dirty content was distributed')
+                    self.assertEqual({k:v for k,v in environment_snapshot(repo).items() if not k.startswith('.git/')},
+                                     before,'dirty checkout was changed')
+                    self.assertEqual((repo_git('status','--porcelain=v1','--untracked-files=all','--ignored'),
+                                      repo_git('diff','--cached','--binary'),repo_git('rev-parse','HEAD')),state_before)
+                    self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+                    self.assertRegex((result.stdout+result.stderr).lower(),r'dirty|local changes')
+                    for line in trace.read_text().splitlines():
+                        if 'built-in: git' in line:
+                            self.assertNotRegex(line,r'\b(fetch|checkout)\b')
+                finally:
+                    if kind == 'staged': repo_git('reset','--quiet','HEAD','--',str(changed))
+                    if kind in ('untracked','ignored'): changed.unlink()
+                    else: tracked.write_bytes(original)
+    def exercise_installer_post_checkout_changes(self, argv):
+        work, home, user_home, git, pinned, installer, env = self.bootstrap_installer_fixture(argv)
+        result = installer()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        repo = home/'repo'
+        skill_path = 'plugins/workflow/skills/example/SKILL.md'
+        skill = work/skill_path
+        skill.write_bytes(skill.read_bytes()+b'Upgraded release content\n')
+        git('add','-A'); git('commit','-q','-m','two'); git('tag','v0.2.0')
+        git('push','--quiet',env['OMH_REPO'],'refs/tags/v0.2.0')
+        ref = pinned('v0.2.0')
+        # Hooks are outside the worktree: the initial cleanliness check passes,
+        # but checkout can still introduce local content before distribution.
+        hook = repo/'.git/hooks/post-checkout'
+        hook.write_bytes(b"#!/bin/sh\nprintf 'Hook-added local content\\n' >> "
+                         +skill_path.encode()+b'\n')
+        hook.chmod(0o755)
+        clean = subprocess.run(['git','-C',str(repo),'status','--porcelain=v1','--ignored'],
+            check=True,capture_output=True,timeout=60)
+        self.assertEqual(clean.stdout,b'')
+        targets_before = installed_targets_snapshot(user_home)
+        index_before = (home/'targets.json').read_bytes()
+        result = installer(OMH_VERSION='v0.2.0',OMH_REF_URL=str(ref))
+        self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertRegex((result.stdout+result.stderr).lower(),r'dirty|local changes')
+        # Compare to committed bytes, not the upstream worktree's CRLF policy.
+        committed = subprocess.run(['git','-C',str(work),'show',f'v0.2.0:{skill_path}'],
+            check=True,capture_output=True,timeout=60).stdout
+        self.assertEqual((repo/skill_path).read_bytes(),committed+b'Hook-added local content\n')
+        head = subprocess.run(['git','-C',str(repo),'rev-parse','HEAD'],
+            check=True,capture_output=True,text=True,timeout=60)
+        self.assertEqual(head.stdout.strip(),ref.read_text().strip())
+        self.assertEqual(installed_targets_snapshot(user_home),targets_before)
+        self.assertEqual((home/'targets.json').read_bytes(),index_before)
+        self.assertNotIn('refresh target:',result.stdout+result.stderr)
+    def exercise_installer_corrupt_index(self, argv):
+        work, home, user_home, git, pinned, installer, env = self.bootstrap_installer_fixture(argv)
+        result = installer()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        index = home/'targets.json'
+        original = index.read_bytes()
+        valid = next(iter(json.loads(original).values()))
+        invalid_indexes = [b'{broken json',b'[]',b'{"broken": {"harness": "codex"}}']
+        for entry in (None, {'harness': 'codex', 'skillsRoot': 'relative/skills'},
+                      {'harness': 1, 'skillsRoot': str(self.root/'skills')}):
+            # Validate the entire index before refreshing even its valid entries.
+            invalid_indexes.append(json.dumps({'valid':valid,'broken':entry}).encode())
+        for invalid in invalid_indexes:
+            with self.subTest(index=invalid):
+                index.write_bytes(invalid)
+                before = installed_targets_snapshot(user_home)
+                result = installer(OMH_HARNESS='grok')
+                self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+                self.assertEqual(index.read_bytes(),invalid)
+                self.assertEqual(installed_targets_snapshot(user_home),before)
+                self.assertNotIn('refresh target:',result.stdout+result.stderr)
+        index.write_bytes(original)
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_installer_refreshes_every_indexed_target_sh(self):
+        self.exercise_installer_indexed_targets(['/bin/sh',str(ROOT/'install.sh')])
+    def test_installer_refreshes_every_indexed_target_ps1(self):
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None: self.skipTest('Windows bootstrap requires powershell or pwsh')
+        self.exercise_installer_indexed_targets([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_installer_preserves_dirty_same_tag_checkout_sh(self):
+        self.exercise_installer_dirty_checkout(['/bin/sh',str(ROOT/'install.sh')])
+    def test_installer_preserves_dirty_same_tag_checkout_ps1(self):
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None: self.skipTest('Windows bootstrap requires powershell or pwsh')
+        self.exercise_installer_dirty_checkout([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_installer_preserves_post_checkout_changes_sh(self):
+        self.exercise_installer_post_checkout_changes(['/bin/sh',str(ROOT/'install.sh')])
+    def test_installer_preserves_post_checkout_changes_ps1(self):
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None: self.skipTest('Windows bootstrap requires powershell or pwsh')
+        self.exercise_installer_post_checkout_changes([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
+    @unittest.skipIf(os.name=='nt','POSIX bootstrap script')
+    def test_installer_rejects_corrupt_target_index_sh(self):
+        self.exercise_installer_corrupt_index(['/bin/sh',str(ROOT/'install.sh')])
+    def test_installer_rejects_corrupt_target_index_ps1(self):
+        program = shutil.which('powershell') or shutil.which('pwsh')
+        if program is None: self.skipTest('Windows bootstrap requires powershell or pwsh')
+        self.exercise_installer_corrupt_index([program,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'install.ps1')])
     def test_default_output_is_human_and_json_opts_in(self):
         self.install()
         out, err = io.StringIO(), io.StringIO()

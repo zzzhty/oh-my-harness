@@ -262,6 +262,12 @@ holding the tag's commit SHA (`git rev-parse <tag>^{}`). `install.sh`,
 anything
 ([ADR 0036](docs/adr/0036-bootstrap-installer-script.md)).
 
+On an existing managed clone, the installers stop if it contains local changes
+or extra files (including ignored files), preserving the checkout for you to
+resolve. Upgrades refresh every indexed skills root, including multiple custom
+roots for the same harness. A malformed target index stops the upgrade instead
+of silently falling back to a default installation directory.
+
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
 provider remains statically distributable; explicit runtime preparation of
 unsupported content fails closed with `OMH_CONTENT_INVALID` (an unsupported

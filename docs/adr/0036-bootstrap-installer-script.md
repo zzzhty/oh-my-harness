@@ -72,7 +72,12 @@ shell is the only difference.
    `powershell -File install.ps1` on Windows, `pwsh` when `powershell` is
    absent); the script performs the ref
    verification and the fetch/checkout, then refreshes every target the
-   home index knows. From an unmanaged checkout (a developer clone)
+   home index knows. Each index entry retains both its `harness` and
+   `skillsRoot`; two roots for the same harness are two refreshes, and an
+   explicit `--skills-root` prevents accidentally installing at the default
+   root. An unreadable or malformed index fails closed before any target
+   mutation; only an absent or empty index uses `OMH_HARNESS` defaults.
+   From an unmanaged checkout (a developer clone)
    `omh update` fails with guidance instead of delegating. The
    target-only operation that `update` performed until now becomes
    `omh refresh` — identical semantics, usable from any source checkout —
@@ -87,3 +92,14 @@ shell is the only difference.
 
 The installer never mutates targets itself; every mutation still goes through
 the standalone CLI as the sole distribution channel.
+
+## Source cleanliness
+
+A pinned HEAD is necessary but does not prove the worktree matches the tag:
+Git checkout can preserve uncommitted changes, including on a same-tag rerun.
+Both installers therefore require a clean managed checkout before fetching
+and again after checkout, before invoking the standalone CLI. Staged changes,
+unstaged changes, untracked files and ignored files all block installation
+because ignored files can also enter the distributor's recursive content walk.
+The installers never reset, clean, stash or otherwise discard those files;
+the owner must preserve or move them outside the clone before retrying.
