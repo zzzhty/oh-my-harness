@@ -240,6 +240,20 @@ python -B -m unittest discover -s plugins/maintenance/tests -p 'test_*.py'
 python -B -m unittest discover -s plugins/workflow/tests -p 'test_*.py'
 ```
 
+The same CI job runs the repository architecture check. Run it locally before
+finishing a change; it is the same command, and it needs the developer
+dependencies in `requirements.txt` (including `ruff`). The distributor under
+`omh/` does not import them.
+
+```sh
+python scripts/check_architecture.py
+```
+
+Findings name the violation, the fix, and the principle. File-size ceilings,
+grandfathered locale text calls, and grandfathered ruff findings live in
+`scripts/architecture_baseline.json`. Do not raise that file to admit a new
+violation. The rule table is in `AGENTS.md`.
+
 After final packaged edits and owning tests, run
 `python scripts/update_plugin_generations.py --release-version <version>` once,
 then `python scripts/check_plugin_generations.py`. Plugin byte identity remains

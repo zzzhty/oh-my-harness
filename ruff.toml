@@ -1,0 +1,9 @@
+# Developer lint invoked by scripts/check_architecture.py.
+# F, E9, and B are the bug-oriented rules that already almost pass.
+# Style-only families are not selected: enabling them would rewrite the tree.
+# Grandfathered findings live in scripts/architecture_baseline.json.
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = ["F", "E9", "B"]
