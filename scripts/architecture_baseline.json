@@ -1,0 +1,44 @@
+{
+  "notes": "Ratchet, not a waiver. file_lines values are ceilings for Python files already over 500 lines. text_io_utf8 values are the maximum number of locale-dependent text calls allowed in that file. ruff is the exact grandfathered finding multiset. Do not raise an entry to land a new violation.",
+  "file_lines": {
+    "omh/standalone.py": 636,
+    "plugins/maintenance/skills/doc-alignment/scripts/doc_alignment/audit_repo.py": 1069,
+    "plugins/workflow/skills/long-running-goal/scripts/check_goal_ready.py": 1506,
+    "plugins/workflow/skills/long-running-goal/scripts/check_goal_sequence.py": 1138,
+    "plugins/workflow/tests/test_goal_sequence.py": 1051,
+    "plugins/workflow/tests/test_ready_checkers.py": 1810,
+    "plugins/workflow/tests/test_summary_artifact.py": 539,
+    "scripts/plugin_package_identity.py": 510,
+    "tests/test_standalone.py": 1061
+  },
+  "text_io_utf8": {
+    "plugins/maintenance/skills/doc-alignment/scripts/doc_alignment/audit_repo.py": 1,
+    "plugins/maintenance/tests/test_doc_alignment_disclosure.py": 6,
+    "plugins/maintenance/tests/test_doc_audit_entry.py": 3,
+    "plugins/maintenance/tests/test_doc_audit_profiles.py": 1,
+    "plugins/maintenance/tests/test_report_incremental.py": 1,
+    "plugins/workflow/skills/long-running-goal/scripts/check_goal_sequence.py": 1,
+    "plugins/workflow/skills/summary-in-html/scripts/collect_summary_inputs.py": 1,
+    "plugins/workflow/tests/test_goal_sequence.py": 1,
+    "plugins/workflow/tests/test_ready_checkers.py": 1,
+    "plugins/workflow/tests/test_summary_artifact.py": 11,
+    "plugins/workflow/tests/test_todo_index.py": 1,
+    "scripts/check_standalone_distribution.py": 5,
+    "tests/test_hub_inventory.py": 1,
+    "tests/test_standalone.py": 77,
+    "tests/test_validate_plugin.py": 1
+  },
+  "ruff": [
+    "plugins/maintenance/skills/doc-alignment/scripts/doc_alignment/audit_repo.py|F401|`json` imported but unused",
+    "plugins/maintenance/skills/doc-alignment/scripts/doc_alignment/report.py|F401|`.audit_repo.safe_slug` imported but unused",
+    "plugins/maintenance/skills/doc-alignment/scripts/doc_alignment/report.py|F401|`sys` imported but unused",
+    "plugins/maintenance/tests/test_doc_alignment_disclosure.py|F401|`json` imported but unused",
+    "plugins/workflow/scripts/omh_runtime.py|F401|`importlib.util` imported but unused",
+    "plugins/workflow/skills/long-running-goal/scripts/check_goal_sequence.py|B905|`zip()` without an explicit `strict=` parameter",
+    "plugins/workflow/tests/test_long_running_goal_disclosure.py|F401|`json` imported but unused",
+    "plugins/workflow/tests/test_ready_checkers.py|B023|Function definition does not bind loop variable `field`",
+    "tests/test_standalone.py|B023|Function definition does not bind loop variable `journal`",
+    "tests/test_standalone.py|B023|Function definition does not bind loop variable `original`",
+    "tests/test_standalone.py|B023|Function definition does not bind loop variable `original`"
+  ]
+}
