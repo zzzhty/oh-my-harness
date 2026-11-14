@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.2.0 — 2026-11-14
+
+This is the source content version after the published 1.1.1 reissue. The retracted historical 1.2.0 entry later in this file keeps its original wording.
+
+- Add explicit-only skills `repo-lessons-lint` (maintenance), `blast-radius` and `create-verification-skill` (workflow), adapted from pstack under the MIT License, Copyright (c) 2026 Lauren Tan, each with a `NOTICE.md`. Fold `principle-attack-the-premise` into `mattpocock-skills:diagnosing-bugs`. The hub catalog is 32 skills.
+
 - Add the Windows bootstrap installer `install.ps1`, the twin of `install.sh` (ADR 0036). It probes Python ≥ 3.11 (and a usable venv), verifies the release's `omh-<tag>.ref` asset, clones into the profile's `.oh-my-harness/repo`, and installs or refreshes each harness through the standalone CLI. `omh update [--to <tag>]` from that managed clone delegates to `install.ps1` via `powershell` or `pwsh`; any other checkout still fails with `OMH_SOURCE_NOT_MANAGED`. POSIX `omh update` still delegates to `install.sh`. `install.sh` joins the indexed harnesses with commas so an upgrade refreshes every one of them.
 - Support relocated Python builds (uv-managed CPython) as first-class bootstrap interpreters through verification-gated seeding (ADR 0037): `prepare` seeds with `venv --copies` and probes the result, and only on failure removes the venv executables and reseeds with `--symlinks`, probing again — the winning strategy is recorded in the runtime marker and both strategies failing stays a hard error. `install.sh` and `install.ps1` mirror the same two-strategy probe, so a uv default `python3` now bootstraps directly. Symlinked runtimes depend on the base interpreter's continued existence; the next `verify`/`prepare` detects uv pruning and demands a re-bootstrap.
 - Add the `install.sh` bootstrap installer and split the lifecycle verbs (ADR 0036). `curl …/install.sh | sh` probes the interpreter (≥ 3.11, able to seed a usable venv), verifies the release's `omh-<tag>.ref` asset against the tag, clones into `~/.oh-my-harness/repo` and installs each requested harness; re-running it upgrades the clone in place and refreshes every indexed target. `omh update [--to <tag>]` delegates to the tree's `install.sh` from the managed clone only (elsewhere it fails with `OMH_SOURCE_NOT_MANAGED`); the target-only operation is now `omh refresh` (previous `update` semantics, any checkout), and `plan --operation` reads `install|refresh|uninstall`. The CLI still carries no git or network logic; releases upload the one-line ref asset.
