@@ -201,6 +201,7 @@ class MaintenanceSkillInstructionContractTests(unittest.TestCase):
         for skill_name in (
             "doc-alignment",
             "housekeeping",
+            "repo-lessons-lint",
             "skill-compressor",
         ):
             metadata = MAINTENANCE_SKILLS / skill_name / "agents" / "openai.yaml"

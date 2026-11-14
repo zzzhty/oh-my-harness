@@ -5,7 +5,7 @@ them through its own small standard-library Python distributor, `python -m omh`.
 It is the sole distribution channel
 ([ADR 0031](docs/adr/0031-sole-standalone-distribution.md)).
 
-The default composition contains 29 skills in `maintenance`, `workflow` and
+The default composition contains 32 skills in `maintenance`, `workflow` and
 `mattpocock-skills`. Watcher collection, automatic hooks and historical report
 readers remain retired. Preparing Python does not invoke skills or enable hooks.
 
@@ -215,9 +215,13 @@ runtime/ownership boundary is preserved by
 
 ## Versions and validation
 
-The latest published OMH content is **1.1.1, reissued on 2026-11-03**. Its source
+The source content version is **1.2.0**. See the [release record](docs/releases/1.2.0.md).
+It keeps the standalone distributor and the shared runtime provider. The catalog
+contains 32 skills. The tag and `omh-v1.2.0.ref` asset are created at publication.
+
+The previously published release is **1.1.1, reissued on 2026-11-03**. Its source
 checkout includes the standalone Python distributor and the shared runtime
-provider. See the [release record](docs/releases/1.1.1.md) for exact source and
+provider. See the [1.1.1 release record](docs/releases/1.1.1.md) for exact source and
 asset coordinates, CI coverage and the separately authorized Linux Home refresh.
 
 The reissue explicitly replaced the original 1.1.1 tag and assets. Old locks still
@@ -229,7 +233,8 @@ The published [`v1.0.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1
 records the earlier lifecycle and Watcher baseline. [`v1.1.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
 and the original 2026-10-30 1.1.1 publication record the content-publishing line; the reissue
 adds independent distribution and the shared runtime. The withdrawn old
-1.2.0 tag/release/assets were deleted, and are not a rollback coordinate. No old
+1.2.0 tag/release/assets were deleted, and are not a rollback coordinate or the
+payload of this source version. No old
 Watcher, hooks, git self-updater or historical state migration is restored.
 
 Use an isolated developer venv with `requirements.txt`:
