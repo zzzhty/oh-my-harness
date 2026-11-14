@@ -14,11 +14,13 @@ class HubInventoryTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'content-manifest.json').read_text())
         catalog = load_repo_skill_catalog(ROOT)
         skills = {f'{s.plugin}:{s.name}': s for s in catalog.sources}
-        self.assertEqual(len(skills), 29)
+        self.assertEqual(len(skills), 32)
         self.assertNotIn('maintenance:skill-maintainer', skills)
         self.assertIn('mattpocock-skills:writing-for-agents', skills)
+        self.assertIn('workflow:blast-radius', skills)
+        self.assertIn('workflow:create-verification-skill', skills)
         self.assertEqual({s.name for s in catalog.sources if s.plugin == 'maintenance'},
-                         {'doc-alignment', 'housekeeping', 'skill-compressor'})
+                         {'doc-alignment', 'housekeeping', 'repo-lessons-lint', 'skill-compressor'})
         self.assertEqual(manifest['historicalIdentities'], {})
         groups = {group['id']: group for group in manifest['runtimeGroups']}
         self.assertEqual(set(groups), set(manifest['runtimeBindings'].values()))

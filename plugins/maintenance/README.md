@@ -1,10 +1,11 @@
 # Maintenance skills
 
-This plugin preserves three distinct interactive workflows:
+This plugin preserves four distinct interactive workflows:
 
 - `doc-alignment`: audit and align current documentation and operational guidance.
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
+- `repo-lessons-lint`: explicitly turn mistake classes that already recurred in the current repository into architecture, types, a check, or a test. It does not scan other repositories.
 
 The audit and validation helpers belong to their consuming skills. Installing
 skills through the standalone distributor needs no Python on `PATH`, and
@@ -22,4 +23,4 @@ thresholds while target repositories stay read-only. See its `references/doc-aud
 OMH 1.1.0 removes `skill-maintainer` and its exclusive historical evidence and
 proposal pipeline. Use the existing `mattpocock-skills:writing-for-agents` skill
 for authoring or revising agent guidance. Its behavior and invocation policy are
-unchanged. The three maintenance skills retain their separate permission boundaries.
+unchanged. The maintenance skills retain their separate permission boundaries.

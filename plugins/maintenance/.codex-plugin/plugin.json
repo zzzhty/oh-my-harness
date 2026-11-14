@@ -1,15 +1,15 @@
 {
   "name": "maintenance",
-  "version": "1.1.1+codex.4a3717c11a215008",
-  "description": "Interactive documentation alignment, housekeeping, and semantic compression workflows.",
+  "version": "1.1.1+codex.2d2baa960a125579",
+  "description": "Interactive documentation alignment, housekeeping, semantic compression, and repeated-mistake checks.",
   "author": {
     "name": "Local developer"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Maintenance",
-    "shortDescription": "Audit docs, clean artifacts and compress skills",
-    "longDescription": "Three maintenance skills with their own optional audit helpers. OMH supplies no collection hooks or historical report reader.",
+    "shortDescription": "Audit docs, clean artifacts, compress skills, encode lessons",
+    "longDescription": "Maintenance skills for documentation alignment, housekeeping, semantic compression, and repeated-mistake checks, with optional audit helpers. OMH supplies no collection hooks or historical report reader.",
     "developerName": "Local developer",
     "category": "Productivity",
     "capabilities": [

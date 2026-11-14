@@ -6,6 +6,8 @@ A locally maintained selection of 20 engineering skills. The plugin keeps the `m
 
 Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release `v1.2.3`, commit `6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`. Matt Pocock's original work remains attributed under the included [MIT license](LICENSE). Local revisions are maintained in this repository. Selected changes from `v1.3.1` (`24fe0ef7737efae15c87225755e9f6f5965e4888`) and `v1.3.2` (`d1478fcb140db0b93c0c8df17bcfd311844749d0`) are applied to the maintained source as recorded in the [upstream review record](../../dev_docs/mattpocock-upstream-review.md); this does not replace the original derivation baseline or mean the complete release was adopted. The new `pr` helper also retains [Dex Horthy / HumanLayer attribution and MIT notice](skills/pr/CREDITS.md).
 
+`diagnosing-bugs` includes a local repeated-premise check adapted from Lauren Tan's pstack principle `principle-attack-the-premise` (https://github.com/cursor/plugins/tree/main/pstack/skills), under the MIT License, Copyright (c) 2026 Lauren Tan. The notice travels with the skill at [skills/diagnosing-bugs/NOTICE.md](skills/diagnosing-bugs/NOTICE.md). That addition does not add a catalog skill and does not change the skill's invocation policy.
+
 [ADR 0012](../../docs/adr/0012-maintain-a-local-mattpocock-selection.md) records the ownership and distribution migration. Local versioning follows the repository `VERSION` plus the package content generation; the upstream revisions above record provenance and review coverage, not the current package version.
 
 ## Entry points

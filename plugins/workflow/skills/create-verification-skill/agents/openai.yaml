@@ -1,0 +1,6 @@
+interface:
+  display_name: "Create Verification Skill"
+  short_description: "Generate and prove a project-local verification skill"
+  default_prompt: "Use $create-verification-skill to generate a project-local verification skill and prove it once."
+policy:
+  allow_implicit_invocation: false
