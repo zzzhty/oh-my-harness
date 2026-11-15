@@ -213,6 +213,32 @@ def main():
             caught = errors(arch.check(root, EMPTY, ruff=False), "harness-identity")
             self.assertTrue(any("INSTRUCTIONS" in item.violation for item in caught))
 
+    def test_harness_choices_are_checked_independently(self) -> None:
+        tables = 'HARNESS_ROOTS = {"codex": ".codex"}\nINSTRUCTIONS = {"codex": "AGENTS.md"}\n'
+        cases = [
+            ('choices=["codex"]', False),
+            ('choices=sorted(HARNESS_ROOTS)', False),
+            ('choices=["claude-code"]', True),
+            ('choices=["codex", "omp"]', True),
+            ('choices=unknown', True),
+            ('', True),
+        ]
+        for choices, should_fail in cases:
+            for flags in ('"--harness"', '"-H", "--harness"'):
+                with self.subTest(choices=choices, flags=flags), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    # Put the call first to ensure name resolution does not depend on AST walk order.
+                    call = f'def build(sub):\n    sub.add_argument({flags}, {choices})\n'
+                    write(root, "omh/standalone.py", call + tables)
+                    caught = errors(arch.check(root, EMPTY, ruff=False), "harness-identity")
+                    self.assertEqual(bool(caught), should_fail)
+                    if should_fail:
+                        self.assertTrue(any("choices" in item.violation for item in caught))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write(root, "omh/standalone.py", tables)
+            self.assertTrue(errors(arch.check(root, EMPTY, ruff=False), "harness-identity"))
+
     def test_third_party_import_in_the_distributor_is_caught(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
