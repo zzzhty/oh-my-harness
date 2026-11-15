@@ -284,14 +284,14 @@ def _harness_sets(tree: ast.AST) -> dict[str, tuple[int, set[str] | None]]:
         for target in targets:
             if isinstance(target, ast.Name) and target.id in {"HARNESS_ROOTS", "INSTRUCTIONS"}:
                 found[target.id] = (target.lineno, _literal_strings(value))
+    for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
         attr = func.attr if isinstance(func, ast.Attribute) else None
         if attr != "add_argument" or not node.args:
             continue
-        first = node.args[0]
-        if not isinstance(first, ast.Constant) or first.value != "--harness":
+        if not any(isinstance(arg, ast.Constant) and arg.value == "--harness" for arg in node.args):
             continue
         for keyword in node.keywords:
             if keyword.arg != "choices":
@@ -466,6 +466,13 @@ def check_harness_identity(root: Path) -> list[Violation]:
             "and make INSTRUCTIONS and --harness choices the same set.",
         ))
         return violations
+    for name in ("INSTRUCTIONS", "choices"):
+        if name not in found or found[name][1] is None:
+            violations.append(_violation(
+                "ERROR", "omh/standalone.py", found.get(name, (1, None))[0], "harness-identity",
+                f"{name} is missing or cannot be resolved.",
+                "Restore explicit INSTRUCTIONS and --harness choices matching HARNESS_ROOTS.",
+            ))
     sets = {name: values for name, (_line, values) in found.items()}
     comparable = {name: values for name, values in sets.items() if values is not None}
     denied = sorted(set().union(*comparable.values()) & SHORT_CANONICAL) if comparable else []
