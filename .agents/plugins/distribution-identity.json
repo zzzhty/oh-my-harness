@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:c92a34e44099973e6003a89cc5e4466a38286521466164934c51a9215145e321",
+  "bundleIdentity": "sha256:a7812b64e5fc228f3c7db6969b9a24f1abb035bc596a67a9a1393c0e98cf49c0",
   "generationLength": 16,
   "plugins": [
     {
@@ -11,10 +11,10 @@
       "versionAuthority": "release"
     },
     {
-      "contentSha256": "f253287e1efeb6de4a6ab57c2812ff38a91a400943f59dca7aba32e468a2f489",
-      "generation": "f253287e1efeb6de",
+      "contentSha256": "cd8a4d75995e348b004c3bf880e079ccb77cd3dc6164cb74fab763dda7764d8c",
+      "generation": "cd8a4d75995e348b",
       "name": "mattpocock-skills",
-      "version": "1.2.0+codex.f253287e1efeb6de",
+      "version": "1.2.0+codex.cd8a4d75995e348b",
       "versionAuthority": "release"
     },
     {
