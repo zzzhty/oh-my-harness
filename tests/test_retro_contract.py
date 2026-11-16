@@ -21,8 +21,12 @@ class RetroContractTests(unittest.TestCase):
             "Report the original task's status independently",
         ):
             self.assertIn(expected, RETRO)
-        for name in ("implement", "code-review", "pr"):
-            self.assertNotIn("retro", (MATT / name / "SKILL.md").read_text(encoding="utf-8").lower())
+        for path in (
+            MATT / "implement/SKILL.md",
+            MATT / "implement/PR.md",
+            MATT / "code-review/SKILL.md",
+        ):
+            self.assertNotIn("retro", path.read_text(encoding="utf-8").lower())
         router = (MATT / "ask-matt/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("`/retro`, only when the user selects it", router)
         self.assertIn("rather than silently starting their workflow", router)

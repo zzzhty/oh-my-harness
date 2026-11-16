@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fold the standalone `pr` skill into `implement` as an on-demand pull request description reference. The hub catalog is 31 skills, including 19 Matt skills. A description of existing changes does not re-run implementation or TDD, and preparing the text does not authorize pushing, publishing, or merging.
+
 ## 1.2.0 — 2026-11-14
 
 This is the source content version after the published 1.1.1 reissue. The retracted historical 1.2.0 entry later in this file keeps its original wording.

@@ -23,7 +23,7 @@ Before stating what a skill does or recommending a step be skipped, read that sk
 | Implement a spec or tickets | `/implement` |
 | Build a behavior test-first | `/tdd` |
 | Review changes against requirements and standards | `/code-review` |
-| Write a PR body from changes and verification evidence | `/pr` |
+| Write a PR body from changes and verification evidence | `/implement`, reading [PR.md](../implement/PR.md) only |
 | Answer a design question with runnable code | `/prototype` |
 | Gather primary-source evidence | `/research` |
 | Transfer context to another session, directory or person | `/handoff` |

@@ -1,17 +1,10 @@
----
-name: pr
-description: Write or revise a concise pull request body from the actual changes and verification evidence.
-metadata:
-  credits:
-    skill: show-me
-    author: Dex Horthy
-    organisation: HumanLayer
-    url: "https://github.com/humanlayer/skills/blob/ca7c8088db69e315a8b2deea43820270457f8f3c/plugins/show-me/skills/show-me/SKILL.md"
----
-
 # Write a PR Body
 
-Produce reviewable content for the requested change. This helper does not grant permission to push, create or edit a published PR, upload evidence, mark ready, request reviewers, close issues, merge, or start ongoing PR maintenance. Reuse authorization already established for those actions; ask only for missing authority. Writing the body does not require restarting a completed code review.
+On-demand reference for `implement`. Read it only when the user asks for a pull request description. A request for changes that already exist does not re-run implementation or `tdd`. This file is not a catalog skill. Finishing implementation does not load it by itself.
+
+Write from the actual diff, the rationale for the change, the verification evidence, and the remaining limitations.
+
+Produce reviewable content for the requested change. This reference does not grant permission to push, create or edit a published PR, upload evidence, mark ready, request reviewers, close issues, merge, start ongoing PR maintenance, or make any other remote write. Reuse authorization already established for those actions; ask only for missing authority. Writing the body does not require restarting a completed code review.
 
 ## Establish the content
 
@@ -33,7 +26,7 @@ Include before/after evidence when available and relevant. If no before run was 
 
 ## Merge Danger
 
-Explain the affected consumers, behavior, data, and operational state at a useful level of detail. Describe rollback or reversibility conditionally: a simple revert does not undo deleted data, sent messages, migrations already applied, or client-visible protocol changes. State unknowns and prerequisites rather than assuming every code change is a two-way door. Scale the explanation to the actual change; neither a one-word blast radius nor a lengthy risk section is mandatory.
+Explain the affected consumers, behavior, data, and operational state at a useful level of detail. Describe rollback or reversibility conditionally: a simple revert does not undo deleted data, sent messages, migrations already applied, or client-visible protocol changes. State unknowns and prerequisites rather than assuming every code change is a two-way door. State the remaining limitations. Scale the explanation to the actual change; neither a one-word blast radius nor a lengthy risk section is mandatory.
 
 When no repository template applies, use **Summary**, **Evidence**, and **Merge Danger** as concise headings. Return the body in the requested draft destination and disclose missing evidence or unresolved choices. An updated body reflects the current diff; it does not create a standing publication task.
 
