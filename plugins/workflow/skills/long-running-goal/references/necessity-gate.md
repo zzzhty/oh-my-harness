@@ -1,5 +1,7 @@
 # Necessity Gate
 
+Adapted from Stop That Shit; the license notice is [necessity-gate-NOTICE.md](necessity-gate-NOTICE.md).
+
 This reference owns the reusable decision for material scope and validation expansion. Apply it after the active request and owner contracts have already defined the current result.
 
 ## Decision Questions

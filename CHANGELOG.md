@@ -4,7 +4,8 @@
 
 - Remove the standalone `pr` skill. Writing a pull request description is ordinary model work, so its guide is not retained.
 - Replace `mattpocock-skills:ask-matt` with explicit-only `workflow:skill-guide`. It chooses from skills the active harness already exposes, and it can recommend no skill. That step left the hub catalog at 31 skills, including 18 Matt skills.
-- Remove `grill-me`. An interview uses `grilling`; a working directory does not by itself write a glossary or ADR. Fold `improve-codebase-architecture` into `codebase-design` as an explicit architecture review; loading that skill for vocabulary does not start the review. Compress `grill-with-docs`, `to-spec`, `implement`, `research`, `writing-for-agents`, and `handoff` without removing those entries. The hub catalog is 29 skills: maintenance 4, workflow 9, and 16 Matt skills.
+- Remove `grill-me`. An interview uses `grilling`; a working directory does not by itself write a glossary or ADR. Fold `improve-codebase-architecture` into `codebase-design` as an explicit architecture review; loading that skill for vocabulary does not start the review. Compress `grill-with-docs`, `to-spec`, `implement`, `research`, `writing-for-agents`, and `handoff` without removing those entries. That step left the hub catalog at 29 skills: maintenance 4, workflow 9, and 16 Matt skills.
+- Remove the callable `workflow:scope-discipline` skill. Its necessity gate stays a long-running-goal reference, not a user-invoked skill. Compress `orchestrate-subagents` to its assignment contract. The hub catalog is 28 skills: maintenance 4, workflow 8, and 16 Matt skills.
 
 ## 1.2.0 — 2026-11-14
 

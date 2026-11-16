@@ -23,10 +23,12 @@ class SkillGuideTests(unittest.TestCase):
         names = {source.name for source in catalog.sources}
         matt = {source.name for source in catalog.sources if source.plugin == "mattpocock-skills"}
         workflow = {source.name for source in catalog.sources if source.plugin == "workflow"}
-        self.assertEqual(len(names), 29)
+        self.assertEqual(len(names), 28)
         self.assertEqual(len(matt), 16)
+        self.assertEqual(len(workflow), 8)
         self.assertNotIn("ask-matt", names)
         self.assertNotIn("pr", names)
+        self.assertNotIn("scope-discipline", names)
         self.assertIn("skill-guide", workflow)
         self.assertFalse((MATT / "skills/ask-matt").exists())
 
@@ -44,6 +46,7 @@ class SkillGuideTests(unittest.TestCase):
             self.assertIn(f"`{package}`", body)
         self.assertNotIn("ask-matt", skill)
         self.assertNotIn("`/pr`", skill)
+        self.assertNotIn("scope-discipline", skill)
 
     def test_body_does_not_hardcode_other_catalog_skills(self) -> None:
         catalog = repo_skill_catalog.load_repo_skill_catalog(ROOT)

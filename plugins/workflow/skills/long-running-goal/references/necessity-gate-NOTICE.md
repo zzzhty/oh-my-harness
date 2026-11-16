@@ -1,6 +1,6 @@
 # Attribution
 
-The necessity-gate design in this skill is adapted from [Stop That Shit](https://github.com/lennney/stop-that-shit), distributed under the MIT License.
+The necessity-gate design in this reference is adapted from [Stop That Shit](https://github.com/lennney/stop-that-shit), distributed under the MIT License.
 
 MIT License
 
