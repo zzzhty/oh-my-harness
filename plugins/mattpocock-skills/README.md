@@ -1,6 +1,6 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 19 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 18 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
@@ -12,7 +12,7 @@ Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release 
 
 ## Entry points
 
-Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
+Skill choice for the whole catalog is `workflow:skill-guide`. `ask-matt` is not a catalog entry. Navigation boundaries adapted from it are attributed with that skill.
 
 | Use | Skills |
 | --- | --- |

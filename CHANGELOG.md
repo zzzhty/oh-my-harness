@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Remove the standalone `pr` skill. Writing a pull request description is ordinary model work, so its guide is not retained. The hub catalog is 31 skills, including 19 Matt skills.
+- Remove the standalone `pr` skill. Writing a pull request description is ordinary model work, so its guide is not retained.
+- Replace `mattpocock-skills:ask-matt` with explicit-only `workflow:skill-guide`. It chooses from skills the active harness already exposes, and it can recommend no skill. The hub catalog is 31 skills, including 18 Matt skills.
 
 ## 1.2.0 — 2026-11-14
 

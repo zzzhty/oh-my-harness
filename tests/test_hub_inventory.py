@@ -16,6 +16,8 @@ class HubInventoryTests(unittest.TestCase):
         skills = {f'{s.plugin}:{s.name}': s for s in catalog.sources}
         self.assertEqual(len(skills), 31)
         self.assertNotIn("mattpocock-skills:pr", skills)
+        self.assertNotIn("mattpocock-skills:ask-matt", skills)
+        self.assertIn("workflow:skill-guide", skills)
         self.assertNotIn('maintenance:skill-maintainer', skills)
         self.assertIn('mattpocock-skills:writing-for-agents', skills)
         self.assertIn('workflow:blast-radius', skills)

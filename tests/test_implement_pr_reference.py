@@ -22,26 +22,26 @@ class RemovedPrSkillTests(unittest.TestCase):
         names = {source.name for source in catalog.sources}
         matt = {source.name for source in catalog.sources if source.plugin == "mattpocock-skills"}
         self.assertEqual(len(names), 31)
-        self.assertEqual(len(matt), 19)
+        self.assertEqual(len(matt), 18)
         self.assertNotIn("pr", names)
+        self.assertNotIn("ask-matt", names)
         self.assertIn("implement", matt)
-        self.assertIn("ask-matt", matt)
         self.assertFalse((MATT / "skills/pr").exists())
+        self.assertFalse((MATT / "skills/ask-matt").exists())
         for leftover in ("PR.md", "CREDITS.md", "LICENSE"):
             self.assertFalse((IMPLEMENT / leftover).exists(), leftover)
 
     def test_no_skill_is_a_pull_request_authoring_route(self) -> None:
         implement = (IMPLEMENT / "SKILL.md").read_text(encoding="utf-8")
-        router = (MATT / "skills/ask-matt/SKILL.md").read_text(encoding="utf-8")
+        guide = (ROOT / "plugins/workflow/skills/skill-guide/SKILL.md").read_text(encoding="utf-8")
         readme = (MATT / "README.md").read_text(encoding="utf-8")
         self.assertIn("name: implement", implement)
         self.assertNotIn("PR.md", implement)
         self.assertNotIn("pull request", implement.lower())
-        self.assertIn("name: ask-matt", router)
-        self.assertIn("A router over the skills in this repo.", router)
-        self.assertNotIn("`/pr`", router)
-        self.assertNotIn("PR.md", router)
-        self.assertNotIn("Write a PR body", router)
+        self.assertIn("name: skill-guide", guide)
+        self.assertNotIn("`/pr`", guide)
+        self.assertNotIn("PR.md", guide)
+        self.assertNotIn("pull request", guide.lower())
         for stale in ("skills/pr/", "skills/implement/PR.md", "skills/implement/CREDITS.md", "Dex Horthy"):
             self.assertNotIn(stale, readme)
 

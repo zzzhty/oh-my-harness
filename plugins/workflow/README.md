@@ -4,6 +4,7 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 
 ## Skills
 
+- `skill-guide`: explicitly choose the smallest useful available skill, or none, after reading that skill's instructions. It does not run the chosen skill. Navigation boundaries adapted from Matt Pocock's `ask-matt` are attributed in [skills/skill-guide/NOTICE.md](skills/skill-guide/NOTICE.md).
 - `long-running-goal`: explicitly requested continuation-ready staged goals and strict serial Long-Running Goal Sequences with explicit lifecycle, branch routing, execution authority, runtime hard stops, milestone scope gates, evidence, and close.
 - `orchestrate-subagents`: user-requested subagent orchestration using bounded `task_name` assignments, prompt-declared permissions, evidence consolidation, failure handling, and parent-owned integration.
 - `prompt-strategy-loop`: evidence-backed prompt and agent-strategy iteration with risk-proportional evaluation and bounded writeback.
