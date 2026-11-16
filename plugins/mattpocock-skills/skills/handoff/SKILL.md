@@ -5,10 +5,8 @@ argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-Write a compact handoff so another session, directory, harness or person can continue the work. Use the user's requested destination; otherwise resolve the operating system's temporary directory (`$TMPDIR`, otherwise `/tmp`, on Unix; `%TEMP%` on Windows) and report the absolute path. If the configured directory is unavailable, report the path problem rather than silently writing into the workspace. A handoff does not require a formal goal contract.
+Write a handoff so another session, directory, harness, or person can continue. Use the user's requested destination. Otherwise use the operating system's temporary directory (`$TMPDIR`, otherwise `/tmp`, on Unix; `%TEMP%` on Windows), report the absolute path, and do not write it into the repository. If that directory is unavailable, report the path problem rather than writing into the workspace. A handoff does not require a formal goal contract.
 
-Include the objective, confirmed decisions and their reasons, relevant environment/branch state, completed work and verification, unresolved questions or blockers, and the next concrete action. Tailor the emphasis to the user's stated next task. Add suggested skills only where they help that task.
+Cite existing specs, plans, ADRs, issues, commits, and diffs instead of copying them. Keep a decision's reason when those artifacts do not. Redact secrets and unnecessary personal information; point to credential locations without copying credential values.
 
-Reference existing specs, plans, ADRs, issues, commits and diffs rather than copying them. Carry enough explanation to preserve decisions whose reasons those artifacts do not capture. Redact secrets and unnecessary personal information; point to credential locations without copying credential values.
-
-Continue in the current session while its context is useful. Create a handoff when the user asks or work actually crosses a continuation boundary; a phase transition, prototype or fixed token count alone does not require one. Report the saved artifact and any unresolved verification; creating it does not authorize sending it to another person.
+Create a handoff when the user asks or the work actually crosses a continuation boundary. A phase change, a prototype, or a token count does not by itself require one. Creating the handoff does not authorize sending it.

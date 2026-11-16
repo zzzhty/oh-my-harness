@@ -1,10 +1,8 @@
 ---
 name: research
-description: Investigate a question against high-trust primary sources. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.
+description: Investigate a question against high-trust primary sources. Use when the user wants a topic researched or docs or API facts gathered from first-hand sources.
 ---
 
-Investigate the requested question against primary sources: official documentation, source code, specifications and first-party evidence. Trace substantive claims to the source that owns them and distinguish verified facts from inference or unresolved questions.
+Investigate the question against primary sources: official documentation, source code, specifications, and first-party evidence. Trace a substantive claim to the source that owns it. Separate verified facts from inference and from unresolved questions.
 
-Use a background agent when the investigation is independently useful and delegation is authorized; otherwise do it directly. Keep the assignment bounded and report missing access or incomplete coverage.
-
-Return findings with source links. For a requested artifact or continuing work that needs a durable record, save or update one Markdown note when document writes are in scope. Reuse the existing owner for the question; otherwise choose an appropriate local path and report it.
+Return findings with source links. When a durable note is in scope, update the existing document owner for that question. If none exists, choose a local path and report it.

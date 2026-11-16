@@ -23,8 +23,8 @@ class SkillGuideTests(unittest.TestCase):
         names = {source.name for source in catalog.sources}
         matt = {source.name for source in catalog.sources if source.plugin == "mattpocock-skills"}
         workflow = {source.name for source in catalog.sources if source.plugin == "workflow"}
-        self.assertEqual(len(names), 31)
-        self.assertEqual(len(matt), 18)
+        self.assertEqual(len(names), 29)
+        self.assertEqual(len(matt), 16)
         self.assertNotIn("ask-matt", names)
         self.assertNotIn("pr", names)
         self.assertIn("skill-guide", workflow)
@@ -60,7 +60,7 @@ class SkillGuideTests(unittest.TestCase):
         self.assertIn("skills/skill-guide/NOTICE.md", readme)
         self.assertIn("`skill-guide`", readme)
         matt_readme = (MATT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("18 engineering skills", matt_readme)
+        self.assertIn("16 engineering skills", matt_readme)
         self.assertIn("`workflow:skill-guide`", matt_readme)
         self.assertNotIn("$mattpocock-skills:ask-matt", matt_readme)
         prompt = (MATT / ".codex-plugin/plugin.json").read_text(encoding="utf-8")

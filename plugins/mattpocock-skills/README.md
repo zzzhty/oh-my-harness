@@ -1,6 +1,6 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 18 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 16 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
@@ -16,7 +16,7 @@ Skill choice for the whole catalog is `workflow:skill-guide`. `ask-matt` is not 
 
 | Use | Skills |
 | --- | --- |
-| Discuss and design | grilling, grill-me, grill-with-docs, domain-modeling, codebase-design, improve-codebase-architecture |
+| Discuss and design | grilling, grill-with-docs, domain-modeling, codebase-design |
 | Implement and verify | implement, code-review, tdd, diagnosing-bugs |
 | Work with issues and context | triage, to-spec, handoff |
 | Investigate, learn and maintain | research, prototype, teach, writing-for-agents, retro |
@@ -28,6 +28,10 @@ Core/specialized labels in the selection proposal are maintenance priorities, no
 Retired skills remain in the private pre-rebuild archive and the documented upstream releases. Recovering one requires a separate scope and attribution review; the clean repository has no earlier Git history.
 
 The standalone `pr` skill is not a catalog entry. Writing a pull request description is ordinary model work, not a skill. Standalone `implement-spec` remains deferred.
+
+`grill-me` is not a catalog entry. An interview uses `grilling`. A working directory does not by itself write a glossary or ADR.
+
+`improve-codebase-architecture` is not a catalog entry. An explicit review of existing architectural friction lives in `codebase-design` ([skills/codebase-design/ARCHITECTURE-REVIEW.md](skills/codebase-design/ARCHITECTURE-REVIEW.md)), under the plugin MIT license. Loading `codebase-design` for vocabulary does not start that review.
 
 `retro` is an explicit-only session retrospective adapted from Matt Pocock's v1.3.1 [skill](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/skills/engineering/retro/SKILL.md) and [guide](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/docs/engineering/retro.md), under the included MIT license. Invoke `/retro` to propose environment or process improvements from authorized session evidence. It can conclude no change is needed; it does not modify the environment, expand access, or become a mandatory delivery step. The existing `writing-for-agents` skill owns agent-guidance authoring; OMH 1.1.0 no longer provides the historical Watcher proposal pipeline.
 

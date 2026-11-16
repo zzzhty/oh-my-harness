@@ -21,8 +21,8 @@ class RemovedPrSkillTests(unittest.TestCase):
         catalog = repo_skill_catalog.load_repo_skill_catalog(ROOT)
         names = {source.name for source in catalog.sources}
         matt = {source.name for source in catalog.sources if source.plugin == "mattpocock-skills"}
-        self.assertEqual(len(names), 31)
-        self.assertEqual(len(matt), 18)
+        self.assertEqual(len(names), 29)
+        self.assertEqual(len(matt), 16)
         self.assertNotIn("pr", names)
         self.assertNotIn("ask-matt", names)
         self.assertIn("implement", matt)

@@ -96,6 +96,6 @@ Choose a diagram that explains the candidate:
 - **Interface and implementation:** paired rectangles illustrating interface burden versus capability, not a line-count depth metric.
 - **Call-graph collapse:** nested boxes before, one module with faded internal calls after.
 
-Keep diagrams legible, approximately 320px high when useful, and use unique SVG IDs per card. Prefer whitespace and sparse color: one accent, red for leakage, amber for warnings. Use the `/codebase-design` vocabulary while respecting repository terms. The top recommendation links to its candidate with a concrete reason.
+Keep diagrams legible, approximately 320px high when useful, and use unique SVG IDs per card. Prefer whitespace and sparse color: one accent, red for leakage, amber for warnings. Use this skill's vocabulary while respecting repository terms. The top recommendation links to its candidate with a concrete reason.
 
 Before delivery, open the file with network access disabled and confirm styles, labels, diagrams, and internal links still work. Evidence links may point to external sources; rendering must not depend on them.
