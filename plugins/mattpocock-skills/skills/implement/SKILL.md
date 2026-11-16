@@ -1,10 +1,8 @@
 ---
 name: implement
-description: "Implement a piece of work based on a spec or set of tickets. On request, write a pull request description for existing changes without re-running that work."
+description: "Implement a piece of work based on a spec or set of tickets."
 disable-model-invocation: true
 ---
-
-If the user asks only for a pull request description, including a description of changes that already exist, read [PR.md](PR.md) and write that description, then stop. Do not start or re-run implementation or `tdd`. Preparing the description does not authorize pushing, creating or editing a published pull request, merging, or any other remote write.
 
 Implement the user's spec or tickets within the agreed scope. Reuse confirmed requirements and test boundaries; resolve only missing decisions that block the implementation.
 
@@ -15,5 +13,3 @@ Record the starting commit and relevant pre-existing work so this task's changes
 Before finishing, separately load `code-review` through the active harness's supported skill-loading mechanism and conduct its read-only review with the task/spec, starting commit and changed-file inventory. Explicitly include this task's committed, staged, unstaged and untracked changes; a comparison ending at HEAD alone cannot review uncommitted implementation.
 
 Address actionable findings and report remaining limits. Commit when the user's existing authorization includes it. Stage only this task's changes and check the entire pending commit, including content staged before the task. If unrelated content cannot be excluded without altering the user's work or staging state, preserve that state and report the blocker.
-
-Do not write a pull request description unless the user asked for one. When they did, read [PR.md](PR.md) and write from the finished diff and evidence; do not re-run implementation or `tdd` to produce the description.

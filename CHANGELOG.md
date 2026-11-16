@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Fold the standalone `pr` skill into `implement` as an on-demand pull request description reference. The hub catalog is 31 skills, including 19 Matt skills. A description of existing changes does not re-run implementation or TDD, and preparing the text does not authorize pushing, publishing, or merging.
+- Remove the standalone `pr` skill. Writing a pull request description is ordinary model work, so its guide is not retained. The hub catalog is 31 skills, including 19 Matt skills.
 
 ## 1.2.0 — 2026-11-14
 
