@@ -128,6 +128,11 @@ def main():
         projected = {name.split('/')[1] for name in receipt_files
                      if name.startswith('skills/') and name.count('/') >= 2}
         assert projected == expected_skills()
+        architecture_review = skills / 'codebase-design/ARCHITECTURE-REVIEW.md'
+        assert '[MIT license](LICENSE)' in architecture_review.read_text(encoding='utf-8')
+        assert (architecture_review.parent / 'LICENSE').read_bytes() == (
+            ROOT / 'plugins/mattpocock-skills/LICENSE'
+        ).read_bytes()
         instructions = home / '.codex/AGENTS.md'
         assert instructions.read_bytes() == (ROOT / 'agents/global-instructions.md').read_bytes()
         assert 'AGENTS.md' in receipt_files

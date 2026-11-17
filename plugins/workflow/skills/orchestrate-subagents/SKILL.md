@@ -5,7 +5,7 @@ description: Use when the user explicitly asks for `$orchestrate-subagents`, sub
 
 # Orchestrate Subagents
 
-Use only when the user explicitly asks for this skill, subagents, parallel agents, or multi-agent delegation. The active instruction chain or an approved plan owns delegation and mutation authority; capability alone does not grant either.
+Use only when the user explicitly asks for this skill, subagents, parallel agents, or multi-agent delegation. Tool availability and task parallelism alone are not triggers.
 
 ## Assignment Contract
 
@@ -20,10 +20,8 @@ Use natural prose or a short structure as needed; these facts matter, not a fixe
 ## Workflow
 
 1. Freeze the parent outcome, required gates, non-goals, and shared artifacts. Use the applicable row of [task patterns](references/task-patterns.md) to choose useful slices; no fixed number of branches or reviewers is required.
-2. Keep the parent agent responsible for planning, final decisions, shared files, generated artifacts, integration, cross-slice validation, and the user-facing conclusion. Continue independent parent work while agents run.
-3. Wait for selected results. Surface missing tools, policy blocks, timeouts, incomplete coverage, conflicts, and missing evidence as `partial` or `blocked`. Apply the global subagent-failure policy before integration; do not substitute assumptions for missing results.
-4. Review returned evidence and resolve disagreements. Subagent output is input to parent judgment, not final validation.
+2. The parent integrates the returned evidence. A subagent result is not the integrated result. Wait for the selected results before that integration.
 
 ## Completion
 
-Account for every selected assignment and confirm the parent independently reviewed its evidence. Report findings, commands/results, coverage gaps, and blockers; for implementation include changed behavior and parent validation. Keep failures visible and write scopes disjoint.
+Account for every selected assignment. Keep write scopes disjoint.

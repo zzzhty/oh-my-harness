@@ -1,10 +1,10 @@
 # Matt Pocock Skills — OMH edition
 
-A locally maintained selection of 20 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
+A locally maintained selection of 16 engineering skills. The plugin keeps the `mattpocock-skills` namespace and each retained skill's invocation policy. Its source is owned by oh-my-harness; the plugin is not an unchanged upstream subscription.
 
 ## Source and attribution
 
-Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release `v1.2.3`, commit `6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`. Matt Pocock's original work remains attributed under the included [MIT license](LICENSE). Local revisions are maintained in this repository. Selected changes from `v1.3.1` (`24fe0ef7737efae15c87225755e9f6f5965e4888`) and `v1.3.2` (`d1478fcb140db0b93c0c8df17bcfd311844749d0`) are applied to the maintained source as recorded in the [upstream review record](../../dev_docs/mattpocock-upstream-review.md); this does not replace the original derivation baseline or mean the complete release was adopted. The new `pr` helper also retains [Dex Horthy / HumanLayer attribution and MIT notice](skills/pr/CREDITS.md).
+Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release `v1.2.3`, commit `6acc160e4e0cd062dbbbd7a1b26ae92855edf07e`. Matt Pocock's original work remains attributed under the included [MIT license](LICENSE). Local revisions are maintained in this repository. Selected changes from `v1.3.1` (`24fe0ef7737efae15c87225755e9f6f5965e4888`) and `v1.3.2` (`d1478fcb140db0b93c0c8df17bcfd311844749d0`) are applied to the maintained source as recorded in the [upstream review record](../../dev_docs/mattpocock-upstream-review.md); this does not replace the original derivation baseline or mean the complete release was adopted.
 
 `diagnosing-bugs` includes a local repeated-premise check adapted from Lauren Tan's pstack principle `principle-attack-the-premise` (https://github.com/cursor/plugins/tree/main/pstack/skills), under the MIT License, Copyright (c) 2026 Lauren Tan. The notice travels with the skill at [skills/diagnosing-bugs/NOTICE.md](skills/diagnosing-bugs/NOTICE.md). That addition does not add a catalog skill and does not change the skill's invocation policy.
 
@@ -12,12 +12,12 @@ Derived from [mattpocock/skills](https://github.com/mattpocock/skills), release 
 
 ## Entry points
 
-Use $mattpocock-skills:ask-matt to help me choose the right skill for this task.
+Skill choice for the whole catalog is `workflow:skill-guide`. `ask-matt` is not a catalog entry. Navigation boundaries adapted from it are attributed with that skill.
 
 | Use | Skills |
 | --- | --- |
-| Discuss and design | grilling, grill-me, grill-with-docs, domain-modeling, codebase-design, improve-codebase-architecture |
-| Implement and verify | implement, code-review, tdd, diagnosing-bugs, pr |
+| Discuss and design | grilling, grill-with-docs, domain-modeling, codebase-design |
+| Implement and verify | implement, code-review, tdd, diagnosing-bugs |
 | Work with issues and context | triage, to-spec, handoff |
 | Investigate, learn and maintain | research, prototype, teach, writing-for-agents, retro |
 
@@ -27,7 +27,11 @@ Core/specialized labels in the selection proposal are maintenance priorities, no
 
 Retired skills remain in the private pre-rebuild archive and the documented upstream releases. Recovering one requires a separate scope and attribution review; the clean repository has no earlier Git history.
 
-`pr` prepares concise PR content using the repository template, actual verification evidence, and proportional rollback/impact guidance. It does not authorize publication or impose a mandatory post-review workflow. Standalone `implement-spec` remains deferred.
+The standalone `pr` skill is not a catalog entry. Writing a pull request description is ordinary model work, not a skill. Standalone `implement-spec` remains deferred.
+
+`grill-me` is not a catalog entry. An interview uses `grilling`. A working directory does not by itself write a glossary or ADR.
+
+`improve-codebase-architecture` is not a catalog entry. An explicit review of existing architectural friction lives in `codebase-design` ([skills/codebase-design/ARCHITECTURE-REVIEW.md](skills/codebase-design/ARCHITECTURE-REVIEW.md)), under the plugin MIT license. Loading `codebase-design` for vocabulary does not start that review.
 
 `retro` is an explicit-only session retrospective adapted from Matt Pocock's v1.3.1 [skill](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/skills/engineering/retro/SKILL.md) and [guide](https://github.com/mattpocock/skills/blob/24fe0ef7737efae15c87225755e9f6f5965e4888/docs/engineering/retro.md), under the included MIT license. Invoke `/retro` to propose environment or process improvements from authorized session evidence. It can conclude no change is needed; it does not modify the environment, expand access, or become a mandatory delivery step. The existing `writing-for-agents` skill owns agent-guidance authoring; OMH 1.1.0 no longer provides the historical Watcher proposal pipeline.
 

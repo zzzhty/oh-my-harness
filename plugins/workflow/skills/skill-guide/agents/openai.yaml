@@ -1,0 +1,6 @@
+interface:
+  display_name: "Skill Guide"
+  short_description: "Choose a skill, or none"
+  default_prompt: "Use $skill-guide to choose a skill, or none."
+policy:
+  allow_implicit_invocation: false

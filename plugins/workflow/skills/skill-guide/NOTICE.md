@@ -1,10 +1,10 @@
 # Attribution
 
-The necessity-gate design in this skill is adapted from [Stop That Shit](https://github.com/lennney/stop-that-shit), distributed under the MIT License.
+Navigation boundaries in this skill are adapted from Matt Pocock's `ask-matt` skill ([mattpocock/skills](https://github.com/mattpocock/skills), `skills/engineering/ask-matt`), under the MIT License. The adapted boundaries are: read a skill's instructions before describing it or recommending that it be skipped; reading does not invoke it; recommend the smallest useful selection; recommend an explicit-only skill for the user to choose rather than starting it. This skill does not copy that skill's routing table. The oh-my-harness local edition was the adapted source. The rest of this guidance is original.
 
 MIT License
 
-Copyright (c) 2026 Stop That Shit contributors
+Copyright (c) 2026 Matt Pocock
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

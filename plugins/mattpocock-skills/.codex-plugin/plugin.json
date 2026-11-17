@@ -1,6 +1,6 @@
 {
   "name": "mattpocock-skills",
-  "version": "1.2.0+codex.a7544c71a42a22dd",
+  "version": "1.2.0+codex.cd8a4d75995e348b",
   "description": "OMH's locally maintained selection of Matt Pocock's engineering skills.",
   "author": {
     "name": "Matt Pocock"
@@ -25,7 +25,7 @@
       "skills"
     ],
     "defaultPrompt": [
-      "Use $mattpocock-skills:ask-matt to help me choose the right Matt Pocock skill."
+      "Use $workflow:skill-guide to choose a skill, or none."
     ]
   }
 }

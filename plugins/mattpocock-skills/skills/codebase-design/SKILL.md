@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.
+description: Shared vocabulary for deep-module design. Use for interface and seam decisions, testability, or when another skill needs this vocabulary. When the user explicitly asks to find architectural friction in existing code, follow ARCHITECTURE-REVIEW.md. Loading this skill for vocabulary does not start that review or an HTML report.
 ---
 
 # Codebase Design
@@ -50,3 +50,4 @@ Use these distinctions consistently while respecting the repository's establishe
 
 - **Deepening a cluster given its dependencies** — see [DEEPENING.md](DEEPENING.md): dependency categories, seam choices, and preserving useful regression coverage.
 - **Exploring alternative interfaces** — see [DESIGN-IT-TWICE.md](DESIGN-IT-TWICE.md): compare meaningfully different interfaces on depth, locality, and seam placement; use independent designers when useful and authorized.
+- **Reviewing existing architectural friction** — see [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) only when the user explicitly asks for that review. Loading this skill for vocabulary does not start it and does not produce an HTML report.

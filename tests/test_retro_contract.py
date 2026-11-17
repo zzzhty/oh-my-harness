@@ -21,11 +21,8 @@ class RetroContractTests(unittest.TestCase):
             "Report the original task's status independently",
         ):
             self.assertIn(expected, RETRO)
-        for name in ("implement", "code-review", "pr"):
+        for name in ("implement", "code-review"):
             self.assertNotIn("retro", (MATT / name / "SKILL.md").read_text(encoding="utf-8").lower())
-        router = (MATT / "ask-matt/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("`/retro`, only when the user selects it", router)
-        self.assertIn("rather than silently starting their workflow", router)
 
     def test_evidence_access_and_prompt_injection_boundaries_are_explicit(self) -> None:
         for expected in (

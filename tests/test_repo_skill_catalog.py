@@ -153,7 +153,7 @@ class RepoSkillCatalogTests(unittest.TestCase):
 
     def test_live_catalog_matches_all_repository_skill_frontmatter_names(self) -> None:
         catalog = repo_skill_catalog.load_repo_skill_catalog()
-        self.assertGreaterEqual(len(catalog.sources), 29)
+        self.assertGreaterEqual(len(catalog.sources), 28)
         self.assertEqual(len(catalog.sources), len(catalog.by_name))
         self.assertEqual(
             set(catalog.plugin_names),
@@ -170,12 +170,13 @@ class RepoSkillCatalogTests(unittest.TestCase):
             source.name: source for source in catalog.sources
             if source.plugin == "mattpocock-skills"
         }
-        self.assertEqual(len(selected), 20)
+        self.assertEqual(len(selected), 16)
         self.assertNotIn("resolving-merge-conflicts", selected)
-        self.assertIn("pr", selected)
+        self.assertNotIn("pr", selected)
+        self.assertIn("implement", selected)
         explicit_workflows = {
-            "ask-matt", "grill-me", "grill-with-docs", "handoff", "implement",
-            "improve-codebase-architecture", "retro", "teach", "to-spec", "triage",
+            "grill-with-docs", "handoff", "implement",
+            "retro", "teach", "to-spec", "triage",
         }
         for name, source in selected.items():
             with self.subTest(skill=name):

@@ -106,7 +106,7 @@ class InstructionOwnershipTests(unittest.TestCase):
         patterns = references[0].read_text(encoding="utf-8")
         for task in ("PR or branch review", "Debugging triage", "Implementation planning", "Parallel implementation", "API/schema inspection", "Documentation alignment"):
             self.assertIn(task, patterns)
-        for boundary in ("ban on edits and commits", "exact disjoint write scope", "shared and forbidden paths", "stopping condition", "parent independently reviewed", "partial"):
+        for boundary in ("ban on edits and commits", "exact disjoint write scope", "shared and forbidden paths", "stopping condition", "A subagent result is not the integrated result"):
             self.assertIn(boundary, skill)
         self.assertNotIn("exactly one primary reference", skill)
 
@@ -116,10 +116,11 @@ class InstructionOwnershipTests(unittest.TestCase):
 
         self.assertIn("Use subagents only when", global_instructions)
         self.assertIn("explicitly asks", skill)
-        self.assertIn("active instruction chain or an approved plan", skill)
+        self.assertIn("task parallelism alone are not triggers", skill)
+        self.assertNotIn("active instruction chain or an approved plan", skill)
         self.assertNotIn("root instructions or an approved plan", skill)
         self.assertIn("exact disjoint write scope", skill)
-        self.assertIn("Surface missing tools", skill)
+        self.assertNotIn("Surface missing tools", skill)
 
 
 if __name__ == "__main__":

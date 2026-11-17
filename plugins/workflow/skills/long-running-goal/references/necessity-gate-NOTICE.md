@@ -1,6 +1,10 @@
+# Attribution
+
+The necessity-gate design in this reference is adapted from [Stop That Shit](https://github.com/lennney/stop-that-shit), distributed under the MIT License.
+
 MIT License
 
-Copyright (c) 2026 HumanLayer
+Copyright (c) 2026 Stop That Shit contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
