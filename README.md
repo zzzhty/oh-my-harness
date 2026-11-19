@@ -215,23 +215,28 @@ runtime/ownership boundary is preserved by
 
 ## Versions and validation
 
-The source content version is **1.2.0**. See the [release record](docs/releases/1.2.0.md).
-It keeps the standalone distributor and the shared runtime provider. The current
-catalog contains 28 skills. The 1.2.0 release record still describes the catalog
-at that preparation. The tag and `omh-v1.2.0.ref` asset are created at publication.
+The source content version is **1.3.0**. See the [release record](docs/releases/1.3.0.md).
+It keeps the standalone distributor and the shared runtime provider. The catalog
+contains 28 skills. [`v1.3.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.3.0)
+is the first GitHub Release and publishes `omh-v1.3.0.ref`.
 
-The previously published release is **1.1.1, reissued on 2026-11-03**. Its source
-checkout includes the standalone Python distributor and the shared runtime
-provider. See the [1.1.1 release record](docs/releases/1.1.1.md) for exact source and
-asset coordinates, CI coverage and the separately authorized Linux Home refresh.
+The previous source tag is **1.2.0**, prepared on 2026-11-14. Its
+[release record](docs/releases/1.2.0.md) describes that preparation's 32-skill
+catalog. Git tags `v1.0.0` through `v1.2.0` remain source coordinates and have
+no GitHub Release.
+
+The 1.1.1 reissue on 2026-11-03 remains the historical source record for the
+standalone distributor and the shared runtime provider. See the
+[1.1.1 release record](docs/releases/1.1.1.md) for exact source and asset
+coordinates, CI coverage and the separately authorized Linux Home refresh.
 
 The reissue explicitly replaced the original 1.1.1 tag and assets. Old locks still
 identify the superseded bytes and need a reviewed update; the version number alone
 does not identify the payload. Existing installations change through their owner's
 explicit plan/apply workflow. Publication does not migrate a Home installation.
 
-The published [`v1.0.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.0.0)
-records the earlier lifecycle and Watcher baseline. [`v1.1.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.1.0)
+The [`v1.0.0`](https://github.com/zzzhty/oh-my-harness/tree/v1.0.0) tag
+records the earlier lifecycle and Watcher baseline. [`v1.1.0`](https://github.com/zzzhty/oh-my-harness/tree/v1.1.0)
 and the original 2026-10-30 1.1.1 publication record the content-publishing line; the reissue
 adds independent distribution and the shared runtime. The withdrawn old
 1.2.0 tag/release/assets were deleted, and are not a rollback coordinate or the
