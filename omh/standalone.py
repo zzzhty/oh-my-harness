@@ -84,14 +84,14 @@ def default_roots():
     yield Path.home() / '.claude', 'claude-code'
     yield Path.home() / '.grok', 'grok'
 
-def overview(home):
+def overview(home, selected_harness=None):
     targets = {}
     for root, entry in load_targets(home).items():
         targets[root] = entry.get('harness')
     for root, harness in default_roots():
         if (root / OWNER).exists(): targets.setdefault(str(root), harness)
     return [dict(target_state(home, rt.safe_path(Path(root))), harness=harness or '?')
-            for root, harness in sorted(targets.items())]
+            for root, harness in sorted(targets.items()) if selected_harness in (None, harness)]
 
 def clean(item):
     return item['state'] == 'installed' and not item['modified'] and not item['recoveryRequired']
@@ -451,7 +451,7 @@ def shared_flags(sub):
 
 def harness_flag(sub):
     sub.add_argument('--harness', choices=['codex', 'claude-code', 'grok'],
-        help='harness target to manage (default codex)')
+        help='harness target (status: filter overview; other commands default to codex)')
 
 def skills_flag(sub):
     sub.add_argument('--skills-root', type=Path,
@@ -581,9 +581,9 @@ def main(argv=None):
             return subprocess.call(update_installer(source), env=environment)
         if args.command == 'status':
             if skills_root is None:
-                items = overview(home)
+                items = overview(home, args.harness)
                 print_overview(home, items, args.json)
-                return 0 if all(clean(item) for item in items) else 1
+                return 0 if (args.harness is None or items) and all(clean(item) for item in items) else 1
             item = target_state(home, root)
             item['harness'] = harness
             if item['state'] == 'installed':

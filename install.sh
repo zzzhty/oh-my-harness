@@ -122,7 +122,7 @@ require_clean_tree
 # --- delegate to the standalone CLI -----------------------------------------
 # Keep each persisted target's full identity. Python passes argument arrays so
 # custom roots containing spaces, quotes or non-ASCII text are never split.
-"$python" -B - "$CLONE" "$HOME_DIR" "$mode" "${OMH_HARNESS:-codex}" <<'PYEOF' || die 'target installation failed'
+"$python" -B - "$CLONE" "$HOME_DIR" "$mode" "${OMH_HARNESS:-codex}" <<'PYEOF' || die 'target lifecycle failed'
 import json, subprocess, sys
 from pathlib import Path
 
@@ -145,17 +145,37 @@ except (OSError, ValueError) as error:
     sys.exit(f'cannot read target index {index}: {error}')
 if not selected:
     selected = [(harness, None) for harness in harness_list.split(',') if harness]
+if not selected:
+    sys.exit('no OMH targets selected')
+# Use the checked-out CLI's actual default roots; verify exactly what we write.
+sys.path.insert(0, clone)
+from omh.standalone import HARNESS_ROOTS
+
 verb = 'install' if mode == 'bootstrap' else 'refresh'
+commands = []
 for harness, skills_root in selected:
-    print(f'{verb} target: {harness}' + (f' at {skills_root}' if skills_root else ''), file=sys.stderr)
-    command = [sys.executable, '-B', '-m', 'omh', verb, '--home', home,
-               '--harness', harness, '--python', sys.executable]
-    if skills_root is not None:
-        command += ['--skills-root', skills_root]
-    result = subprocess.run(command, cwd=clone)
+    if harness not in HARNESS_ROOTS:
+        sys.exit(f'unknown OMH harness: {harness}')
+    if skills_root is None:
+        skills_root = str(Path.home() / HARNESS_ROOTS[harness] / 'skills')
+    commands.append((harness, skills_root))
+cli = [sys.executable, '-B', '-m', 'omh']
+for harness, skills_root in commands:
+    print(f'{verb} target: {harness} at {skills_root}', file=sys.stderr)
+    result = subprocess.run(cli + [verb, '--home', home, '--harness', harness,
+        '--skills-root', skills_root, '--python', sys.executable], cwd=clone)
     if result.returncode:
-        sys.exit(result.returncode)
+        sys.exit(f'{verb} failed for {harness} at {skills_root}')
+print('Target writes completed; verifying selected targets.', file=sys.stderr)
+failed = False
+for harness, skills_root in commands:
+    result = subprocess.run(cli + ['status', '--home', home, '--harness', harness,
+        '--skills-root', skills_root], cwd=clone)
+    if result.returncode:
+        print(f'verification failed for {harness} at {skills_root}', file=sys.stderr)
+        failed = True
+if failed:
+    sys.exit('Target writes are not rolled back; inspect the reported target status.')
 PYEOF
 
 log "done: $tag at $CLONE"
-(cd "$CLONE" && "$python" -B -m omh status --home "$HOME_DIR") || true
