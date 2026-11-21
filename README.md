@@ -123,7 +123,9 @@ default output is a human-readable summary — each target is prefixed with `✓
 returns the machine form. The home's `targets.json` index is maintained by
 install/refresh and pruned by uninstall, and default harness roots (`~/.codex`,
 `~/.claude`, `~/.grok`) are probed alongside it — the index is a hint,
-receipts stay the source of truth
+receipts stay the source of truth. Add `--harness codex|claude-code|grok`
+to filter the overview (no matching target exits 1). Without either filter,
+an empty overview exits 0. Use `--skills-root` for an exact target
 ([ADR 0034](docs/adr/0034-status-surface-and-target-index.md)).
 
 Runtime errors print one JSON object to **stderr** as
@@ -291,7 +293,10 @@ On an existing managed clone, the installers stop if it contains local changes
 or extra files (including ignored files), preserving the checkout for you to
 resolve. Upgrades refresh every indexed skills root, including multiple custom
 roots for the same harness. A malformed target index stops the upgrade instead
-of silently falling back to a default installation directory.
+of silently falling back to a default installation directory. After all writes
+complete, the installer checks status for each selected target. Verification
+failure returns nonzero and names the affected target; completed writes are not
+rolled back. Other targets do not affect the result.
 
 The reissued 1.1.1 supplies runtime protocol 1. Historical content without its
 provider remains statically distributable; explicit runtime preparation of
