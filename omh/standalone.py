@@ -91,8 +91,7 @@ def overview(home, selected_harness=None):
     for root, harness in default_roots():
         if (root / OWNER).exists(): targets.setdefault(str(root), harness)
     return [dict(target_state(home, rt.safe_path(Path(root))), harness=harness or '?')
-            for root, harness in sorted(targets.items())
-            if selected_harness is None or harness == selected_harness]
+            for root, harness in sorted(targets.items()) if selected_harness in (None, harness)]
 
 def clean(item):
     return item['state'] == 'installed' and not item['modified'] and not item['recoveryRequired']
@@ -452,11 +451,7 @@ def shared_flags(sub):
 
 def harness_flag(sub):
     sub.add_argument('--harness', choices=['codex', 'claude-code', 'grok'],
-        help='harness target to manage (default codex)')
-
-def status_harness_flag(sub):
-    sub.add_argument('--harness', choices=HARNESS_ROOTS,
-        help='filter the overview by harness; with --skills-root, identify the explicit target')
+        help='harness target (status: filter overview; other commands default to codex)')
 
 def skills_flag(sub):
     sub.add_argument('--skills-root', type=Path,
@@ -509,7 +504,7 @@ def build_parser():
     command('uninstall', 'remove a managed target and the shared launcher shim',
         shared_flags, harness_flag, skills_flag, json_flag)
     command('status', 'show every installed target and its health',
-        shared_flags, status_harness_flag, skills_flag, json_flag)
+        shared_flags, harness_flag, skills_flag, json_flag)
     command('plan', 'preview file changes without writing (see --operation)',
         shared_flags, harness_flag, skills_flag, operation_flag, json_flag)
     command('recover', 'roll back or finish an interrupted transaction',
@@ -588,10 +583,7 @@ def main(argv=None):
             if skills_root is None:
                 items = overview(home, args.harness)
                 print_overview(home, items, args.json)
-                if args.harness is not None and not items:
-                    if not args.json: print(f'No known targets for {args.harness}.')
-                    return 1
-                return 0 if all(clean(item) for item in items) else 1
+                return 0 if (args.harness is None or items) and all(clean(item) for item in items) else 1
             item = target_state(home, root)
             item['harness'] = harness
             if item['state'] == 'installed':
