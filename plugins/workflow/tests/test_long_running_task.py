@@ -11,6 +11,22 @@ class LongRunningTaskContractTests(unittest.TestCase):
         self.skill = (TASK / "SKILL.md").read_text(encoding="utf-8")
         self.handoff = (TASK / "references" / "host-handoff.md").read_text(encoding="utf-8")
 
+    def test_retired_goal_adrs_only_point_to_the_current_decision(self):
+        repo = WORKFLOW.parents[1]
+        adr = repo / "docs" / "adr"
+        current = "0038-use-native-goals-for-long-running-tasks.md"
+        for number in ("0013", "0014", "0019"):
+            with self.subTest(adr=number):
+                (old,) = adr.glob(f"{number}-*.md")
+                lines = old.read_text(encoding="utf-8").strip().splitlines()
+                self.assertEqual(len(lines), 3)
+                self.assertIn(f"]({current})", lines[2])
+        self.assertIn("`long-running-task`", (adr / current).read_text(encoding="utf-8"))
+        for entry in (repo / "README.md", WORKFLOW / "README.md",
+                      repo / "docs" / "todo" / "README.md"):
+            with self.subTest(entry=entry):
+                self.assertIn(current, entry.read_text(encoding="utf-8"))
+
     def test_direct_opt_in_does_not_imply_goal_background_or_delegation(self):
         metadata = (TASK / "agents" / "openai.yaml").read_text(encoding="utf-8")
         self.assertIn("disable-model-invocation: true", self.skill.split("---", 2)[1])

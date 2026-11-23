@@ -15,6 +15,8 @@ Reusable agent workflow skills maintained from the oh-my-harness repository.
 
 ## Long task migration
 
+See [ADR 0038](../../docs/adr/0038-use-native-goals-for-long-running-tasks.md) for the current decision.
+
 - Invoke `$long-running-task` to work directly. To use a durable native Goal, explicitly select Goal mode in that same request or use the host’s `/goal` control and tell the skill to use the existing Goal. If the host only allows manual control, invoke it yourself; the skill does not activate `/goal` automatically.
 - The old `long-running-goal` skill and its staged templates/checkers are no longer distributed. Existing project plans and native Goal state stay intact. They are not automatically converted or treated as execution authority.
 - For an OMH-managed target, preview `omh plan --operation refresh` and then use the normal managed refresh for the selected source. It prunes unchanged OMH-owned legacy files and stops on edited owned files. Manually installed copies and user files outside the receipt are not removed; inspect them separately if the old skill remains visible.

@@ -25,7 +25,7 @@ class RepoLessonsLintTests(unittest.TestCase):
         self.assertIn("Do not fan out across other repositories", body)
         self.assertIn("unless the user explicitly requests them", body)
         self.assertIn("at least twice", body)
-        self.assertIn("at least two historical commits", body)
+        self.assertIn("at least two distinct historical commits firsthand", body)
         self.assertIn("change nothing", body)
         self.assertIn("`Violation`", body)
         self.assertIn("`Fix`", body)
@@ -53,6 +53,24 @@ class RepoLessonsLintTests(unittest.TestCase):
         self.assertIn("MIT License", notice)
         self.assertIn("`correct`", notice)
         self.assertIn("`repo-lessons-lint`", README.read_text(encoding="utf-8"))
+
+
+    def test_history_is_a_discovery_gate_not_a_persistent_rule_payload(self) -> None:
+        skill = SKILL.read_text(encoding="utf-8")
+        discovery = skill.split("## Find classes", 1)[1].split("## Encode", 1)[0]
+        output = skill.split("## Rules a check must carry", 1)[1].split("## Report", 1)[0]
+        report = skill.split("## Report", 1)[1]
+        self.assertIn("separate occurrences of the same mistake", discovery)
+        self.assertIn("Other evidence can help", discovery)
+        self.assertIn("does not replace them", discovery)
+        self.assertIn("do not add a rule for it", discovery)
+        self.assertIn("`Principle` explains why the rule exists", output)
+        self.assertIn("do not include the supporting commits in check output", output)
+        self.assertIn("historical evidence, commit IDs, or commit links in `AGENTS.md`", output)
+        self.assertNotIn("Every rule cites", output)
+        self.assertNotIn("includes the two commit ids", output)
+        self.assertIn("may cite the two supporting commits in the one-time change report", report)
+        self.assertIn("no persistent evidence record is required", report)
 
 
 if __name__ == "__main__":

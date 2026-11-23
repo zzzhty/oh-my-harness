@@ -11,9 +11,9 @@ Work only in the current repository. Do not fan out across other repositories. D
 
 ## Find classes
 
-Read the history that can show the same mistake twice: commits, reverts, review comments, architectural decision records, and comments that explain a workaround. Group them into classes. A class exists only after the same mistake has occurred at least twice.
+Read the history that can show the same mistake twice: commits, reverts, review comments, architectural decision records, and comments that explain a workaround. Group them into classes that occurred at least twice. For each proposed rule, inspect at least two distinct historical commits firsthand and confirm that they substantiate separate occurrences of the same mistake. Other evidence can help locate or understand those commits but does not replace them.
 
-If that history is too short to show a repeat, or no class repeats, change nothing. Report which sources you read and why no class qualified.
+If two commits do not substantiate a class, do not add a rule for it. If nothing qualifies, change nothing and report which sources you read and why.
 
 ## Encode at the highest level that works
 
@@ -29,15 +29,14 @@ A workaround comment is not a fix. When the lesson is structural, the structure 
 
 ## Rules a check must carry
 
-- Every rule cites at least two historical commits as evidence. If you cannot cite two commits, do not add the rule. Name that gap in the report.
-- Each finding prints three labeled lines: `Violation`, `Fix`, and `Principle`. `Fix` names what to use instead. `Principle` includes the two commit ids and why the rule exists.
+- Each finding prints three labeled lines: `Violation`, `Fix`, and `Principle`. `Fix` names what to use instead. `Principle` explains why the rule exists; do not include the supporting commits in check output.
 - Local runs and CI run the same command. Do not add a check that only one of them executes.
 - Put violations that already exist, and files that are already over a length limit, into a ratchet baseline. The baseline may only shrink: remove an entry or lower a ceiling when the tree no longer needs it. Do not raise it to admit a new violation.
 - Each rule has a test built from the real pre-fix code. Minimize that code only when the smaller sample still exhibits the same class. The test proves the check fails on that code and that the current tree passes.
-- Keep a rule-to-enforcer table in the repository's agent instruction file. Each row names the rule and the command, type, or test that enforces it. Remove a row when that mistake can no longer occur.
+- Keep a rule-to-enforcer table in the repository's agent instruction file. Each row names the rule and the command, type, or test that enforces it. Do not put its historical evidence, commit IDs, or commit links in `AGENTS.md`. Remove a row when that mistake can no longer occur.
 
 One working shape is a single check command, a baseline of grandfathered findings, and that table. A repository may already have this shape, for example `scripts/check_architecture.py`, `scripts/architecture_baseline.json`, and the rule table in its agent instructions. Extend that shape when it exists. Those paths are an example of the output, not required names in every repository, and they are not a reason to add a second command beside an existing one.
 
 ## Report
 
-For each class, report the two commits, the level you used, and why each higher level could not express the rule. When you change nothing, report the sources you read and why no class qualified.
+For each class, report the level you used and why each higher level could not express the rule. You may cite the two supporting commits in the one-time change report. They establish necessity during discovery; no persistent evidence record is required. When you change nothing, report the sources you read and why no class qualified.

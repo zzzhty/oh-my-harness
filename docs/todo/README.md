@@ -5,7 +5,7 @@
 - [Subagent Orchestration Follow-Up](subagent-orchestration-follow-up.md): future plan for evidence-driven custom-agent criteria and targeted orchestration improvements beyond the current built-in-role workflow.
 
 Use active design notes for unresolved plans, options, and follow-up decisions.
-The [current long-task workflow](../../plugins/workflow/README.md#long-task-migration) does not require a repository-specific goal index or checker.
+The [current long-task decision](../adr/0038-use-native-goals-for-long-running-tasks.md) does not require a repository-specific goal index or checker.
 Completed entries below are pre-rebuild history. Their PR numbers, source hashes, installed-state observations and validation results refer to the private pre-rebuild archive, not this repository's new root. The archive retains the detailed evidence.
 
 ## Development Timeline

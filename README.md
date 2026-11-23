@@ -12,6 +12,7 @@ readers remain retired. Preparing Python does not invoke skills or enable hooks.
 Use [`long-running-task`](plugins/workflow/skills/long-running-task/SKILL.md) for an
 explicit long task: direct by default, with native Goal, host-supported
 background execution, and subagent orchestration requested separately.
+[ADR 0038](docs/adr/0038-use-native-goals-for-long-running-tasks.md) records the decision.
 
 ## Standalone installation
 
