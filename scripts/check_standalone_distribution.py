@@ -128,6 +128,17 @@ def main():
         projected = {name.split('/')[1] for name in receipt_files
                      if name.startswith('skills/') and name.count('/') >= 2}
         assert projected == expected_skills()
+        # Exercise the entry point the caller receives, including linked resources
+        # and explicit-only metadata. Installation does not execute the skill.
+        task = 'long-running-task'
+        for relative in ('SKILL.md', 'agents/openai.yaml', 'references/host-handoff.md',
+                         'references/scope-authority.md'):
+            path = Path(task) / relative
+            assert f'skills/{path.as_posix()}' in receipt_files
+            source = ROOT / 'plugins/workflow/skills' / path
+            assert (skills / path).read_bytes() == source.read_bytes()
+        assert not (skills / task / 'scripts').exists()
+        assert {'long-running-goal', 'orchestrate-subagents'} <= projected
         architecture_review = skills / 'codebase-design/ARCHITECTURE-REVIEW.md'
         assert '[MIT license](LICENSE)' in architecture_review.read_text(encoding='utf-8')
         assert (architecture_review.parent / 'LICENSE').read_bytes() == (

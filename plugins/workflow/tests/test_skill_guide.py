@@ -23,9 +23,9 @@ class SkillGuideTests(unittest.TestCase):
         names = {source.name for source in catalog.sources}
         matt = {source.name for source in catalog.sources if source.plugin == "mattpocock-skills"}
         workflow = {source.name for source in catalog.sources if source.plugin == "workflow"}
-        self.assertEqual(len(names), 28)
+        self.assertEqual(len(names), 29)
         self.assertEqual(len(matt), 16)
-        self.assertEqual(len(workflow), 8)
+        self.assertEqual(len(workflow), 9)
         self.assertNotIn("ask-matt", names)
         self.assertNotIn("pr", names)
         self.assertNotIn("scope-discipline", names)

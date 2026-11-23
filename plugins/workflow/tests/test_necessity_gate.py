@@ -26,7 +26,7 @@ class NecessityGateTests(unittest.TestCase):
         names = {source.name for source in catalog.sources}
         workflow = {source.name for source in catalog.sources if source.plugin == "workflow"}
         self.assertNotIn("scope-discipline", names)
-        self.assertEqual(len(workflow), 8)
+        self.assertEqual(len(workflow), 9)
         self.assertFalse((WORKFLOW_ROOT / "skills" / "scope-discipline").exists())
         readme = (WORKFLOW_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("`scope-discipline` is not a catalog entry", readme)

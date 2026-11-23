@@ -22,9 +22,9 @@ class MattSkillCleanupTests(unittest.TestCase):
         by_plugin: dict[str, set[str]] = {}
         for source in catalog.sources:
             by_plugin.setdefault(source.plugin, set()).add(source.name)
-        self.assertEqual(len(catalog.sources), 28)
+        self.assertEqual(len(catalog.sources), 29)
         self.assertEqual(len(by_plugin["maintenance"]), 4)
-        self.assertEqual(len(by_plugin["workflow"]), 8)
+        self.assertEqual(len(by_plugin["workflow"]), 9)
         self.assertEqual(len(by_plugin["mattpocock-skills"]), 16)
         self.assertNotIn("grill-me", by_plugin["mattpocock-skills"])
         self.assertNotIn("improve-codebase-architecture", by_plugin["mattpocock-skills"])
