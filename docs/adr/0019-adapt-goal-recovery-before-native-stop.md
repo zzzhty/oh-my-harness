@@ -2,6 +2,8 @@
 
 Status: Accepted for implementation on 2026-10-08.
 
+Superseded for current workflow use by the [long task migration](../../plugins/workflow/README.md#long-task-migration). The original decision and validation below are historical.
+
 ## Decision and scope
 
 The user identifies the three-failure stop as Codex Goal's native rule and requests

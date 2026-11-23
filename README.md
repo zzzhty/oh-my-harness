@@ -5,7 +5,7 @@ them through its own small standard-library Python distributor, `python -m omh`.
 It is the sole distribution channel
 ([ADR 0031](docs/adr/0031-sole-standalone-distribution.md)).
 
-The current default composition contains 29 skills in `maintenance`, `workflow` and
+The current default composition contains 28 skills in `maintenance`, `workflow` and
 `mattpocock-skills`. Watcher collection, automatic hooks and historical report
 readers remain retired. Preparing Python does not invoke skills or enable hooks.
 

@@ -12,15 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL_PLUGINS = ('maintenance', 'workflow', 'mattpocock-skills')
 HELPERS = (
     ('sop', 'check_sop_ready.py', 'workflow'),
-    ('long-running-goal', 'check_goal_ready.py', 'workflow'),
     ('summary-in-html', 'collect_summary_inputs.py', 'workflow'),
     ('doc-alignment', 'audit_docs.py', 'maintenance'),
 )
 PROJECTED_HELPERS = (
-    'long-running-goal/scripts/check_goal_ready.py',
-    'long-running-goal/scripts/check_goal_sequence.py',
-    'long-running-goal/scripts/check_md_links.py',
-    'long-running-goal/scripts/check_todo_index.py',
     'summary-in-html/scripts/render_summary_html.py',
     'sop/scripts/check_sop_links.py',
     'sop/scripts/check_sop_ready.py',
@@ -94,6 +89,71 @@ def check_installed_helpers(home, env):
         assert result.stdout.strip() == str(support), (relative, result.stdout, result.stderr)
 
 
+def check_legacy_refresh(temp, env, python):
+    # CI's shallow checkout can exercise the same receipt-driven path with a
+    # synthetic old source. A local run may point to the exact pre-change checkout.
+    configured = os.environ.get('OMH_TEST_LEGACY_SOURCE')
+    if configured:
+        legacy = Path(configured).resolve()
+    else:
+        legacy = temp / 'legacy fixture source'
+        shutil.copytree(ROOT, legacy, ignore=shutil.ignore_patterns('.git', '__pycache__'))
+        shutil.rmtree(legacy / 'plugins/workflow/skills/long-running-task')
+        old = legacy / 'plugins/workflow/skills/long-running-goal'
+        (old / 'references').mkdir(parents=True)
+        (old / 'SKILL.md').write_text(
+            '---\nname: long-running-goal\ndescription: Legacy fixture\n---\n',
+            encoding='utf-8',
+        )
+        (old / 'references/legacy.md').write_text('Legacy reference\n', encoding='utf-8')
+
+    user = temp / 'upgrade user'
+    user.mkdir()
+    codex = user / '.codex'
+    skills = codex / 'skills'
+    state = temp / 'upgrade manager'
+    test_env = dict(env, HOME=str(user), USERPROFILE=str(user), CODEX_HOME=str(codex))
+    args = ('--home', state, '--skills-root', skills, '--json')
+    runtime_args = ('--python', python, '--offline')
+    checked(test_env, 'install', *args, *runtime_args, '--source', legacy)
+    old_skill = skills / 'long-running-goal/SKILL.md'
+    original = old_skill.read_bytes()
+    receipt = codex / '.omh-owner.json'
+    receipt_before = receipt.read_bytes()
+    old_owned = {
+        codex / name for name in json.loads(receipt_before)['files']
+        if name.startswith('skills/long-running-goal/')
+    }
+    assert len(old_owned) >= 2
+    # Opaque markers: no Codex process, login, session, or Goal API is used.
+    sentinels = (codex / 'native-goal-state', user / 'project/existing-goal.md',
+                 skills / 'long-running-goal/local-notes.md',
+                 skills / 'manual-local-copy/SKILL.md')
+    for path in sentinels:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'user-owned, untouched')
+    old_skill.write_bytes(b'user edited legacy file')
+    blocked, _ = standalone(test_env, 'refresh', *args, *runtime_args)
+    assert blocked.returncode != 0 and 'HARNESS_CONFLICT' in blocked.stderr
+    assert old_skill.read_bytes() == b'user edited legacy file'
+    assert receipt.read_bytes() == receipt_before
+    assert not (skills / 'long-running-task').exists()
+
+    old_skill.write_bytes(original)
+    plan = checked(test_env, 'plan', *args, '--operation', 'refresh')
+    assert old_owned <= {codex / name for name in plan['changes']}
+    assert all(path.is_file() for path in old_owned), 'plan removed files'
+    checked(test_env, 'refresh', *args, *runtime_args)
+    assert not any(path.exists() for path in old_owned)
+    assert (skills / 'long-running-task/SKILL.md').is_file()
+    assert all(path.read_bytes() == b'user-owned, untouched' for path in sentinels)
+    assert checked(test_env, 'refresh', *args, *runtime_args)['changed'] == 0
+
+    checked(test_env, 'refresh', *args, *runtime_args, '--source', legacy)
+    assert all(path.is_file() for path in old_owned)
+    assert not (skills / 'long-running-task/SKILL.md').exists()
+    assert all(path.read_bytes() == b'user-owned, untouched' for path in sentinels)
+
 def main():
     with tempfile.TemporaryDirectory(prefix='OMH_TEST_ONLY_standalone_') as directory:
         temp = Path(directory).resolve()
@@ -138,7 +198,7 @@ def main():
             source = ROOT / 'plugins/workflow/skills' / path
             assert (skills / path).read_bytes() == source.read_bytes()
         assert not (skills / task / 'scripts').exists()
-        assert {'long-running-goal', 'orchestrate-subagents'} <= projected
+        assert 'orchestrate-subagents' in projected and 'long-running-goal' not in projected
         architecture_review = skills / 'codebase-design/ARCHITECTURE-REVIEW.md'
         assert '[MIT license](LICENSE)' in architecture_review.read_text(encoding='utf-8')
         assert (architecture_review.parent / 'LICENSE').read_bytes() == (
@@ -209,6 +269,8 @@ def main():
         (grok / 'Claude.md').unlink()
         checked(env, 'uninstall', '--home', state, '--harness', 'grok', '--json')
         assert not (grok / 'AGENTS.md').exists() and not (grok / 'skills/sop').exists()
+
+        check_legacy_refresh(temp, env, python)
 
         print(json.dumps({'targets': ['standalone'], 'skills': len(expected_skills()),
                           'instructions': 'AGENTS.md', 'launcher': os.name != 'nt',

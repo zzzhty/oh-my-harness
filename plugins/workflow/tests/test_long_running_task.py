@@ -21,6 +21,18 @@ class LongRunningTaskContractTests(unittest.TestCase):
         self.assertIn("A native Goal is not a background request.", self.skill)
         self.assertIn("does not itself request orchestration", self.skill)
 
+    def test_native_goal_is_host_owned_and_lookup_does_not_advance(self):
+        self.assertIn("host-supported `/goal` entry point", self.skill)
+        self.assertIn("The host owns lifecycle, budgets, continuation and hard stops.", self.skill)
+        self.assertIn("do not simulate it", self.skill)
+        self.assertIn("never commandeer a different active Goal", self.skill)
+        self.assertIn("Do not start, replace, or reset a Goal to obtain more attempts", self.skill)
+        self.assertIn("`thread/goal/get`", self.handoff)
+        self.assertIn("Do not set, clear, pause, or resume a Goal", self.handoff)
+        self.assertIn("the lookup must not trigger advancement", self.handoff)
+        authority = (TASK / "references" / "scope-authority.md").read_text(encoding="utf-8")
+        self.assertIn("not as permission to start, resume", authority)
+
     def test_missing_capability_and_ambiguous_dispatch_do_not_change_route(self):
         self.assertIn("If detached execution is unsupported", self.skill)
         self.assertIn("silently switch modes", self.skill)

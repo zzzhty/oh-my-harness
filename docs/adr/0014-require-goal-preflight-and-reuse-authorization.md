@@ -2,7 +2,9 @@
 
 Status: Accepted and implemented on 2026-09-09.
 
-The decision and consumer contract remain current. Validation results and recovery references below describe pre-rebuild work retained in the private pre-rebuild archive; they do not validate the clean repository's new root.
+Superseded for current workflow use by the [long task migration](../../plugins/workflow/README.md#long-task-migration). The original decision and validation below are historical.
+
+Validation results and recovery references below describe pre-rebuild work retained in the private pre-rebuild archive; they do not validate the clean repository's new root.
 
 ## Evidence and decision
 

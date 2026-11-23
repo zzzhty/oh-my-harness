@@ -10,7 +10,7 @@ This workflow does not supply a scheduler, daemon, resume protocol, or status AP
 
 ## Evidence And Reporting
 
-Query the recorded host reference for current state (and check active instructions) before answering a background status request. Do not alter work for a status query. For a native Goal, use its own host state and goal record; for direct work, use observed actions and the existing checkpoint.
+Query the recorded host reference for current state (and check active instructions) before answering a background status request. Do not alter work for a status query. For a native Goal, use the host’s read-only status (for example `thread/goal/get` when exposed) and existing Goal record. Do not set, clear, pause, or resume a Goal or edit its brief to answer a lookup. An already active Goal may advance independently under host policy; the lookup must not trigger advancement. If status is unavailable, report that uncertainty. For direct work, use observed actions and the existing checkpoint.
 
 | Evidence | Report |
 | --- | --- |

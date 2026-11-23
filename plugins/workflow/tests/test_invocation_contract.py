@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import re
 import unittest
 from pathlib import Path
 
 
 WORKFLOW_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = WORKFLOW_ROOT.parents[1]
-LONG_RUNNING_ROOT = WORKFLOW_ROOT / "skills" / "long-running-goal"
 ORCHESTRATE_ROOT = WORKFLOW_ROOT / "skills" / "orchestrate-subagents"
 SUMMARY_ROOT = WORKFLOW_ROOT / "skills" / "summary-in-html"
 SOP_ROOT = WORKFLOW_ROOT / "skills" / "sop"
@@ -22,29 +20,6 @@ def skill_description(skill_file: Path) -> str:
 
 
 class InvocationContractTests(unittest.TestCase):
-    def test_preflight_composition_preserves_explicit_wrapper_invocation_policy(self) -> None:
-        mattpocock = REPO_ROOT / "plugins" / "mattpocock-skills" / "skills"
-        wrapper = mattpocock / "grill-with-docs"
-        frontmatter = (wrapper / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
-        fields = dict(
-            line.split(":", 1) for line in frontmatter.splitlines() if ":" in line
-        )
-        self.assertEqual(fields["disable-model-invocation"].strip(), "true")
-        metadata = (wrapper / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        policy = re.search(r"(?m)^policy:\n((?:[ \t]+[^\n]+\n?)*)", metadata)
-        self.assertIsNotNone(policy)
-        assert policy is not None
-        self.assertRegex(policy.group(1), r"(?m)^\s+allow_implicit_invocation:\s+false\s*$")
-
-        preflight = (LONG_RUNNING_ROOT / "components" / "planning-preflight.md").read_text(encoding="utf-8")
-        for method in ("grilling", "domain-modeling"):
-            with self.subTest(method=method):
-                source = mattpocock / method / "SKILL.md"
-                method_frontmatter = source.read_text(encoding="utf-8").split("---", 2)[1]
-                self.assertNotRegex(method_frontmatter, r"(?m)^disable-model-invocation:\s*true\s*$")
-                self.assertIn(f"mattpocock-skills:{method}", preflight)
-        self.assertIn("without implicitly invoking its explicit-only entrypoint", preflight)
-
     def test_summary_trigger_covers_reference_and_source_walkthrough_modes(self) -> None:
         description = skill_description(SUMMARY_ROOT / "SKILL.md")
         metadata = (SUMMARY_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -55,23 +30,6 @@ class InvocationContractTests(unittest.TestCase):
         self.assertIn("real entry points", description)
         self.assertIn("summaries and source-code walkthroughs", metadata)
         self.assertIn("summary or entry-first source-code walkthrough", metadata)
-
-    def test_long_running_goal_metadata_matches_lifecycle_entry_interface(self) -> None:
-        description = skill_description(LONG_RUNNING_ROOT / "SKILL.md")
-        metadata = (LONG_RUNNING_ROOT / "agents" / "openai.yaml").read_text(
-            encoding="utf-8"
-        )
-
-        for branch in ("Create", "upgrade", "execute", "resume", "evolve", "close"):
-            self.assertIn(branch.lower(), description.lower())
-            self.assertIn(branch.lower(), metadata.lower())
-        self.assertIn("Long-Running Goal Sequence", description)
-        self.assertIn("Long-Running Goal Sequence", metadata)
-        self.assertIn("continuation-ready staged goal", metadata)
-        self.assertIn("user explicitly requests", description)
-        self.assertIn("confirms conversion", description)
-        self.assertIn("task size or duration alone is not a trigger", description)
-        self.assertNotIn("automatic handoffs", metadata)
 
     def test_orchestrate_trigger_is_scoped_to_user_requested_subagents(self) -> None:
         description = skill_description(ORCHESTRATE_ROOT / "SKILL.md")
@@ -128,16 +86,16 @@ class InvocationContractTests(unittest.TestCase):
         self.assertIn("does not invoke `orchestrate-subagents`", prompt_strategy)
         self.assertNotIn("current environment exposes subagent tools", prompt_strategy)
 
-    def test_companion_skills_only_suggest_long_running_goal_conversion(self) -> None:
+    def test_companion_skills_only_suggest_explicit_long_running_task(self) -> None:
         for skill_file in (
             SOP_ROOT / "SKILL.md",
             PROMPT_STRATEGY_ROOT / "SKILL.md",
         ):
             with self.subTest(skill_file=skill_file):
                 text = skill_file.read_text(encoding="utf-8")
-                self.assertIn("suggest `long-running-goal`", text)
+                self.assertIn("suggest `long-running-task`", text)
                 self.assertIn("wait for explicit user confirmation", text)
-                self.assertNotIn("Use `long-running-goal` when", text)
+                self.assertNotIn("Use `long-running-task` when", text)
 
     def test_sop_execute_branch_requires_ready_gate_before_actions(self) -> None:
         skill = (SOP_ROOT / "SKILL.md").read_text(encoding="utf-8")

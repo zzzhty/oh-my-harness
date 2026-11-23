@@ -23,7 +23,7 @@ Skill choice for the whole catalog is `workflow:skill-guide`. `ask-matt` is not 
 
 Core/specialized labels in the selection proposal are maintenance priorities, not additional activation modes. Skills and their referenced resources live under `skills/`; `agents/openai.yaml` retains native Codex metadata, and existing frontmatter flags support the other harnesses that consume them.
 
-`grill-with-docs` remains an explicit user entrypoint. A workflow with its own planning trigger, such as long-running-goal preflight, directly composes `grilling` and `domain-modeling`; it does not implicitly invoke the wrapper or obtain implementation authority from planning. Both methods must be available, and document creation follows domain-modeling's existing ownership and value rules.
+`grill-with-docs` remains an explicit user entrypoint. Its underlying `grilling` and `domain-modeling` methods do not confer implementation authority; document creation follows existing ownership and value rules.
 
 Retired skills remain in the private pre-rebuild archive and the documented upstream releases. Recovering one requires a separate scope and attribution review; the clean repository has no earlier Git history.
 

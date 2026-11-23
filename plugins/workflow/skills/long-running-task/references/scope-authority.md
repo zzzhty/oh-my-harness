@@ -29,6 +29,7 @@ new decision is necessary, ask once with the concrete effect and preserve
 conditional, limited, or negative answers. Revocation and expiry invalidate
 cached authorization and prevent retries until new approval expressly covers them.
 
-For a native Goal, its own planning preflight and runtime hard stops still own
-authority. Do not copy a Goal's Ready permissions into an unrelated task, or
-promote a direct/background brief to Ready.
+For a native Goal, current authorization still applies and the host owns its
+lifecycle and hard stops. Existing project goal files, templates, or Ready
+labels can be read as context or evidence, not as permission to start, resume,
+or perform any action. Do not migrate, rewrite, or remove them automatically.

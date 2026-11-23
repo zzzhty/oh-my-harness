@@ -14,7 +14,7 @@ class HubInventoryTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'content-manifest.json').read_text())
         catalog = load_repo_skill_catalog(ROOT)
         skills = {f'{s.plugin}:{s.name}': s for s in catalog.sources}
-        self.assertEqual(len(skills), 29)
+        self.assertEqual(len(skills), 28)
         self.assertNotIn("workflow:scope-discipline", skills)
         self.assertNotIn("mattpocock-skills:pr", skills)
         self.assertNotIn("mattpocock-skills:ask-matt", skills)

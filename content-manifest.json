@@ -38,7 +38,6 @@
     }
   ],
   "runtimeBindings": {
-    "workflow:long-running-goal": "workflow",
     "workflow:sop": "workflow",
     "workflow:summary-in-html": "workflow",
     "maintenance:doc-alignment": "maintenance"

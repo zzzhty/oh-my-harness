@@ -115,7 +115,6 @@ class ArchitectureCheckTests(unittest.TestCase):
     def test_known_long_files_stay_within_their_ceilings(self) -> None:
         ceilings = arch.load_baseline()["file_lines"]
         for relative in (
-            "plugins/workflow/skills/long-running-goal/scripts/check_goal_ready.py",
             "omh/standalone.py",
             "tests/test_standalone.py",
         ):

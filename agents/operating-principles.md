@@ -48,7 +48,7 @@ Custom-agent presets are not installed. Future requirements belong in `docs/todo
 
 ## Scheduling And Monitoring Boundary
 
-Scheduled or repeated workflows must define the trigger or schedule, exact command or tool, working directory, inputs and output contract, allowed and forbidden actions, report or memory location, validation or freshness checks, and stop condition. For `long-running-goal`, use its narrower runtime hard-stop boundary.
+Scheduled or repeated workflows must define the trigger or schedule, exact command or tool, working directory, inputs and output contract, allowed and forbidden actions, report or memory location, validation or freshness checks, and stop condition. For `long-running-task`, the host owns native Goal lifecycle and stops; the task brief does not grant authority.
 
 For wall-clock schedules, preserve the user-visible local time unless the user explicitly requests UTC, and verify the written automation state before reporting the schedule.
 
