@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.4.0 — 2026-11-24
+
+- Replace `long-running-goal` and its templates and checkers with the explicit `long-running-task` skill. Work directly with a brief checkpoint by default; explicitly opt into a host-native `/goal`, detached execution, or multi-agent orchestration. SOP and Prompt Strategy follow the same routing. There is no legacy alias or automatic conversion of project documents or native Goal state.
+- Keep `research`, `orchestrate-subagents`, and `skill-guide` independent. Align the one-line acceptance format in `to-spec` and `triage` without sharing an installed dependency or changing their authorization boundaries.
+- Keep implementation unstaged by default. Separate diagnosis or verification from application repair, redact verification evidence, and keep HITL input to hidden y/n choices with LF and CRLF support. Triage outcome approval does not authorize individual writes. Personal teaching records, local prototypes, and temporary handoffs keep distinct privacy and publication boundaries.
+- Keep doc-alignment and HTML summaries inside their selected scope; normalize partial validator output on timeout, and keep housekeeping status reads from refreshing the Git index. Repository lessons still require firsthand evidence from at least two separate historical occurrences, without carrying those commit references into `AGENTS.md`. New commits use the target repository's effective `git config user.email` only, without co-author trailers.
+- Honor `omh status --harness` for overviews; after writing, bootstrap installers verify each exact selected target and report failures as nonzero without undoing completed writes.
+
 ## 1.3.0 — 2026-11-19
 
 - Load `tdd` from `implement` only when the user or agreed spec requires test-first work; ordinary implementations still verify changed behavior. Close actionable review findings before handoff.

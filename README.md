@@ -222,15 +222,16 @@ runtime/ownership boundary is preserved by
 
 ## Versions and validation
 
-The source content version is **1.3.0**. See the [release record](docs/releases/1.3.0.md).
-It keeps the standalone distributor and the shared runtime provider. The catalog
-contains 28 skills. [`v1.3.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.3.0)
-is the first GitHub Release and publishes `omh-v1.3.0.ref`.
+The source content version is **1.4.0**. See the [release record](docs/releases/1.4.0.md).
+The standalone distributor and shared runtime are unchanged as distribution
+channels. The catalog contains 28 skills. The `v1.4.0` GitHub Release publishes
+`omh-v1.4.0.ref` for bootstrap verification.
 
-The previous source tag is **1.2.0**, prepared on 2026-11-14. Its
-[release record](docs/releases/1.2.0.md) describes that preparation's 32-skill
-catalog. Git tags `v1.0.0` through `v1.2.0` remain source coordinates and have
-no GitHub Release.
+The preceding GitHub Release is
+[`v1.3.0`](https://github.com/zzzhty/oh-my-harness/releases/tag/v1.3.0),
+which remains available for [managed rollback](docs/releases/1.4.0.md#upgrade-and-rollback).
+The [1.2.0 release record](docs/releases/1.2.0.md) describes that earlier
+preparation; `v1.2.0` is a source tag, not a GitHub Release.
 
 The 1.1.1 reissue on 2026-11-03 remains the historical source record for the
 standalone distributor and the shared runtime provider. See the
