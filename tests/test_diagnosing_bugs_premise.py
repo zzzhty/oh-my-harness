@@ -16,7 +16,7 @@ class DiagnosingBugsPremiseTests(unittest.TestCase):
         notice = (SKILL_ROOT / "NOTICE.md").read_text(encoding="utf-8")
         readme = (ROOT / "plugins" / "mattpocock-skills" / "README.md").read_text(encoding="utf-8")
         frontmatter = skill.split("---", 2)[1]
-        fix = skill.split("## Fix and verify", 1)[1].split("Once the evidence supports a cause", 1)[0]
+        fix = skill.split("## Fix and verify", 1)[1].split("When repair is authorized", 1)[0]
 
         self.assertIn("two or more fixes that share one premise", fix)
         self.assertIn("write the premise in one sentence", fix)

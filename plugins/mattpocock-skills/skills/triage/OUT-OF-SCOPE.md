@@ -77,8 +77,8 @@ During triage (Step 1: Gather context), read all files in `.out-of-scope/`. When
 
 The maintainer may:
 
-- **Confirm** — the new issue gets added to the existing file's "Prior requests" list, then closed
-- **Reconsider** — the out-of-scope file gets deleted or updated, and the issue proceeds through normal triage
+- **Confirm** — recommend appending the new issue to the existing file's "Prior requests" list and closing it; apply only authorized actions
+- **Reconsider** — return to normal triage; propose updating or removing the out-of-scope file without changing it unless authorized
 - **Disagree** — the issues are related but distinct, proceed with normal triage
 
 ## When to write to `.out-of-scope/`
@@ -87,19 +87,19 @@ Only when an **enhancement** (not a bug) is *rejected* as `wontfix`. This applie
 
 Do **not** write here when something is closed as `wontfix` because it's **already implemented**. That's a built feature, not a rejected one; recording it would poison the dedup checks with false rejections. Instead, the closing comment points to where the feature already lives.
 
-The flow:
+The flow below lists separately scoped actions. A maintainer decision is not consent to edit repository files, post a comment, close the item, or apply a label. Apply each only when it is already authorized; otherwise present it as a proposed next step:
 
 1. Maintainer decides a feature request is out of scope
 2. Check if a matching `.out-of-scope/` file already exists
 3. If yes: append the new issue to the "Prior requests" list
 4. If no: create a new file with the concept name, decision, reason, and first prior request
-5. Post a comment on the issue explaining the decision and mentioning the `.out-of-scope/` file
+5. Post a comment explaining the decision; link the `.out-of-scope/` record only if it already exists and reflects that decision
 6. Close the issue with the `wontfix` label
 
 ## Updating or removing out-of-scope files
 
 If the maintainer changes their mind about a previously rejected concept:
 
-- Delete the `.out-of-scope/` file
+- Propose updating or deleting the `.out-of-scope/` file; change it only when authorized
 - The skill does not need to reopen old issues — they're historical records
 - The new issue that triggered the reconsideration proceeds through normal triage

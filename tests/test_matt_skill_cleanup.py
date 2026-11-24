@@ -86,7 +86,7 @@ class MattSkillCleanupTests(unittest.TestCase):
         self.assertIn("without automatically loading `tdd`", implement)
         self.assertIn("Fix actionable findings within scope, verify the fixes", implement)
         self.assertIn("report unresolved findings or verification limits", implement)
-        self.assertIn("Stage only this task's changes", implement)
+        self.assertIn("If staging or committing is authorized, select only verified task changes", implement)
         self.assertNotIn("pull request", implement.lower())
         self.assertNotIn("PR.md", implement)
         self.assertIn("primary sources", research)

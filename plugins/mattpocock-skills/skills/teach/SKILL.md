@@ -7,25 +7,30 @@ argument-hint: "What would you like to learn about?"
 
 # Teach
 
-Use the current directory as a persistent teaching workspace. Ground each session in the user's mission, demonstrated understanding, and teaching preferences. Workspace paths below resolve from the directory where this skill was invoked, not the installed skill directory. The `*-FORMAT.md` references resolve from this skill's own directory.
+Use the current directory as a teaching workspace only when appropriate for the materials. Keep personal learning history, stated prior knowledge, preferences, mission details and performance evidence in a user-approved private workspace, never in a public repository. Resolve the private workspace and the material paths before reading or writing personal records; do not follow links into shared or public locations. If a private destination is not established, teach without persisting personal material. Only non-personal curriculum belongs in a shared repository when writing it is in scope; do not copy, summarize, or link personal records from shared materials. Ground each session in the user's mission, demonstrated understanding, and teaching preferences. Non-personal curriculum paths resolve from the invoked content workspace; personal paths resolve only from the authorized private workspace, never from the invocation directory by default. The `*-FORMAT.md` references resolve from this skill's own directory.
 
 ## Workspace Owners
 
-Read existing materials before choosing the next lesson; create or update them as learning produces useful content:
+Read existing non-personal curriculum and, only when the authorized private workspace is established, its personal materials. Use the two roots independently:
+
+Private workspace (skip these reads and writes when no private root is established):
 
 - `MISSION.md`: the reason for learning and observable success; use [MISSION-FORMAT.md](MISSION-FORMAT.md).
-- `RESOURCES.md`: trusted sources for knowledge and practice; use [RESOURCES-FORMAT.md](RESOURCES-FORMAT.md).
 - `learning-records/0001-<dash-case-name>.md`: incrementing records of non-obvious learning and stated prior knowledge, using [LEARNING-RECORD-FORMAT.md](LEARNING-RECORD-FORMAT.md). Record evidence of understanding, not just material covered.
+- `NOTES.md`: teaching preferences and working notes that should inform future sessions.
+
+Content workspace (non-personal curriculum only):
+
+- `RESOURCES.md`: trusted sources for knowledge and practice; use [RESOURCES-FORMAT.md](RESOURCES-FORMAT.md).
 - `lessons/0001-<dash-case-name>.html`: incrementing HTML entrypoints, each teaching one tightly scoped thing tied to the mission.
 - `reference/*.html`: concise, printable references distilled from lessons for quick later use, such as syntax, algorithms, or exercises.
 - `assets/`: shared lesson components and stylesheets.
-- `NOTES.md`: teaching preferences and working notes that should inform future sessions.
 
 When recording terminology, read [GLOSSARY-FORMAT.md](GLOSSARY-FORMAT.md). Reuse the workspace's existing glossary owner, including an HTML glossary; new workspaces default to `GLOSSARY.md`. Keep one owner for definitions. Lessons, references, and learning records use and link to that owner rather than maintaining a second glossary.
 
 ## Choose The Lesson
 
-Reuse the learning goal already stated in the request or records. Ask why only when it remains unclear; a missing `MISSION.md` alone is not a reason to pause. Confirm a mission change with the user before updating `MISSION.md`, and capture the change in a learning record.
+Reuse the learning goal already stated in the request or records. Ask why only when it remains unclear; a missing `MISSION.md` alone is not a reason to pause. Confirm a mission change with the user. Update `MISSION.md` and capture the change in a learning record only in the authorized private workspace; otherwise keep the change in the session.
 
 Honor a specific learning request. Otherwise use the mission and learning records to select the next relevant challenge within the user's zone of proximal development: challenging enough to progress without overwhelming them.
 
@@ -42,4 +47,4 @@ Distinguish in-the-moment fluency from long-term retention. Build retention thro
 1. Inspect `assets/` and reuse existing components. Put new reusable styles, quiz widgets, simulators, or diagram helpers there. Workspace lessons link a shared stylesheet; for a requested standalone HTML file, inline its required assets.
 2. Build a short, readable lesson with one tangible win tied to the mission and the learner's current level. Use clear typography and layout, links to related lessons and references, a recommended primary source to read or watch, and a reminder to ask follow-up questions. Open the lesson for the user when supported.
 3. Create concise reference material alongside lessons for knowledge worth revisiting. Keep it easy to scan and print, follow the glossary's terminology, and link to existing owners instead of duplicating definitions.
-4. Record demonstrated learning and relevant preferences in their workspace owners so the next session can continue from evidence.
+4. Record demonstrated learning and relevant preferences only in their private workspace files. Without that workspace, keep the evidence and preferences in this session without saving personal records.

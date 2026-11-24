@@ -5,7 +5,7 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 # Diagnosing Bugs
 
-Build an evidence-backed explanation of the reported symptom, then verify the smallest root-cause fix. Read relevant domain terms and ADRs when present.
+Build an evidence-backed explanation of the reported symptom. A request to diagnose or reproduce does not authorize a repair. Report the evidence and proposed fix unless implementing the fix is already in scope. Read relevant domain terms and ADRs when present.
 
 ## Evidence and feedback
 
@@ -21,14 +21,14 @@ Keep secrets out of displayed commands and artifacts: use environment variables 
 
 For each plausible cause, state a prediction and the observation that would falsify it. Test the strongest discriminator first; add competing hypotheses when the evidence leaves a real ambiguity. Change one relevant variable at a time.
 
-Use debugger inspection, targeted temporary instrumentation, or a measured experiment. Mark instrumentation so it can be removed. A human-operated reproduction may use [the HITL template](scripts/hitl-loop.template.sh) when manual interaction is necessary; ordinary code/log investigation does not require that template.
+Use debugger inspection, targeted temporary instrumentation, or a measured experiment. Mark instrumentation so it can be removed. A human-operated reproduction may use [the HITL template](scripts/hitl-loop.template.sh) when manual interaction is necessary; ordinary code/log investigation does not require that template. Ask for fixed-choice observations, not pasted logs, headers or credentials. Keep sign-in out of capture and inspect and redact any additional evidence before it reaches a terminal transcript, report, or shared artifact.
 
 ## Fix and verify
 
 When two or more fixes that share one premise fail the same gate, write the premise in one sentence and test it directly before another fix. Choose an observation that would differ if the premise were false, then follow that evidence. If the premise is wrong, look for what the failures share that it did not predict. If the premise holds, the earlier fixes treated a consequence. Remove the condition that produces the failure instead of compensating for it with another cleanup, retry, or guard. See [NOTICE.md](NOTICE.md).
 
-Once the evidence supports a cause, apply the smallest fix. When a persistent regression test protects a distinct failure mode, first make it fail on the original behavior and then pass with the fix. If an authorized experiment forces the red by mutating code or a fixture, compare it with a pristine copy to prove the mutation actually landed before trusting the failure. An unchanged fixture is not evidence of a successful mutation. Use the interface that reproduces the real failure pattern; a shallow test that cannot trigger it gives no assurance. When the test boundary itself needs design, load `codebase-design` through the active harness's supported skill-loading mechanism. If unavailable, report the dependency and the blocked design step; independent read-only investigation can continue.
+When repair is authorized and the evidence supports a cause, apply the smallest fix. When a persistent regression test protects a distinct failure mode, first make it fail on the original behavior and then pass with the fix. If an authorized experiment forces the red by mutating code or a fixture, compare it with a pristine copy to prove the mutation actually landed before trusting the failure. An unchanged fixture is not evidence of a successful mutation. Use the interface that reproduces the real failure pattern; a shallow test that cannot trigger it gives no assurance. When the test boundary itself needs design, load `codebase-design` through the active harness's supported skill-loading mechanism. If unavailable, report the dependency and the blocked design step; independent read-only investigation can continue.
 
 Recheck the original scenario, not only a reduced fixture. If that verification is blocked, report the exact limit and available evidence instead of declaring the bug resolved. Preserve useful user artifacts and remove only the temporary instrumentation and disposable files created for this investigation.
 
-Report the cause, change, observed result and remaining uncertainty. Recommend architectural follow-up only when the investigation demonstrates a missing test boundary or coupling problem; it does not automatically start another workflow.
+Report the cause, observed result, remaining uncertainty, and any proposed or verified change. Recommend architectural follow-up only when the investigation demonstrates a missing test boundary or coupling problem; it does not automatically start another workflow.

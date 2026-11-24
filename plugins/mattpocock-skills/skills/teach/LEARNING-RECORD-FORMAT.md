@@ -1,6 +1,8 @@
 # Learning Record Format
 
-Learning records live in `./learning-records/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc. Create the directory lazily — only when the first record is written.
+Within the resolved private workspace, learning records live in `./learning-records/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc. Create the directory lazily — only when the first record is written.
+
+Persist these personal records only in the user-approved private teaching workspace. Never place them in a public repository, even as untracked files. If no private workspace is established, do not save a record. Keep only the minimum evidence needed for future lessons.
 
 They are the teaching equivalent of ADRs: they capture non-obvious lessons, key insights, and stated prior knowledge that will steer future sessions. They are used to calculate the zone of proximal development.
 
@@ -24,7 +26,7 @@ Only include these when they add genuine value. Most records won't need them.
 
 ## Numbering
 
-Scan `./learning-records/` for the highest existing number and increment by one.
+Scan only the resolved private workspace's `learning-records/` for the highest existing number and increment by one.
 
 ## When to write a learning record
 
