@@ -8,6 +8,15 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+// The pinned executable launches every command; only runtime verbs also accept
+// its path as a Python CLI argument.
+pub fn append_python(args: &mut Vec<String>, command: &str, python: &Path) {
+    if matches!(command, "prepare" | "install" | "refresh") {
+        args.push("--python".into());
+        args.push(python.display().to_string());
+    }
+}
+
 pub struct Child {
     pub command: String,
     pub args: Vec<String>,

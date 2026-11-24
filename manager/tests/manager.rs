@@ -1483,6 +1483,29 @@ fn self_uninstall_matches_run_self_and_leaves_harness_files() {
 }
 
 #[test]
+fn forward_respects_the_real_python_cli_grammar() {
+    let sb = sandbox();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    install_managed(&sb, Some(source));
+    let home = p(&sb.home);
+    let skills = p(&sb.user.join(".codex/skills"));
+    let python = p(base_python());
+    for command in ["prepare", "plan", "install", "status", "recover", "refresh", "uninstall"] {
+        let mut args = vec![command, "--home", &home, "--python", &python, "--json"];
+        if command != "prepare" {
+            args.extend(["--skills-root", &skills]);
+        }
+        if matches!(command, "prepare" | "install" | "refresh") {
+            args.push("--offline");
+        }
+        let result = invoke(&sb, &args, &[], None);
+        assert!(result.status.success(), "{command}: {}", show(&result));
+        assert!(serde_json::from_slice::<Value>(&result.stdout).is_ok(), "{command}: {}", show(&result));
+    }
+    assert!(!sb.user.join(".codex/.omh-owner.json").exists());
+}
+
+#[test]
 fn forward_execs_the_pin_and_clears_only_the_scratch_shim() {
     let sb = sandbox();
     let package = sb.root.join("package");
@@ -1542,7 +1565,11 @@ fn forward_execs_the_pin_and_clears_only_the_scratch_shim() {
             let rows = read_trace(&trace);
             assert_eq!(rows.len(), 1, "{command} {code}");
             assert_child_launch(&rows[0], command, &package);
-            assert_eq!(argv_flag(&rows[0], "--python"), p(base_python()));
+            if matches!(command, "prepare" | "install" | "refresh") {
+                assert_eq!(argv_flag(&rows[0], "--python"), p(base_python()));
+            } else {
+                assert!(!rows[0]["argv"].as_array().unwrap().iter().any(|item| item == "--python"));
+            }
             let bin_flags = rows[0]["argv"]
                 .as_array()
                 .unwrap()
@@ -2061,7 +2088,11 @@ fn content_update_bootstraps_and_refreshes_without_reading_a_bad_index() {
             argv_flag(row, "--skills-root"),
             p(&sb.user.join(root).join("skills"))
         );
-        assert_eq!(argv_flag(row, "--python"), p(base_python()));
+        if verb == "status" {
+            assert!(!row["argv"].as_array().unwrap().iter().any(|item| item == "--python"));
+        } else {
+            assert_eq!(argv_flag(row, "--python"), p(base_python()));
+        }
         let bins = row["argv"]
             .as_array()
             .unwrap()

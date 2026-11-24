@@ -57,7 +57,10 @@ class ManagerRecordTests(unittest.TestCase):
 
     def test_matching_digest_skips_the_shim_and_status_reports_the_binary(self):
         self.install()
-        binary = Path.home() / '.local' / 'bin' / 'omh'
+        user_home = self.root / 'userhome'
+        self.assertEqual(Path.home(), user_home)
+        binary = user_home / '.local' / 'bin' / 'omh'
+        binary.parent.mkdir(parents=True, exist_ok=True)
         payload = b'\x7fELF omh-test-binary\n'
         binary.write_bytes(payload)
         digest = hashlib.sha256(payload).hexdigest()
