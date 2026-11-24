@@ -65,6 +65,8 @@ Completion criterion: apply the selected evidence branch below.
 
 Both branches hand findings to the common review workflow and preserve its target-repository read-only boundary.
 
+Discovered files beneath a documentation directory do not follow symlinks or junctions; a configured path still uses the existing repository-containment check.
+
 ### Repository skill-root discovery
 
 When `docs` is omitted, The audit helper scans the normal entry files and documentation directories plus the

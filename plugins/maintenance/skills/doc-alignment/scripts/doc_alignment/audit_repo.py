@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .local_tree import iter_local_files
+
 ENTRY_FILES = (
     "README.md",
     "AGENTS.md",
@@ -239,7 +241,6 @@ def discover_doc_files(
 ) -> tuple[list[Path], list[str]]:
     missing: list[str] = []
     files: list[Path] = []
-
     if configured:
         candidates = configured
     else:
@@ -247,7 +248,6 @@ def discover_doc_files(
         candidates.extend(name for name in DOC_DIRS if (repo / name).exists())
         if selected_skill_root is not None:
             candidates.append(selected_skill_root)
-
     for rel in candidates:
         expanded = expand_repo_skill_path(rel, selected_skill_root)
         if expanded is None:
@@ -260,9 +260,7 @@ def discover_doc_files(
         if path.is_file():
             files.append(path)
             continue
-        for child in path.rglob("*"):
-            if should_skip(child.relative_to(repo)):
-                continue
+        for child in iter_local_files(path, repo, should_skip):
             if child.is_file() and child.suffix.lower() in DOC_EXTENSIONS:
                 files.append(child)
 
@@ -458,8 +456,10 @@ def normalize_link_validation(raw: dict[str, Any] | str | None) -> dict[str, Any
     return config
 
 
-def bounded_output(value: str, *, limit: int = 2000) -> str:
-    text = value.strip()
+def bounded_output(value: str | bytes | None, *, limit: int = 2000) -> str:
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    text = (value or "").strip()
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n... output truncated by doc-alignment ..."
@@ -495,8 +495,8 @@ def run_owner_link_validator(repo: Path, config: dict[str, Any]) -> dict[str, An
             "cwd": cwd.relative_to(repo).as_posix() or ".",
             "exit_code": None,
             "timeout_seconds": timeout_seconds,
-            "stdout": bounded_output(exc.stdout or ""),
-            "stderr": bounded_output(exc.stderr or ""),
+            "stdout": bounded_output(exc.stdout),
+            "stderr": bounded_output(exc.stderr),
             "reason": "timeout",
         }
     return {
