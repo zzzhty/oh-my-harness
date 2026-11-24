@@ -1,6 +1,6 @@
 {
   "name": "maintenance",
-  "version": "1.4.0+codex.5ead3e01320f7695",
+  "version": "1.5.0+codex.58f4bef7fe96dc52",
   "description": "Interactive documentation alignment, housekeeping, semantic compression, and repeated-mistake checks.",
   "author": {
     "name": "Local developer"

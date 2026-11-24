@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+## 1.5.0 — 2026-11-24
+
 - Extend `doc-alignment` with scoped ADR curation: keep current constraints discoverable without reading superseded decisions by default.
 - Add explicit-only `workflow:reframe` and `workflow:sharpen`, adapted from Lauren Tan’s pstack under the MIT License. The skills return a rewritten brief or prompt without executing it. The source catalog now contains 30 skills.
 - `omh uninstall` removes only a harness target and leaves the `omh` command in place. `omh self uninstall` removes that owned command; harness targets and runtimes stay.
+
+- Add the build-from-source Rust manager for managing its own binary, pinning Python and verifying tagged content before handing off to the standalone Python distributor. The existing shell and PowerShell bootstrap path remains available.
+- Fix runtime argument forwarding: pass `--python` to runtime-preparing operations only and verify target status after a content update. Restore cross-platform CI coverage for package identity and isolated Windows homes.
 
 ## 1.4.0 — 2026-11-24
 
