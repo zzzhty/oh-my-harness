@@ -96,6 +96,11 @@ class InvocationContractTests(unittest.TestCase):
                 self.assertIn("suggest `long-running-task`", text)
                 self.assertIn("wait for explicit user confirmation", text)
                 self.assertNotIn("Use `long-running-task` when", text)
+                self.assertIn("brief checkpoint to continue across turns", text)
+                self.assertIn("Direct execution is the default", text)
+                self.assertIn("native `/goal` only if the user explicitly selects it and the host supports it", text)
+                for stale in ("staged milestones", "multi-milestone objective", "close/archive lifecycle"):
+                    self.assertNotIn(stale, text)
 
     def test_sop_execute_branch_requires_ready_gate_before_actions(self) -> None:
         skill = (SOP_ROOT / "SKILL.md").read_text(encoding="utf-8")

@@ -53,6 +53,18 @@ class SkillAuthorityTests(unittest.TestCase):
             "otherwise present it as a proposed next step",
         )
 
+    def test_spec_and_triage_share_only_the_acceptance_criterion_shape(self) -> None:
+        spec = (MATT / "to-spec/SKILL.md").read_text(encoding="utf-8")
+        brief = (MATT / "triage/AGENT-BRIEF.md").read_text(encoding="utf-8")
+        criterion = next(line for line in spec.splitlines() if line.startswith("- [ ] **Condition/action:**"))
+        self.assertIn(criterion, brief.split("## Template", 1)[1])
+        self.assertIn("**Observable result:**", criterion)
+        self.assertIn("**Verification:**", criterion)
+        self.assertNotIn("AGENT-BRIEF.md", spec)
+        self.assertNotIn("to-spec/", brief)
+        self.assertIn("Publish to a tracker only when separately authorized", spec)
+        self.assertIn("Post it only when posting is authorized", brief)
+
     def test_private_artifacts_do_not_default_to_publication(self) -> None:
         self.assert_skill_contains("teach/SKILL.md", "teach without persisting personal material", "skip these reads and writes when no private root is established")
         self.assert_skill_contains("teach/LEARNING-RECORD-FORMAT.md", "even as untracked files")
