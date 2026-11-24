@@ -1,0 +1,6 @@
+interface:
+  display_name: "Reframe"
+  short_description: "Name an unclear problem before rewriting it"
+  default_prompt: "Use $reframe to name and rewrite the problem in this brief without choosing a solution."
+policy:
+  allow_implicit_invocation: false

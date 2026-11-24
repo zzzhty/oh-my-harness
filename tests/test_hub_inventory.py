@@ -14,7 +14,7 @@ class HubInventoryTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'content-manifest.json').read_text())
         catalog = load_repo_skill_catalog(ROOT)
         skills = {f'{s.plugin}:{s.name}': s for s in catalog.sources}
-        self.assertEqual(len(skills), 28)
+        self.assertEqual(len(skills), 30)
         self.assertNotIn("workflow:scope-discipline", skills)
         self.assertNotIn("mattpocock-skills:pr", skills)
         self.assertNotIn("mattpocock-skills:ask-matt", skills)
@@ -29,6 +29,13 @@ class HubInventoryTests(unittest.TestCase):
         self.assertNotIn('maintenance:skill-maintainer', skills)
         self.assertIn('mattpocock-skills:writing-for-agents', skills)
         self.assertIn('workflow:blast-radius', skills)
+        for name in ('reframe', 'sharpen'):
+            identity = f'workflow:{name}'
+            with self.subTest(skill=identity):
+                source = skills[identity].path
+                self.assertNotIn(identity, manifest["runtimeBindings"])
+                self.assertTrue((source / 'NOTICE.md').is_file())
+                self.assertTrue((source / 'agents/openai.yaml').is_file())
         self.assertIn('workflow:create-verification-skill', skills)
         self.assertEqual({s.name for s in catalog.sources if s.plugin == 'maintenance'},
                          {'doc-alignment', 'housekeeping', 'repo-lessons-lint', 'skill-compressor'})

@@ -1,6 +1,6 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:a895e77d0e94d8f25c1a97f657757425f63dea5ed60acbfd309f234eda3a4586",
+  "bundleIdentity": "sha256:125fb42760f560a9379e86886f1158b6d3b01d59d490310b90e11471bc5a809b",
   "generationLength": 16,
   "plugins": [
     {
@@ -18,10 +18,10 @@
       "versionAuthority": "release"
     },
     {
-      "contentSha256": "871ad5ec09a9a4f47c50743c061c40c82aaf477dfa2df1ff13ec6958883688ce",
-      "generation": "871ad5ec09a9a4f4",
+      "contentSha256": "2f999e1a042e3de78c33ae5f3768fbf160b76ae7e8a5115898d63177359a2f1e",
+      "generation": "2f999e1a042e3de7",
       "name": "workflow",
-      "version": "1.4.0+codex.871ad5ec09a9a4f4",
+      "version": "1.4.0+codex.2f999e1a042e3de7",
       "versionAuthority": "release"
     }
   ],
