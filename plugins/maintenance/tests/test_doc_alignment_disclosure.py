@@ -49,6 +49,8 @@ class DocAlignmentDisclosureTests(unittest.TestCase):
         self.assertIn("Use implementation mode when the user asks", text)
         self.assertIn("references/doc-audit.md", text)
         self.assertIn("references/alignment-reference.md", text)
+        self.assertIn("[ADR curation](references/adr-curation.md)", text)
+        self.assertTrue((SKILL_DIR / "references/adr-curation.md").is_file())
         self.assertIn("unresolved target drift does not prevent completing the audit", text)
         self.assertIn("Leave target repositories unchanged", text)
 
