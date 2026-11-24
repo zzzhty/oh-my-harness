@@ -5,7 +5,7 @@ them through its own small standard-library Python distributor, `python -m omh`.
 It is the sole distribution channel
 ([ADR 0031](docs/adr/0031-sole-standalone-distribution.md)).
 
-The current default composition contains 28 skills in `maintenance`, `workflow` and
+The current default composition contains 30 skills in `maintenance`, `workflow` and
 `mattpocock-skills`. Watcher collection, automatic hooks and historical report
 readers remain retired. Preparing Python does not invoke skills or enable hooks.
 
@@ -225,7 +225,8 @@ runtime/ownership boundary is preserved by
 
 The source content version is **1.4.0**. See the [release record](docs/releases/1.4.0.md).
 The standalone distributor and shared runtime are unchanged as distribution
-channels. The catalog contains 28 skills. The `v1.4.0` GitHub Release publishes
+channels. The tagged 1.4.0 release contains 28 skills; later source additions
+are listed in [Unreleased](CHANGELOG.md#unreleased). The `v1.4.0` GitHub Release publishes
 `omh-v1.4.0.ref` for bootstrap verification.
 
 The preceding GitHub Release is

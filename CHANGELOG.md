@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add explicit-only `workflow:reframe` and `workflow:sharpen`, adapted from Lauren Tan’s pstack under the MIT License. The skills return a rewritten brief or prompt without executing it. The source catalog now contains 30 skills.
 - `omh uninstall` removes only a harness target and leaves the `omh` command in place. `omh self uninstall` removes that owned command; harness targets and runtimes stay.
 
 ## 1.4.0 — 2026-11-24
