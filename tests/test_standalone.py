@@ -48,7 +48,7 @@ class StandaloneTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="OMH TEST target ' $() 空间 ")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
-        home_environment = patch.dict(os.environ, {'HOME': str(self.root/'userhome')})
+        home_environment = patch.dict(os.environ, dict.fromkeys(('HOME', 'USERPROFILE'), str(self.root/'userhome')))
         home_environment.start(); self.addCleanup(home_environment.stop)
         self.source, self.home, self.skills = self.root/'source', self.root/'manager', self.root/'client/skills'
         skill = self.source/'plugins/workflow/skills/example'

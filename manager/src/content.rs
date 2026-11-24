@@ -93,9 +93,8 @@ fn child(
         harness.to_string(),
         "--skills-root".into(),
         skills.display().to_string(),
-        "--python".into(),
-        python.display().to_string(),
     ];
+    forward::append_python(&mut args, verb, python);
     if let Some(scratch) = &scratch {
         args.push("--bin-dir".into());
         args.push(scratch.display().to_string());

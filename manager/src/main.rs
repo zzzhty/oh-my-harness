@@ -91,8 +91,7 @@ fn forward_command(args: &[String], command: &str, without: &[String]) -> Result
     if scratch.is_some() {
         child_args = strip_flag(&child_args, "--bin-dir");
     }
-    child_args.push("--python".into());
-    child_args.push(python.display().to_string());
+    forward::append_python(&mut child_args, command, &python);
     if let Some(dir) = &scratch {
         child_args.push("--bin-dir".into());
         child_args.push(dir.display().to_string());
