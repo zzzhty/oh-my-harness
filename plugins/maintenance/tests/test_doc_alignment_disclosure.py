@@ -216,8 +216,8 @@ class MaintenanceSkillInstructionContractTests(unittest.TestCase):
         script = match.group("script")
 
         self.assertNotIn("<target>", script)
-        self.assertIn('git -C "$housekeeping_target" status --short -- .', script)
-        self.assertIn('git -C "$housekeeping_target" status --ignored --short -- .', script)
+        self.assertIn('git --no-optional-locks -C "$housekeeping_target" status --short -- .', script)
+        self.assertIn('git --no-optional-locks -C "$housekeeping_target" status --ignored --short -- .', script)
         self.assertIn('find "$housekeeping_target"', script)
         self.assertNotIn("stale_pattern", script)
         self.assertNotIn("grep", script)
@@ -272,6 +272,13 @@ class MaintenanceSkillInstructionContractTests(unittest.TestCase):
                     if ".git" not in path.relative_to(target).parts
                 )
 
+            subprocess.run(
+                ["git", "-C", str(repo), "add", "scope/guidance.md"], check=True,
+            )
+            index = repo / ".git" / "index"
+            index_before = index.read_bytes(), index.stat().st_mtime_ns
+            # Make cached stat data stale without changing tracked bytes.
+            os.utime(target / "guidance.md", (1000000000, 1000000000))
             before = target_state()
 
             env = os.environ.copy()
@@ -294,6 +301,7 @@ class MaintenanceSkillInstructionContractTests(unittest.TestCase):
             self.assertNotIn(str(target / "src" / "__pycache__"), failed.stdout)
 
             after = target_state()
+            self.assertEqual((index.read_bytes(), index.stat().st_mtime_ns), index_before)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(after, before)

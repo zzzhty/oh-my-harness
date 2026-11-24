@@ -68,7 +68,7 @@ def is_ignored(path: Path) -> bool:
 
 
 def relative_to_root(path: Path, root: Path) -> str:
-    return path.resolve().relative_to(root).as_posix()
+    return path.relative_to(root).as_posix()
 
 
 def resolve_scope(root: Path, raw_scope: str) -> Path:
@@ -85,6 +85,14 @@ def resolve_scope(root: Path, raw_scope: str) -> Path:
     return resolved
 
 
+def is_local_entry(path: Path) -> bool:
+    try:
+        # Junctions on Windows can redirect without being symbolic links.
+        return not path.is_symlink() and path.resolve() == path
+    except (OSError, RuntimeError):
+        return False
+
+
 def iter_paths(scope: Path, root: Path, max_depth: int) -> list[Path]:
     if scope.is_file():
         return [scope]
@@ -93,7 +101,7 @@ def iter_paths(scope: Path, root: Path, max_depth: int) -> list[Path]:
     for current_root, dirs, files in os.walk(scope):
         current = Path(current_root)
         rel_depth = len(current.relative_to(scope).parts)
-        dirs[:] = sorted(d for d in dirs if d not in IGNORED_DIRS)
+        dirs[:] = sorted(d for d in dirs if d not in IGNORED_DIRS and is_local_entry(current / d))
         files = sorted(files)
         if rel_depth >= max_depth:
             dirs[:] = []
@@ -103,7 +111,7 @@ def iter_paths(scope: Path, root: Path, max_depth: int) -> list[Path]:
                 paths.append(path)
         for filename in files:
             path = current / filename
-            if not is_ignored(path.relative_to(root)):
+            if not is_ignored(path.relative_to(root)) and is_local_entry(path):
                 paths.append(path)
     return paths
 

@@ -7,7 +7,7 @@ description: Create, run, or revise a reusable Standard Operating Procedure for 
 
 Use this skill when a repeated workflow is stable enough to execute the same way again.
 
-Route unresolved design or prompt behavior to `prompt-strategy-loop`. When the work may need staged milestones, checkpoint evidence, or close/archive lifecycle, suggest `long-running-goal` and wait for explicit user confirmation before creating or converting its contract.
+Route unresolved design or prompt behavior to `prompt-strategy-loop`. If the work needs a brief checkpoint to continue across turns, suggest `long-running-task` and wait for explicit user confirmation before switching. Direct execution is the default; use the host's native `/goal` only if the user explicitly selects it and the host supports it.
 
 ## Suitability
 

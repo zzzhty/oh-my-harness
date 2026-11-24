@@ -1,27 +1,27 @@
 {
   "algorithm": "sha256-canonical-plugin-tree-v1",
-  "bundleIdentity": "sha256:6ef7154fae1f26da5c623b59450997a64dc75a25404721869cfd6dfb226a6f15",
+  "bundleIdentity": "sha256:dac54b47f2569419e926cad1ecee2735d3819d5e7bbba1389dff25aa83eefc45",
   "generationLength": 16,
   "plugins": [
     {
-      "contentSha256": "508ebbf5bd1cb3731405572db7b92fc3044f63c76b734d65975f6a3b701dd64e",
-      "generation": "508ebbf5bd1cb373",
+      "contentSha256": "35fec35f513308460a739c414bcd0f46368f949b66ca215dd44187bbe20a9a33",
+      "generation": "35fec35f51330846",
       "name": "maintenance",
-      "version": "1.3.0+codex.508ebbf5bd1cb373",
+      "version": "1.3.0+codex.35fec35f51330846",
       "versionAuthority": "release"
     },
     {
-      "contentSha256": "a80668db41504797f67e8e1770776c91e20c3c4dd7cfc0a6605ab4f5d4fd34bc",
-      "generation": "a80668db41504797",
+      "contentSha256": "6913c4a3b0a661cf79a342c1bd0ebebaebc030eda7472493758152232fef1044",
+      "generation": "6913c4a3b0a661cf",
       "name": "mattpocock-skills",
-      "version": "1.3.0+codex.a80668db41504797",
+      "version": "1.3.0+codex.6913c4a3b0a661cf",
       "versionAuthority": "release"
     },
     {
-      "contentSha256": "35fe1355da2e6eae4b2331017b238d5a908e9efeddacef019b6970538a3416d1",
-      "generation": "35fe1355da2e6eae",
+      "contentSha256": "c053852dbadbe5060912a41188740a95fba842a62f50bf50e7ff353fb65d582a",
+      "generation": "c053852dbadbe506",
       "name": "workflow",
-      "version": "1.3.0+codex.35fe1355da2e6eae",
+      "version": "1.3.0+codex.c053852dbadbe506",
       "versionAuthority": "release"
     }
   ],

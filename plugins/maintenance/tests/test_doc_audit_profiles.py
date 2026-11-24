@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,52 @@ def initialize_repo(root: Path) -> Path:
 
 
 class DocAlignmentAuditProfileTests(unittest.TestCase):
+    def test_discovery_does_not_follow_descendant_path_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            repo = initialize_repo(root)
+            docs = repo / "docs"
+            docs.mkdir()
+            (docs / "readme.md").write_text("LOCAL_TERM", encoding="utf-8")
+            outside = root / "outside"
+            outside.mkdir()
+            secret = outside / "private.md"
+            secret.write_text("OUTSIDE_TERM", encoding="utf-8")
+            try:
+                (docs / "redirect.md").symlink_to(secret)
+                (docs / "alias").symlink_to(outside, target_is_directory=True)
+            except (NotImplementedError, OSError) as exc:
+                self.skipTest(f"symbolic link fixture unavailable: {exc}")
+            for simulate_junction in (False, True):
+                with self.subTest(simulate_junction=simulate_junction):
+                    if simulate_junction:
+                        with patch.object(Path, "is_symlink", return_value=False):
+                            result = audit_repository(repo=repo, name="demo", docs=["docs"],
+                                                      watch_terms=["LOCAL_TERM", "OUTSIDE_TERM"])
+                    else:
+                        result = audit_repository(repo=repo, name="demo", docs=["docs"],
+                                                  watch_terms=["LOCAL_TERM", "OUTSIDE_TERM"])
+                    self.assertEqual(result["doc_files"], ["docs/readme.md"])
+                    self.assertIn("LOCAL_TERM", str(result["watch_hits"]))
+                    self.assertNotIn("OUTSIDE_TERM", str(result["watch_hits"]))
+
+    def test_owner_command_timeout_normalizes_partial_binary_output(self) -> None:
+        from doc_alignment.audit_repo import run_owner_link_validator
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            config = {"cwd": ".", "command": ["mock-validator"], "timeout_seconds": 1}
+            timeout = subprocess.TimeoutExpired(
+                config["command"], 1, output=b"  progress \xff  ",
+                stderr=b"x" * 2001,
+            )
+            with patch("doc_alignment.audit_repo.subprocess.run", side_effect=timeout):
+                result = run_owner_link_validator(repo, config)
+            self.assertEqual((result["status"], result["reason"]), ("failed", "timeout"))
+            self.assertEqual(result["stdout"], "progress \ufffd")
+            self.assertIn("output truncated", json.dumps(result))
+            self.assertIsNone(result["exit_code"])
+
     def test_default_discovery_includes_dev_docs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = initialize_repo(Path(tmp))

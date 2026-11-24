@@ -17,7 +17,7 @@ A UI prototype is much easier to judge when it's **butting up against the rest o
 
 ### Sub-shape A — adjustment to an existing page (preferred)
 
-The route already exists. Render the prototype **on the same route**. When comparing variants, select their rendering with a `?variant=` URL search param. The existing data fetching, params, and auth all stay — only the rendering swaps. This is the default; pick it unless there's a specific reason not to.
+The route already exists. Render the prototype **on the same route in isolated local development**, not a shared or production instance. When comparing variants, select their rendering with a `?variant=` URL search param. Keep the route shape and authentication behavior, using fake or sanitized data and isolated credentials. Only the rendering swaps; never point the experiment at production mutations. This is the default; pick it unless there's a specific reason not to.
 
 If the prototype is for something that doesn't yet have a page but *would naturally live inside one* (a new section of the dashboard, a new card on the settings screen, a new step in an existing flow) — that's still sub-shape A. Mount the prototype inside the host page.
 

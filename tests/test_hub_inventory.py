@@ -21,6 +21,8 @@ class HubInventoryTests(unittest.TestCase):
         self.assertNotIn("mattpocock-skills:grill-me", skills)
         self.assertNotIn("mattpocock-skills:improve-codebase-architecture", skills)
         self.assertIn("workflow:skill-guide", skills)
+        self.assertIn("workflow:long-running-task", skills)
+        self.assertNotIn("workflow:long-running-task", manifest["runtimeBindings"])
         self.assertIn("mattpocock-skills:grilling", skills)
         self.assertIn("mattpocock-skills:grill-with-docs", skills)
         self.assertIn("mattpocock-skills:codebase-design", skills)

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Triage
 
-Move issues on the project issue tracker through a small state machine of triage roles. Match the requested scope: discovery and assessment stay read-only; labels, comments, closure and repository documents require the corresponding user authorization. Reuse authorization already given rather than confirming the same action twice.
+Move issues on the project issue tracker through a small state machine of triage roles. Match the requested scope: discovery and assessment stay read-only; labels, comments, closure and repository documents require the corresponding user authorization. Agreement with a recommended outcome (including rejection) is not authorization to change labels, post a comment or brief, close an item, or write local records. Draft or report unapproved actions without applying them; reuse explicit authorization already given for a specific action rather than confirming it twice.
 
 If this repo treats external pull requests as a request surface (see the issue-tracker config), triage covers them too: **a PR is an issue with attached code** — same roles, same states, same machine, with a few deltas marked "for a PR" below. Resolve a bare `#42` to an issue or PR per the tracker config.
 
@@ -75,14 +75,14 @@ Show counts and a one-line summary per item. Let the maintainer pick.
 
 4. **Grill (if needed).** If the request needs fleshing out, load `grilling` through the active harness's supported skill-loading mechanism for open decisions. Separately load `domain-modeling` when new durable knowledge needs recording and document changes are in scope. If a required method is unavailable, report it and the blocked step. Compose these methods directly; do not invoke the explicit `grill-with-docs` wrapper or infer write or implementation permission from planning.
 
-5. **Apply the outcome:**
+5. **Apply only authorized actions for the outcome.** The actions below are options, not a bundled approval:
    - `ready-for-agent` — post an agent brief comment ([AGENT-BRIEF.md](AGENT-BRIEF.md)).
    - `ready-for-human` — same structure as an agent brief, but note why it can't be delegated (judgment calls, external access, design decisions, manual testing).
    - `needs-info` — post triage notes (template below).
    - `wontfix` — close, with the comment depending on *why*:
      - **Already implemented** — step 3 verified that the existing implementation fully satisfies the request. Point to the implementation and evidence; do **not** write to `.out-of-scope/` (that KB is for *rejected* requests, not built ones).
      - **Rejected (bug)** — polite explanation, then close.
-     - **Rejected (enhancement)** — write to `.out-of-scope/`, link to it from a comment, then close ([OUT-OF-SCOPE.md](OUT-OF-SCOPE.md)).
+     - **Rejected (enhancement)** — propose a `.out-of-scope/` record, an explanatory comment, and closure ([OUT-OF-SCOPE.md](OUT-OF-SCOPE.md)).
    - `needs-triage` — apply the role. Optional comment if there's partial progress.
 
 ## Quick state override

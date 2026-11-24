@@ -12,4 +12,4 @@ Record the starting commit and relevant pre-existing work so this task's changes
 
 Before finishing, load `code-review` and include this task's committed, staged, unstaged, and untracked changes. A comparison that ends at HEAD does not review uncommitted work. Fix actionable findings within scope, verify the fixes, and report unresolved findings or verification limits.
 
-Stage only this task's changes. Check the whole pending commit, including content staged before the task. If unrelated content cannot be excluded without altering the user's work or staging state, preserve that state and report the blocker.
+Leave this task's changes unstaged by default. Inspect staged and unstaged diffs separately, including when both touch the same file; preserve the user's work and staging state. If staging or committing is authorized, select only verified task changes, never whole files containing mixed changes, and inspect the entire pending commit. If task changes cannot be isolated or unrelated staged work cannot be kept out without disturbing the user's index, leave the index intact and report the blocker.

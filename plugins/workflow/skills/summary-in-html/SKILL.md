@@ -20,7 +20,7 @@ Use `maintenance:doc-alignment` instead when the task is to find stale or contra
 
 ## Common Evidence Inventory
 
-Before mode-specific authoring, both document types share only this evidence-inventory stage. Collect a read-only inventory:
+Before mode-specific authoring, both document types share only this evidence-inventory stage. Read the source without changing its files. Write the inventory JSON only to the authorized artifact location; the collector skips descendant symbolic links and junctions:
 
 ```bash
 sh "<harness-root>/.omh-runtime/run.sh" workflow "<skill-folder>/scripts/collect_summary_inputs.py" --root <repo-root> --scope <scope-path> --out <artifact>.inputs.json

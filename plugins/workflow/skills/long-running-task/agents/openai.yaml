@@ -1,0 +1,6 @@
+interface:
+  display_name: "Long-Running Task"
+  short_description: "Run a long task directly or explicitly choose Goal or background"
+  default_prompt: "Use $long-running-task to clarify the outcome, work directly unless I request a native Goal or background, and verify the result."
+policy:
+  allow_implicit_invocation: false

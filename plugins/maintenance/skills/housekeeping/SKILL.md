@@ -34,8 +34,8 @@ housekeeping_target=$HOUSEKEEPING_TARGET
 }
 case "${HOUSEKEEPING_TARGET_KIND:-git}" in
   git)
-    git -C "$housekeeping_target" status --short -- .
-    git -C "$housekeeping_target" status --ignored --short -- .
+    git --no-optional-locks -C "$housekeeping_target" status --short -- .
+    git --no-optional-locks -C "$housekeeping_target" status --ignored --short -- .
     ;;
   cache) ;;
   *) printf 'unknown housekeeping target kind\n' >&2; exit 2 ;;
