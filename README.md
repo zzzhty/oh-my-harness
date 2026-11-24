@@ -112,8 +112,9 @@ On POSIX, `install` and `refresh` also write an `omh` launcher shim into
 if `~/.local/bin` is not on `PATH`, add it or pass `--bin-dir /absolute/dir`
 pointing at a directory that is. The shim is a static pointer to the installing
 checkout and interpreter — no state, no self-update, no PATH search; an unowned
-existing `omh` there fails closed, and `uninstall` removes an owned one even
-when other targets remain installed — rerun `install` to recreate it
+existing `omh` there fails closed. `omh uninstall` removes only the named
+harness and leaves the `omh` command in place. `omh self uninstall` removes
+that owned command and its record; harness targets and runtimes stay
 ([ADR 0033](docs/adr/0033-standalone-launcher-shim.md)). Windows uses the full
 `python -B -m omh` command, including `python -B -m omh update` from the
 managed clone.

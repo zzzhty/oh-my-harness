@@ -3,7 +3,10 @@ import os
 import shutil
 import unittest
 
-import test_standalone as fixture
+try:
+    import test_standalone as fixture
+except ModuleNotFoundError:
+    from tests import test_standalone as fixture
 
 
 class StandaloneStatusTests(unittest.TestCase):

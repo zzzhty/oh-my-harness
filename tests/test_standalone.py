@@ -470,7 +470,7 @@ class StandaloneTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)['targets'][0]['owner'],'omh')
         self.assertEqual(self.call('refresh')[0],0)
         self.assertEqual(self.call('uninstall')[0],0)
-        self.assertFalse(shim.exists()); self.assertFalse((self.home/'shim.json').exists())
+        self.assertTrue(shim.is_file()); self.assertTrue((self.home/'shim.json').is_file())
         shim.parent.mkdir(parents=True,exist_ok=True)
         shim.write_text('#!/bin/sh\necho other tool\n')
         code,result = self.call('install')

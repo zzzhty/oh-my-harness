@@ -252,7 +252,10 @@ def main():
         uninstall = checked(env, 'uninstall', '--home', state, '--skills-root', skills, '--json')
         assert uninstall['changed'] > 0 and not (home / '.codex/.omh-owner.json').exists()
         assert not instructions.exists()
-        if os.name != 'nt': assert not shim.exists()
+        if os.name != 'nt':
+            assert shim.is_file()
+            removed = checked(env, 'self', 'uninstall', '--home', state, '--json')
+            assert removed['removed'] is True and not shim.exists()
         status, payload = standalone(env, 'status', '--home', state, '--skills-root', skills, '--json')
         assert status.returncode == 1 and payload['targets'][0]['state'] == 'missing'
         status, payload = standalone(env, 'status', '--home', state, '--json')

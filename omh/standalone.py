@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from . import parameters
 
 SOURCE = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location('omh_runtime', SOURCE / 'plugins/workflow/scripts/omh_runtime.py')
@@ -32,9 +33,7 @@ INSTRUCTIONS = {'codex': 'AGENTS.md', 'claude-code': 'CLAUDE.md', 'grok': 'AGENT
 SHADOWS = {'codex': ('AGENTS.override.md',), 'grok': ('Claude.md', 'AGENT.md')}
 INSTRUCTIONS_SOURCE = 'agents/global-instructions.md'
 
-# ADR 0033: a static POSIX launcher shim pointing at the installing source
-# checkout and interpreter. It is a pointer, not a manager: no state, no
-# self-update, no PATH search, no fallback when the checkout is gone.
+# ADR 0033: static POSIX launcher. No state, self-update, PATH search, or fallback.
 SHIM_MARKER = '# oh-my-harness standalone launcher v1'
 SHIM_NAME = 'omh'
 
@@ -59,6 +58,7 @@ def remember_target(home, root, harness, skills, installed):
         if installed: targets[str(root)] = dict(harness=harness, skillsRoot=str(skills))
         else: targets.pop(str(root), None)
         save_targets(home, targets)
+        return bool(targets)
 
 def target_state(home, root):
     item = dict(target=str(root))
@@ -450,8 +450,8 @@ def shared_flags(sub):
         help='manager state directory (default ~/.oh-my-harness; absolute)')
 
 def harness_flag(sub):
-    sub.add_argument('--harness', choices=['codex', 'claude-code', 'grok'],
-        help='harness target (status: filter overview; other commands default to codex)')
+    sub.add_argument('target', nargs='?', metavar='HARNESS', type=parameters.harness_name, choices=['codex', 'claude-code', 'grok'], help=parameters.positional_help(sub))
+    sub.add_argument('--harness', type=parameters.harness_name, choices=['codex', 'claude-code', 'grok'], help='harness target (status: filter overview; other commands default to codex)')
 
 def skills_flag(sub):
     sub.add_argument('--skills-root', type=Path,
@@ -490,7 +490,7 @@ def build_parser():
         help='manager state directory (default ~/.oh-my-harness; absolute)')
     commands = parser.add_subparsers(dest='command', required=True)
     def command(name, description, *groups):
-        sub = commands.add_parser(name, description=description, help=description)
+        sub = commands.add_parser(name, description=description, help=description, formatter_class=parameters.formatter(name))
         for group in groups: group(sub)
     command('prepare', 'prepare Python runtimes without installing skills',
         shared_flags, runtime_flags, json_flag)
@@ -501,8 +501,9 @@ def build_parser():
     command('update', 'upgrade the managed clone to a new release and refresh targets (ADR 0036)',
         shared_flags, lambda sub: sub.add_argument('--to',
             help='tag to upgrade to (default: the latest release)'))
-    command('uninstall', 'remove a managed target and the shared launcher shim',
+    command('uninstall', 'remove one harness target; requires codex, claude-code, grok, or claude',
         shared_flags, harness_flag, skills_flag, json_flag)
+    parameters.add_self(commands, shared_flags, json_flag)
     command('status', 'show every installed target and its health',
         shared_flags, harness_flag, skills_flag, json_flag)
     command('plan', 'preview file changes without writing (see --operation)',
@@ -542,9 +543,9 @@ def update_installer(source):
     return ['/bin/sh', str(source / 'install.sh')]
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
-    # Deterministic UTF-8 on real text streams, including Windows pipes.
-    # In-process captures such as io.StringIO have no reconfigure method.
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    chosen = parameters.bind_parser(parser, args)
     for stream, name in ((sys.stdout, 'stdout'), (sys.stderr, 'stderr')):
         reconfigure = getattr(stream, 'reconfigure', None)
         if reconfigure is None: continue
@@ -555,9 +556,11 @@ def main(argv=None):
             return 1
     try:
         home, source = rt.safe_path(args.home), rt.safe_path(args.source)
+        if args.command == 'self':
+            return parameters.run_self(args, home, data, shim_owned, remove_shim, rt.fail)
         bin_dir = getattr(args, 'bin_dir', None)
         if bin_dir is not None: bin_dir = rt.safe_path(bin_dir)
-        harness = getattr(args, 'harness', None) or 'codex'
+        harness = chosen or 'codex'
         skills_root = getattr(args, 'skills_root', None)
         skills = rt.safe_path(skills_root or Path.home() / HARNESS_ROOTS[harness] / 'skills')
         root = skills.parent
@@ -565,8 +568,6 @@ def main(argv=None):
         if args.command not in ('status', 'prepare', 'update'):
             default_target_hint(home, harness, skills_root, args.json)
         if args.command == 'update':
-            # ADR 0036: a thin delegate. The CLI carries no git or network logic;
-            # the versioned installer performs verification, fetch and checkout.
             left, right = os.path.realpath(source), os.path.realpath(home / 'repo')
             if os.name == 'nt':
                 left, right = os.path.normcase(left), os.path.normcase(right)
@@ -581,9 +582,9 @@ def main(argv=None):
             return subprocess.call(update_installer(source), env=environment)
         if args.command == 'status':
             if skills_root is None:
-                items = overview(home, args.harness)
+                items = overview(home, chosen)
                 print_overview(home, items, args.json)
-                return 0 if (args.harness is None or items) and all(clean(item) for item in items) else 1
+                return 0 if (chosen is None or items) and all(clean(item) for item in items) else 1
             item = target_state(home, root)
             item['harness'] = harness
             if item['state'] == 'installed':
@@ -609,12 +610,9 @@ def main(argv=None):
                 changes = plan(source,home,skills,'uninstall',{},harness)
                 transact(home,root,changes)
                 remember_target(home,root,harness,skills,False)
-                remove_shim(home)
                 result = dict(changed=len(changes))
             else:
                 if args.command != 'prepare':
-                    # Owner identity is enough here. Plan target files once,
-                    # after preparing bindings; the journal rechecks before-images.
                     receipt(root,home)
                     shim_preflight(bin_dir)
                 python = rt.absolute(args.python if args.python is not None else os.environ.get('OMH_PYTHON', sys.executable))

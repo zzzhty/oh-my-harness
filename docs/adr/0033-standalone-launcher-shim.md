@@ -35,9 +35,12 @@ unchanged.
   transaction; its record lives in `<home>/shim.json`.
 - An existing unowned `omh` file in the bin directory fails with
   `HARNESS_CONFLICT` before the transaction runs.
-- `uninstall` removes the shim only when its second line is the managed
-  marker, and removes the record. Removing one target while another remains
-  also removes the shim; rerun `install` to recreate it.
+- `uninstall` removes one harness target and does not touch the launcher.
+- `self uninstall` removes the owned POSIX launcher and `<home>/shim.json`.
+  The launcher file is removed only when its second line is the managed
+  marker. An unowned `omh` file fails with `HARNESS_CONFLICT` and stays.
+  Harness targets and runtimes stay. A second run reports that no command
+  remains.
 - `prepare`, `plan` and `status` never touch the bin directory.
 - Windows has no shim in this decision; use the full `python -B -m omh`
   command there.

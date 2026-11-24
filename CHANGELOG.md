@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `omh uninstall` removes only a harness target and leaves the `omh` command in place. `omh self uninstall` removes that owned command; harness targets and runtimes stay.
+
 ## 1.4.0 — 2026-11-24
 
 - Replace `long-running-goal` and its templates and checkers with the explicit `long-running-task` skill. Work directly with a brief checkpoint by default; explicitly opt into a host-native `/goal`, detached execution, or multi-agent orchestration. SOP and Prompt Strategy follow the same routing. There is no legacy alias or automatic conversion of project documents or native Goal state.

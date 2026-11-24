@@ -313,13 +313,15 @@ def prepare(request):
                     for executable in binaries.glob('python*'): executable.unlink()
             venv_args = ['-I', '-B', '-m', 'venv', strategy]
             if not packages: venv_args.append('--without-pip')
-            run_process(interpreter, [*venv_args, str(root)], 120)
             try:
+                # Relocated CPython dies inside ensurepip before a probe exists.
+                run_process(interpreter, [*venv_args, str(root)], 120)
                 probe(prepared['python'], {**spec, 'imports': []}, {}, root)
-                seed = strategy
-                break
             except RuntimeFailure:
                 if strategy == '--symlinks': raise
+                continue
+            seed = strategy
+            break
         atomic(marker, encode({**descriptor, 'seed': seed}))
         if packages:
             lock_path = root / 'requirements.lock'
