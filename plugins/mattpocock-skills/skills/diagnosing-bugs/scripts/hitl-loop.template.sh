@@ -21,7 +21,9 @@ capture_yes_no() {
   local var="$1" question="$2" answer
   printf '\n>>> %s\n' "$question"
   while true; do
-    read -r -s -p "    [y/n] " answer || return 1
+    IFS= read -r -s -p "    [y/n] " answer || return 1
+    # Bash consumes LF. Strip only the CR left by a CRLF line ending.
+    answer=${answer%$'\r'}
     printf '\n'
     case "$answer" in
       y|Y) printf -v "$var" '%s' yes; return ;;

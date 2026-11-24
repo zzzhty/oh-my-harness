@@ -73,37 +73,43 @@ class SkillAuthorityTests(unittest.TestCase):
         self.assert_skill_contains("prototype/UI.md", "not a shared or production instance")
         self.assert_skill_contains("handoff/SKILL.md", "outside repositories and shared workspaces", "owner-only access", "does not authorize sending it")
 
-    @unittest.skipUnless(BASH, "Bash is required for the HITL template")
-    def test_hitl_never_prints_arbitrary_capture_input(self) -> None:
+    def run_hitl(self, raw_input: bytes) -> subprocess.CompletedProcess[bytes]:
         template = MATT / "diagnosing-bugs/scripts/hitl-loop.template.sh"
-        run = subprocess.run(
+        return subprocess.run(
             [BASH, template.name],
             cwd=template.parent,
-            input="secret-on-step\nBearer secret-on-answer\nY\n",
+            input=raw_input,
             capture_output=True,
-            encoding="utf-8",
-            check=True,
-            timeout=10,
-        )
-        self.assertIn("Enter y or n only.", run.stdout)
-        self.assertIn("ERRORED=yes", run.stdout)
-        self.assertNotIn("secret-on-", run.stdout + run.stderr)
-
-    @unittest.skipUnless(BASH, "Bash is required for the HITL template")
-    def test_hitl_incomplete_capture_does_not_emit_a_transcript(self) -> None:
-        template = MATT / "diagnosing-bugs/scripts/hitl-loop.template.sh"
-        run = subprocess.run(
-            [BASH, template.name],
-            cwd=template.parent,
-            input="\nunusable-private-input\n",
-            capture_output=True,
-            encoding="utf-8",
             check=False,
             timeout=10,
         )
-        self.assertNotEqual(run.returncode, 0)
-        self.assertNotIn("ERRORED=", run.stdout)
-        self.assertNotIn("unusable-private-input", run.stdout + run.stderr)
+
+    @unittest.skipUnless(BASH, "Bash is required for the HITL template")
+    def test_hitl_normalizes_lf_and_crlf_choices(self) -> None:
+        for newline in (b"\n", b"\r\n"):
+            for answer, expected in ((b"Y", b"yes"), (b"n", b"no")):
+                with self.subTest(newline=newline, answer=answer):
+                    run = self.run_hitl(newline + answer + newline)
+                    self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                    self.assertIn(b"ERRORED=" + expected, run.stdout)
+                    self.assertNotIn(b"Enter y or n only.", run.stdout)
+
+    @unittest.skipUnless(BASH, "Bash is required for the HITL template")
+    def test_hitl_never_prints_arbitrary_capture_input(self) -> None:
+        run = self.run_hitl(b"secret-on-step\r\nBearer secret-on-answer\r\nY\r\n")
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn(b"Enter y or n only.", run.stdout)
+        self.assertIn(b"ERRORED=yes", run.stdout)
+        self.assertNotIn(b"secret-on-", run.stdout + run.stderr)
+
+    @unittest.skipUnless(BASH, "Bash is required for the HITL template")
+    def test_hitl_incomplete_or_invalid_capture_does_not_emit_a_transcript(self) -> None:
+        for answer in (b"", b"unusable-private-input\r\n", b"Y\r\r\n", b"\rY\n", b" Y \n"):
+            with self.subTest(answer=answer):
+                run = self.run_hitl(b"\r\n" + answer)
+                self.assertNotEqual(run.returncode, 0)
+                self.assertNotIn(b"ERRORED=", run.stdout)
+                self.assertNotIn(b"unusable-private-input", run.stdout + run.stderr)
 
 
 if __name__ == "__main__":
