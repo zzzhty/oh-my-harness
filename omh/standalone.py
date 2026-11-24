@@ -126,7 +126,7 @@ def progress(message):
 
 def print_overview(home, items, as_json):
     entries = runtime_entries(home)
-    shim = data(home / 'shim.json')
+    shim = parameters.launcher_bytes(home, data)
     if as_json:
         print(json.dumps(dict(home=str(home), launcher=json.loads(shim) if shim else None,
                               runtimes=entries, targets=items)))
@@ -134,7 +134,7 @@ def print_overview(home, items, as_json):
     print(f"omh home: {home}")
     if shim:
         record = json.loads(shim)
-        print(f"launcher: {record['path']} → {record['source']}")
+        print(parameters.launcher_text(record))
     runtimes = runtime_summary(entries)
     if runtimes: print(f"runtimes: {runtimes}")
     print()
@@ -173,14 +173,14 @@ def shim_script(source, python):
             + f'export PYTHONPATH={shlex.quote(str(source))}\n'
             + f'exec {shlex.quote(str(python))} -B -m omh "$@"\n').encode()
 
-def shim_preflight(bin_dir):
-    if os.name == 'nt': return
+def shim_preflight(home, bin_dir):
+    if os.name == 'nt' or parameters.binary_owns(home, bin_dir): return
     current = data(shim_target(bin_dir))
     if current is not None and not shim_owned(current):
         rt.fail(f'Unowned {SHIM_NAME} launcher exists in the bin directory', 'HARNESS_CONFLICT')
 
 def write_shim(home, bin_dir, source, python):
-    if os.name == 'nt': return
+    if os.name == 'nt' or parameters.binary_owns(home, bin_dir): return
     path = shim_target(bin_dir)
     script = shim_script(source, python)
     if data(path) != script:
@@ -579,6 +579,7 @@ def main(argv=None):
             environment = dict(os.environ, OMH_HOME=str(home))
             target = getattr(args, 'to', None)
             if target: environment['OMH_VERSION'] = target
+            parameters.refuse_binary_manager(home, data, rt.fail)
             return subprocess.call(update_installer(source), env=environment)
         if args.command == 'status':
             if skills_root is None:
@@ -614,7 +615,7 @@ def main(argv=None):
             else:
                 if args.command != 'prepare':
                     receipt(root,home)
-                    shim_preflight(bin_dir)
+                    shim_preflight(home, bin_dir)
                 python = rt.absolute(args.python if args.python is not None else os.environ.get('OMH_PYTHON', sys.executable))
                 deployment = rt.safe_path(args.deployment_root or home / 'runtimes')
                 if deployment == root or deployment.is_relative_to(root) or root.is_relative_to(deployment): rt.fail('Runtime deployment and skill targets must be separate', 'OMH_PATH_INVALID')

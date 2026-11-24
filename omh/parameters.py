@@ -2,10 +2,14 @@
 
 Persisted ids stay codex, claude-code, and grok. The only input alias is
 claude, and it resolves to claude-code before argparse checks choices.
-`omh self uninstall` removes the owned omh command. `omh uninstall` does not.
+`omh self uninstall` removes the shell launcher recorded in shim.json.
+`omh uninstall` does not. A Rust manager records itself in manager.json;
+install and refresh leave that binary in place when its digest matches.
 """
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 
 REQUIRED_TARGET = 'uninstall requires a target: codex, claude-code, grok, or claude'
@@ -81,3 +85,65 @@ def run_self(args, home, read, owned, remove, fail):
     text = 'removed the omh command' if removed else 'no omh command to remove'
     print(json.dumps({'removed': removed}) if args.json else text)
     return 0
+
+
+def _load_json(path):
+    try:
+        return json.loads(path.read_bytes())
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def matching_manager(home):
+    """Return manager.json when its digest matches the file it names."""
+    record = _load_json(home / 'manager.json')
+    if not isinstance(record, dict):
+        return None
+    target, digest = record.get('path'), record.get('digest')
+    if not isinstance(target, str) or not isinstance(digest, str):
+        return None
+    try:
+        content = Path(target).read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(content).hexdigest() != digest:
+        return None
+    return record
+
+
+def command_path(bin_dir):
+    root = bin_dir if bin_dir is not None else Path.home() / '.local' / 'bin'
+    return root / 'omh'
+
+
+def binary_owns(home, bin_dir):
+    """True when manager.json names this destination and the file digest matches."""
+    record = matching_manager(home)
+    if record is None:
+        return False
+    recorded, dest = Path(record['path']), command_path(bin_dir)
+    if os.name == 'nt':
+        return os.path.normcase(str(recorded)) == os.path.normcase(str(dest))
+    return recorded == dest
+
+
+def launcher_bytes(home, read):
+    """Prefer a digest-matching manager record. Otherwise keep the shell shim."""
+    if matching_manager(home) is not None:
+        raw = read(home / 'manager.json')
+        if raw is not None:
+            return raw
+    return read(home / 'shim.json')
+
+
+def launcher_text(record):
+    version = record.get('binaryVersion')
+    suffix = f" · {version}" if isinstance(version, str) else ''
+    return f"launcher: {record['path']} → {record['source']}{suffix}"
+
+
+def refuse_binary_manager(home, read, fail):
+    """The shell installer is not the manager once manager.json exists."""
+    if read(home / 'manager.json') is not None:
+        fail('omh update is owned by the installed omh binary while manager.json is present',
+             'OMH_ENVIRONMENT_INVALID')
