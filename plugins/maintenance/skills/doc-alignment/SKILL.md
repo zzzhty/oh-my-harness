@@ -1,6 +1,6 @@
 ---
 name: doc-alignment
-description: Audit or align documentation, scripts, skills, runbooks, operational entry points, and planning trees against repository source of truth; keep review-only and scheduled audits non-mutating.
+description: Audit or align documentation, scripts, skills, runbooks, operational entry points, and planning trees against repository source of truth; reduce stale ADR guidance while preserving decision history. Keep review-only and scheduled audits non-mutating.
 ---
 
 # Doc Alignment
@@ -27,8 +27,9 @@ Use implementation mode when the user asks to align, update, reorganize, prune, 
 1. Freeze the target, mode, current authority, active-versus-history boundary, and write scope.
 2. For a configured, scheduled, commit-dependent, or one-repository documentation audit, read `references/doc-audit.md` and complete that branch.
 3. Inventory current entry points and disputed names, paths, commands, links, ownership, and validation claims. For script or entry-point naming, documentation-tree placement, planning/TODO navigation, agent skills, classification, severity, reporting, or validation selection, read `references/alignment-reference.md` and apply every matching section.
-4. Classify drift against current truth, then apply the selected mode's write boundary and report or repair requirements above.
-5. Complete any missing required checks and reuse valid results under the global verification policy; re-run only invalidated checks or explicit fresh-run requirements. Report exact failures and partial checks without presenting them as full validation.
+4. For an explicit request to audit, prune, or reorganize architecture decision records (ADRs) or their active navigation, read [ADR curation](references/adr-curation.md). Routine audits do not open the entire ADR history.
+5. Classify drift against current truth, then apply the selected mode's write boundary and report or repair requirements above.
+6. Complete any missing required checks and reuse valid results under the global verification policy; re-run only invalidated checks or explicit fresh-run requirements. Report exact failures and partial checks without presenting them as full validation.
 
 ## Completion
 

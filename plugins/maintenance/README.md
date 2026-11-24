@@ -2,7 +2,7 @@
 
 This plugin preserves four distinct interactive workflows:
 
-- `doc-alignment`: audit and align current documentation and operational guidance.
+- `doc-alignment`: audit and align current documentation and operational guidance. For ADR cleanup, curate active decision guidance without deleting decision history.
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
 - `repo-lessons-lint`: explicitly turn mistake classes that already recurred in the current repository into architecture, types, a check, or a test. It does not scan other repositories.
