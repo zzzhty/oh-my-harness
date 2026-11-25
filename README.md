@@ -319,8 +319,4 @@ source tree through the standalone CLI. The historical `.omh` archives and
 `omh.lock.json` are a retired archive path;
 published assets remain immutable. The 2026-11-03 reissue was an explicitly
 authorized exception recorded with both old and new coordinates.
-See [ADR 0031](docs/adr/0031-sole-standalone-distribution.md) for the current
-decision; [ADR 0030](docs/adr/0030-independent-distribution-and-shared-runtime.md),
-[ADR 0028](docs/adr/0028-versioned-content-publishing.md)
-and [ADR 0029](docs/adr/0029-pure-hub-with-skill-owned-helpers.md) preserve the
-superseded distribution history.
+Use the [ADR index](docs/adr/README.md) to trace decision history when needed.

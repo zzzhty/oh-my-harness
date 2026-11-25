@@ -2,6 +2,8 @@
 
 This context describes the language used for canonical skill source, harness distributions, skill-owned documentation audits, and plugin-provided skill systems.
 
+Definitions describe current repository behavior. Use the [ADR index](docs/adr/README.md) when earlier terminology or migration rationale is needed.
+
 ## Language
 
 ### Harness Distribution
@@ -15,45 +17,24 @@ The bare name declared by a skill's `SKILL.md` frontmatter and used as the repos
 _Avoid_: harness-independent invocation identity, plugin-qualified identity, physical directory name
 
 **Harness**:
-A client target resolved by its installation owner according to local policy; content imports do not select or enable targets.
-_Avoid_: skills target plus instructions target, mode, product name without a registry entry
-
-**Harness Registry**:
-Historical registry-era local policy that declared supported target adapters and host paths. Retired with the standalone-only distribution; OMH content does not supply it.
-_Avoid_: shell path table, command template registry, duplicated wrapper defaults
+A client target selected by the installation owner. The standalone distributor resolves it to a skills root and the native instructions filename.
+_Avoid_: registry entry, independently selected instructions target
 
 **Harness Plan**:
-The validated, platform-resolved distribution plan produced from one Harness Registry entry.
-_Avoid_: independently selected skills and instructions plans, implicit fallback plan
-
-**Excluded Skill Root**:
-A skill-discovery root intentionally outside every Harness Plan because it would duplicate catalog identities or conflict with product-specific discovery; registry-selected refresh and closure require canonical repository identities to be absent there.
-_Avoid_: shared harness, partial harness, implicit cleanup target
+A read-only preview of changes for one resolved target and one operation (install, refresh, or uninstall), produced by `omh plan`. It does not prepare runtimes or take ownership.
 
 **Harness Skill Projection**:
-A managed user-level exposure of canonical skill directories for harness-native discovery; it is neither source nor cache.
+The managed exposure of canonical skill directories for harness-native discovery; it is neither source nor cache.
 _Avoid_: direct source, copied catalog, plugin cache
 
-**Codex Marketplace Distribution**:
-The `codex` harness skills driver that installs the exact skills-bearing package set selected by the Codex install manifest and requires every Excluded Skill Root to be clear of repository catalog identities.
-_Avoid_: `$CODEX_HOME/skills` projection, optional partial plugin mode, directory projection
-> **Retracted as a current channel.** Marketplace distribution exited with ADR 0031. Standalone directory projection is the sole distributor. The definition above is historical vocabulary.
-
 **Harness Instructions Projection**:
-The registry-selected global instructions file derived from `agents/global-instructions.md`; a Harness Plan with managed instructions owns exactly one such projection, while an explicit skills-only plan owns none. Root `AGENTS.md` is repository-local routing, not a global instructions source.
-_Avoid_: `~/.agents/AGENTS.md`, independently selected instructions harness, silent replacement
-
-**Codex Invocation Identity**:
-The plugin-qualified identity `${plugin}:${catalog-name}` that Codex exposes through the Codex Marketplace Distribution.
-_Avoid_: bare catalog name, cross-harness identity promise, request reference, distribution package identity
+The native global instructions file beside the skills root, derived from `agents/global-instructions.md` and owned through the same target receipt as the skills. See [standalone installation](README.md#standalone-installation) for filenames and conflict handling. Repository-root `AGENTS.md` is local routing, not the global source.
 
 **Skill Request Reference**:
-A prompt-level name or explicit token used to request a skill; a bare reference may match a harness-native identity or resolve to a plugin-qualified Codex identity.
-_Avoid_: harness-independent invocation identity, distribution identity
+The name or explicit token used to request a skill. Invocation syntax belongs to the host; a catalog name does not guarantee identical syntax across harnesses.
 
 **Distribution Package Identity**:
-The installable plugin coordinate used to package and select a group of skills, separate from skill names and invocation identities.
-_Avoid_: Codex invocation identity, runtime state
+A content-derived identity for a complete package, separate from a skill name, an invocation token, or an installed-target receipt.
 
 ### Skill-owned helpers
 
@@ -77,10 +58,8 @@ terminology remain in the 1.0.0 baseline and archival ADRs, not a current runtim
 OMH's versioned declaration of packages, internal resources, compositions and optional runtime requirements.
 _Avoid_: installation receipt, target-path policy
 
-**Version Lock**:
-A locally selected immutable source revision, release artifact and verified content inventory; generated by the shared Rust exporter.
-_Avoid_: latest-version selector, install state
-> **Retracted generator.** The shared Rust exporter no longer generates version locks (ADR 0031). A release is a tagged source checkout installed through `python -m omh`. Historical locks remain immutable evidence. The sentence above is historical wording.
+**Release Ref**:
+The commit SHA in the release's `omh-<tag>.ref` file, checked against the source tag before a managed bootstrap changes its checkout. It is not installed-target state.
 
 **Install Receipt**:
 The installation owner's record of actual target roots, owned resources, runtime references and recovery state. The OMH standalone distributor writes the current receipts; historical receipts remain persisted evidence until their homes are handed over.
@@ -91,10 +70,10 @@ A named complete set of content packages in one release; native plugin identitie
 _Avoid_: partial native plugin, automatically enabled hooks
 
 **Standalone Distribution**:
-OMH directory skill projection with an OMH target receipt, shared owner lock and recoverable file journal. It is the sole distribution channel (ADR 0031) and also projects the harness global-instructions file as an owned managed file (ADR 0032).
+The Python distributor projects skills and global instructions using a target receipt, shared owner lock and recoverable file journal. Bootstrap and manager commands delegate target projection to it.
 
 **Launcher Shim**:
-The managed-marker `omh` pointer script in `~/.local/bin`, pinned to the installing checkout and interpreter. A static forwarding script, not a lifecycle manager (ADR 0033).
+The managed-marker `omh` pointer script in `~/.local/bin`, pinned to the installing checkout and interpreter. A static forwarding script, distinct from the optional Rust manager binary.
 
 **Runtime Deployment Root**:
 Storage for final-path Python venvs, distinct from a harness skill target. OMH owns the shared preparation/verification/startup implementation; the installation owner supplies defaults or explicit paths.
