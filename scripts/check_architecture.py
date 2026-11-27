@@ -8,9 +8,9 @@ finding is an error. Warnings do not fail the run. Grandfathered sizes, locale
 text calls, and ruff findings live in scripts/architecture_baseline.json.
 Do not raise that file to admit a new violation.
 
-The checker uses only the standard library. It shells out to ruff, a developer
-dependency in requirements.txt, which omh/ does not import. Rule bodies live in
-architecture_rules.py so this entry stays under the file-length warning.
+The checker uses developer dependencies from requirements.txt for Markdown
+parsing and ruff checks. The distributor under omh/ does not import them.
+Rule bodies live in separate modules to keep this entry small.
 """
 
 from __future__ import annotations
@@ -40,6 +40,8 @@ from architecture_rules import (
     relpath,
     text_io_counts,
 )
+
+from version_label_rules import check_doc_version_labels
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = Path(__file__).resolve().parent / "architecture_baseline.json"
@@ -231,6 +233,7 @@ def check(root: Path, baseline: dict[str, Any], *, ruff: bool = True) -> list[Vi
         *check_closed_argv(root),
         *check_harness_identity(root),
         *check_distributor_stdlib(root),
+        *check_doc_version_labels(root),
     ]
     if ruff:
         violations.extend(check_ruff(root, baseline))

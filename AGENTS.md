@@ -13,6 +13,12 @@
 - When changing a plugin's packaged content, finish all source edits first, run the owning tests, then run `scripts/update_plugin_generations.py` once and validate the resulting single current identity.
 - For anything under `plugins/mattpocock-skills/`, follow its scoped `AGENTS.md` for the locally maintained selection and upstream attribution.
 
+## Documentation version labels
+
+- Keep one descriptive name for a living OMH document through reviews and rapid releases. Do not append draft counters like `revision 3`, `revision+3`, `rev-3`, or `v3` to its filename or headings. Update it in place; use Git commits, PRs, or dates when you need to identify a particular iteration. Use the real tag (such as `v1.5.0`) for a published release.
+- The linter checks Markdown filenames and headings at the repository root and under `agents/`, `docs/`, `dev_docs/`, and `plugins/`. It ignores link destinations, prose, code blocks, the changelog, and records in `docs/releases/`, `docs/archive/`, `docs/adr/archive/`, and `dev_docs/archive/` alone. It does not govern public, persisted, or upstream identities.
+- If a heading must reproduce a genuine external version or explicitly maintained compatibility edition that looks like a counter, put `<!-- doc-version-label: allow v3; name the external contract or maintained edition -->` at the end of that heading. This exempts only the named token. Do not use it for draft iterations; keep the Markdown filename descriptive.
+
 ## Rules and what enforces them
 
 After a change, run `python scripts/check_architecture.py` before finishing. CI runs that same command. It exits 1 on errors; file-length warnings do not fail the run. Do not raise `scripts/architecture_baseline.json` to admit a new violation.
@@ -26,6 +32,7 @@ After a change, run `python scripts/check_architecture.py` before finishing. CI 
 | `HARNESS_ROOTS`, `INSTRUCTIONS`, and `--harness` choices stay one set; `omp`, `copilot`, and `gemini` are not canonical | `scripts/check_architecture.py` (`harness-identity`) reading `omh/standalone.py` |
 | `omh/` imports only the standard library | `scripts/check_architecture.py` (`distributor-stdlib`). Developer packages stay in `requirements.txt` and `scripts/`. |
 | Pyflakes and Bugbear findings | `ruff.toml` through the same script (`ruff`). The baseline lists the grandfathered findings exactly. |
+| Ad hoc version labels in current Markdown filenames and headings | `scripts/check_architecture.py` (`doc-version-label`) |
 | Plugin generation identity | `python scripts/check_plugin_generations.py` |
 | Packaged content edits | Owning tests, then `scripts/update_plugin_generations.py` once. Do not edit generations by hand. |
 | Whitespace | `git diff --check` |
