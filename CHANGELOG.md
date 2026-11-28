@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make `repo-lessons-lint` lesson-first: distill what the next agent should do without creating history logs, and keep the two-occurrence evidence gate for new enforcement.
+
 - Review and prune new or updated `workflow:sop` documents before handoff. Keep live execution rules in the SOP and route one-off evidence and obsolete plans to their existing owners.
 
 ## 1.5.0 — 2026-11-24

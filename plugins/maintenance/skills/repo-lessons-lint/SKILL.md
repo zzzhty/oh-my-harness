@@ -1,23 +1,25 @@
 ---
 name: repo-lessons-lint
-description: In the current repository, turn mistake classes that already occurred at least twice into checks that make a repeat impossible. Use only when the user explicitly invokes repo-lessons-lint or explicitly asks to encode repeated historical mistakes into structure. Ordinary bugfixes and reviews are not a trigger.
+description: Distill actionable lessons from evidence in the current repository and enforce proven recurring mistakes when possible. Use only when the user explicitly invokes repo-lessons-lint or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. Ordinary bugfixes and reviews are not a trigger.
 ---
 
 # Repository Lessons Lint
 
-Make a repeated mistake impossible in the repository you are in. Use only when the user explicitly invokes `repo-lessons-lint` or explicitly asks to encode repeated historical mistakes into structure. A normal bugfix, review, or documentation edit is not a trigger.
+Distill lessons that change what the next agent does. Where evidence supports a recurring mistake, enforce the lesson at the strongest level that works. Use only when the user explicitly invokes `repo-lessons-lint` or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. A normal bugfix, review, or documentation edit is not a trigger.
 
 Work only in the current repository. Do not fan out across other repositories. Do not start subagents unless the user explicitly requests them.
 
 ## Find classes
 
-Read the history that can show the same mistake twice: commits, reverts, review comments, architectural decision records, and comments that explain a workaround. Group them into classes that occurred at least twice. For each proposed rule, inspect at least two distinct historical commits firsthand and confirm that they substantiate separate occurrences of the same mistake. Other evidence can help locate or understand those commits but does not replace them.
+Inspect the original evidence and check the current SOP, tests, and repository guidance first. Group incidents by the wrong assumption and the action that would prevent recurrence, not by run, date, or symptom.
 
-If two commits do not substantiate a class, do not add a rule for it. If nothing qualifies, change nothing and report which sources you read and why.
+Write a lesson only when the evidence shows a concrete mistake that could recur: name the situation, the mistaken assumption, and what to do next time. A single verified incident can support a lesson or proposal, not a new enforced rule. If a current SOP or check already teaches or enforces the action, point to it rather than restating it. When authorized to write, use the existing lesson or guidance owner; without one, return the proposed wording. Link original evidence where useful; do not copy the incident chronology or create an archive, log, or evidence ledger. Do not delete original evidence.
+
+Before promoting a lesson to a new repo-wide rule or automatic check, verify it still applies and inspect at least two distinct historical commits firsthand. They must substantiate separate occurrences of the same mistake. Other evidence can help locate or understand those commits but does not replace them. If two commits do not substantiate a class, do not add a rule for it. If no lesson or rule qualifies, change nothing and report which sources you read and why.
 
 ## Encode at the highest level that works
 
-Prefer, in this order:
+For a lesson that passes the enforcement gate and is authorized for implementation, prefer, in this order:
 
 1. **Architecture.** Give the state one owner and the task one supported path, so the wrong path fails to build or cannot be reached. Delete the old path an agent would copy.
 2. **Types.** Make the bad state unrepresentable.
@@ -39,4 +41,4 @@ One working shape is a single check command, a baseline of grandfathered finding
 
 ## Report
 
-For each class, report the level you used and why each higher level could not express the rule. You may cite the two supporting commits in the one-time change report. They establish necessity during discovery; no persistent evidence record is required. When you change nothing, report the sources you read and why no class qualified.
+For each class, report whether you reused existing guidance, distilled a lesson, or added enforcement. For enforcement, report the chosen level and why higher levels did not work. You may cite the two supporting commits in the one-time change report. They establish necessity during discovery; no persistent evidence record is required. When you change nothing, report the sources you read and why no class qualified.

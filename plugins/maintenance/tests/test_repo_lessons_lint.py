@@ -24,7 +24,7 @@ class RepoLessonsLintTests(unittest.TestCase):
         self.assertIn("current repository", body)
         self.assertIn("Do not fan out across other repositories", body)
         self.assertIn("unless the user explicitly requests them", body)
-        self.assertIn("at least twice", body)
+        self.assertIn("separate occurrences of the same mistake", body)
         self.assertIn("at least two distinct historical commits firsthand", body)
         self.assertIn("change nothing", body)
         self.assertIn("`Violation`", body)
@@ -53,6 +53,18 @@ class RepoLessonsLintTests(unittest.TestCase):
         self.assertIn("MIT License", notice)
         self.assertIn("`correct`", notice)
         self.assertIn("`repo-lessons-lint`", README.read_text(encoding="utf-8"))
+
+
+    def test_lesson_precedes_enforcement_without_an_evidence_ledger(self) -> None:
+        skill = SKILL.read_text(encoding="utf-8")
+        discovery = skill.split("## Find classes", 1)[1].split("## Encode", 1)[0]
+        lesson = discovery.index("A single verified incident can support a lesson or proposal")
+        promotion = discovery.index("Before promoting a lesson")
+        self.assertLess(lesson, promotion)
+        self.assertIn("not a new enforced rule", discovery[lesson:promotion])
+        self.assertIn("point to it rather than restating it", discovery[lesson:promotion])
+        self.assertIn("do not copy the incident chronology or create an archive", discovery[lesson:promotion])
+        self.assertIn("at least two distinct historical commits firsthand", discovery[promotion:])
 
 
     def test_history_is_a_discovery_gate_not_a_persistent_rule_payload(self) -> None:
