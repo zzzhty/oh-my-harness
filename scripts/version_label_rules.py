@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
+import yaml
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
@@ -37,10 +38,17 @@ PRINCIPLE = "Git carries draft history; current docs should not create a second 
 
 def without_front_matter(source: str) -> str:
     lines = source.splitlines(keepends=True)
-    if lines and lines[0].strip() == "---":
+    if lines and lines[0].rstrip() == "---":
         for index, line in enumerate(lines[1:], 1):
-            if line.strip() in {"---", "..."}:
-                return "\n" * (index + 1) + "".join(lines[index + 1:])
+            if line.rstrip() in {"---", "..."}:
+                # Delimiters alone also match ordinary Markdown. Require a YAML mapping.
+                try:
+                    metadata = yaml.compose("".join(lines[1:index]), Loader=yaml.SafeLoader)
+                except yaml.YAMLError:
+                    return source
+                if isinstance(metadata, yaml.MappingNode):
+                    return "\n" * (index + 1) + "".join(lines[index + 1:])
+                return source
     return source
 
 
