@@ -71,6 +71,48 @@ class DocVersionLabelTests(unittest.TestCase):
         self.assertIn("'revision+3'", items[0].violation)
         self.assertIn("'v4'", items[1].violation)
 
+    def test_thematic_breaks_do_not_hide_headings(self):
+        for source, line in (
+            ("---\n\n# Design revision+3\n\n---\n", 3),
+            ("---\n\n# Design revision+3\n\n...\n", 3),
+            ("---\n\nDesign revision+3\n---\n", 3),
+            ("---\nmetadata: [\n\n# Design revision+3\n\n---\n", 4),
+            ("---\n- Example\n\n# Design revision+3\n\n---\n", 4),
+            ("---\n\n# Design revision+3\n", 3),
+            ("  ---\n\n# Design revision+3\n\n---\n", 3),
+            ("---\n\n# Design revision+3\n\n  ---\n", 3),
+        ):
+            with self.subTest(source=source):
+                items = self.check_files({"docs/design.md": source})
+                self.assertEqual(arch.exit_code(items), 1)
+                self.assertEqual([(item.line, item.rule) for item in items], [(line, "doc-version-label")])
+                self.assertIn("'revision+3'", items[0].violation)
+
+    def test_yaml_mapping_preserves_heading_lines_and_exceptions(self):
+        for closing in ("---", "..."):
+            with self.subTest(closing=closing):
+                items = self.check_files({
+                    "docs/design.md": (
+                        "---\n"
+                        "# Metadata revision+8\n"
+                        "name: legacy-v2\n"
+                        "description: |\n"
+                        "  # Hidden revision+9\n"
+                        "  ---\n"
+                        "  ...\n"
+                        "  # Hidden revision+10\n"
+                        "metadata:\n"
+                        "  version: v3\n"
+                        f"{closing}\n"
+                        "\n"
+                        "# Vendor API v4 <!-- doc-version-label: allow v4; Vendor API contract -->\n"
+                        "## Vendor API v4 revision+3 <!-- doc-version-label: allow v4; Vendor API contract -->\n"
+                        "## Release v1.5.0\n"
+                    ),
+                })
+                self.assertEqual([(item.line, item.rule) for item in items], [(14, "doc-version-label")])
+                self.assertIn("'revision+3'", items[0].violation)
+
     def test_checks_rendered_link_labels_not_destinations(self):
         items = self.check_files({
             "docs/links.md": (
