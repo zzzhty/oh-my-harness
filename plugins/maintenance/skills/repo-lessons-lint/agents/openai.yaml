@@ -1,6 +1,0 @@
-interface:
-  display_name: "Repository Lessons Lint"
-  short_description: "Distill lessons and enforce proven repeats"
-  default_prompt: "Use $repo-lessons-lint to distill actionable lessons and enforce proven recurring mistakes in this repository."
-policy:
-  allow_implicit_invocation: false

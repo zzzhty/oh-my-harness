@@ -5,7 +5,14 @@ This plugin preserves four distinct interactive workflows:
 - `doc-alignment`: audit and align current documentation and operational guidance. For ADR cleanup, curate active decision guidance without deleting decision history.
 - `housekeeping`: remove inventoried disposable artifacts while protecting user work.
 - `skill-compressor`: reduce instruction size while preserving required behavior.
-- `repo-lessons-lint`: explicitly distill actionable lessons from repository evidence and use architecture, types, checks, or tests for proven recurring mistakes. It does not scan other repositories.
+- `repo-lessons`: explicitly distill actionable lessons from repository evidence and use architecture, types, checks, or tests for proven recurring mistakes. It does not scan other repositories.
+
+Use `maintenance:repo-lessons` in place of `maintenance:repo-lessons-lint`;
+there is no alias. Managed refresh replaces unchanged files owned by OMH and
+stops on edited managed files. Update external callers or manual installations
+separately; OMH does not rewrite project instructions or native sessions. To
+roll back a managed installation, refresh from the previous compatible source
+after reviewing the plan.
 
 The audit and validation helpers belong to their consuming skills. Installing
 skills through the standalone distributor needs no Python on `PATH`, and

@@ -5,12 +5,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "repo-lessons-lint"
+SKILL_ROOT = ROOT / "skills" / "repo-lessons"
 SKILL = SKILL_ROOT / "SKILL.md"
 README = ROOT / "README.md"
 
 
-class RepoLessonsLintTests(unittest.TestCase):
+class RepoLessonsTests(unittest.TestCase):
     def test_skill_is_explicit_and_encodes_repeated_mistakes(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         metadata = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -18,7 +18,7 @@ class RepoLessonsLintTests(unittest.TestCase):
         frontmatter = skill.split("---", 2)[1]
         body = skill.split("---", 2)[2]
 
-        self.assertIn("explicitly invokes `repo-lessons-lint`", skill)
+        self.assertIn("explicitly invokes `repo-lessons`", skill)
         self.assertIn("explicitly asks to encode repeated historical mistakes", skill)
         self.assertIn("Ordinary bugfixes and reviews are not a trigger", frontmatter)
         self.assertIn("current repository", body)
@@ -47,12 +47,12 @@ class RepoLessonsLintTests(unittest.TestCase):
             self.assertNotIn(banned, skill)
         self.assertNotIn("disable-model-invocation", frontmatter)
         self.assertIn("allow_implicit_invocation: false", metadata)
-        self.assertIn("$repo-lessons-lint", metadata)
+        self.assertIn("$repo-lessons", metadata)
         self.assertIn("Lauren Tan", notice)
         self.assertIn("Copyright (c) 2026 Lauren Tan", notice)
         self.assertIn("MIT License", notice)
         self.assertIn("`correct`", notice)
-        self.assertIn("`repo-lessons-lint`", README.read_text(encoding="utf-8"))
+        self.assertIn("`repo-lessons`", README.read_text(encoding="utf-8"))
 
 
     def test_lesson_precedes_enforcement_without_an_evidence_ledger(self) -> None:

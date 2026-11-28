@@ -1,11 +1,11 @@
 ---
-name: repo-lessons-lint
-description: Distill actionable lessons from evidence in the current repository and enforce proven recurring mistakes when possible. Use only when the user explicitly invokes repo-lessons-lint or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. Ordinary bugfixes and reviews are not a trigger.
+name: repo-lessons
+description: Distill actionable lessons from evidence in the current repository and enforce proven recurring mistakes when possible. Use only when the user explicitly invokes repo-lessons or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. Ordinary bugfixes and reviews are not a trigger.
 ---
 
-# Repository Lessons Lint
+# Repository Lessons
 
-Distill lessons that change what the next agent does. Where evidence supports a recurring mistake, enforce the lesson at the strongest level that works. Use only when the user explicitly invokes `repo-lessons-lint` or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. A normal bugfix, review, or documentation edit is not a trigger.
+Distill lessons that change what the next agent does. Where evidence supports a recurring mistake, enforce the lesson at the strongest level that works. Use only when the user explicitly invokes `repo-lessons` or explicitly asks to encode repeated historical mistakes into structure or to distill repository lessons. A normal bugfix, review, or documentation edit is not a trigger.
 
 Work only in the current repository. Do not fan out across other repositories. Do not start subagents unless the user explicitly requests them.
 
