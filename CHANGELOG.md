@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Review and prune new or updated `workflow:sop` documents before handoff. Keep live execution rules in the SOP and route one-off evidence and obsolete plans to their existing owners.
+
 ## 1.5.0 — 2026-11-24
 
 - Extend `doc-alignment` with scoped ADR curation: keep current constraints discoverable without reading superseded decisions by default.
