@@ -1,6 +1,0 @@
-interface:
-  display_name: "Repository Lessons Lint"
-  short_description: "Make repeated historical mistakes impossible"
-  default_prompt: "Use $repo-lessons-lint to encode repeated mistakes in this repository into structure."
-policy:
-  allow_implicit_invocation: false

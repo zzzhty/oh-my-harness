@@ -38,7 +38,7 @@ class HubInventoryTests(unittest.TestCase):
                 self.assertTrue((source / 'agents/openai.yaml').is_file())
         self.assertIn('workflow:create-verification-skill', skills)
         self.assertEqual({s.name for s in catalog.sources if s.plugin == 'maintenance'},
-                         {'doc-alignment', 'housekeeping', 'repo-lessons-lint', 'skill-compressor'})
+                         {'doc-alignment', 'housekeeping', 'repo-lessons', 'skill-compressor'})
         self.assertEqual(manifest['historicalIdentities'], {})
         groups = {group['id']: group for group in manifest['runtimeGroups']}
         self.assertEqual(set(groups), set(manifest['runtimeBindings'].values()))
